@@ -109,9 +109,12 @@ function NubeSheet({ open, onClose, estado }) {
   )
 }
 
-export function Header({ title, sub }) {
+export function Header({ title, sub, onBack }) {
   return (
     <header className="header">
+      {onBack && (
+        <button className="back-btn" onClick={onBack} aria-label="Volver">‹ Inicio</button>
+      )}
       <h1>{title}</h1>
       {sub && <div className="sub">{sub}</div>}
     </header>

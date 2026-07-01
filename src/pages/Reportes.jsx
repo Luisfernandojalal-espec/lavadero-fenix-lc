@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
 import { db, stockBajo } from '../db'
-import { money, currentMonthKey, monthLabel, LOGO_URL } from '../format'
+import { money, currentMonthKey, monthLabel } from '../format'
+import { Header } from '../components/ui'
 import { descargarReportePDF } from '../pdf'
 
 // Devuelve las últimas N claves de mes ("2026-06", "2026-05", ...)
@@ -85,10 +86,7 @@ export default function Reportes() {
 
   return (
     <>
-      <div className="brand-header">
-        <img src={LOGO_URL} alt="Lavadero Fénix LC - Villa Caribe" className="brand-logo" />
-        <div className="sub">Resumen del negocio</div>
-      </div>
+      <Header title="Balance" sub="Resumen financiero del negocio" onBack={() => navigate('/')} />
 
       <div className="content">
         <div className="pill-row">
@@ -100,7 +98,7 @@ export default function Reportes() {
         </div>
 
         {porAcabarse.length > 0 && (
-          <div className="card alerta-stock" onClick={() => navigate('/productos')}>
+          <div className="card alerta-stock" onClick={() => navigate('/inventario')}>
             <div className="label" style={{ fontWeight: 700, marginBottom: 6 }}>
               ⚠️ {porAcabarse.length === 1 ? 'Un producto se está acabando' : `${porAcabarse.length} productos se están acabando`}
             </div>
@@ -114,8 +112,8 @@ export default function Reportes() {
           </div>
         )}
 
-        <button className="btn ghost" style={{ marginBottom: 12 }} onClick={() => navigate('/movimientos')}>
-          📋 Ver movimientos y corregir ventas
+        <button className="btn ghost" style={{ marginBottom: 12 }} onClick={() => navigate('/historial')}>
+          📋 Ver historial y corregir ventas
         </button>
 
         <button className="btn ghost" style={{ marginBottom: 12 }} onClick={descargarPDF}>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, emojiCategoria, stockBajo } from '../db'
 import { money, monthKey } from '../format'
@@ -6,6 +7,7 @@ import { Header, useToast } from '../components/ui'
 import { useAuth } from '../auth'
 
 export default function Caja() {
+  const navigate = useNavigate()
   const { show, node } = useToast()
   const { user } = useAuth()
   const [modo, setModo] = useState('producto') // 'producto' | 'servicio'
@@ -102,7 +104,7 @@ export default function Caja() {
 
   return (
     <>
-      <Header title="Caja" sub="Registra ventas y servicios en segundos" />
+      <Header title="Factura rápida" sub="Vender productos y servicios" onBack={() => navigate('/')} />
 
       <div className="content">
         <div className="pill-row">

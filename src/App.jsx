@@ -7,19 +7,25 @@ import { LOGO_URL } from './format'
 import { useAuth } from './auth'
 import { SyncBadge } from './components/ui'
 import Login from './pages/Login'
+import Inicio from './pages/Inicio'
 import Reportes from './pages/Reportes'
 import Movimientos from './pages/Movimientos'
 import Caja from './pages/Caja'
 import Productos from './pages/Productos'
 import Servicios from './pages/Servicios'
 import Gastos from './pages/Gastos'
+import Credito from './pages/Credito'
 
-const TABS = [
-  { to: '/', ico: '📊', label: 'Inicio', end: true, soloDueno: true },
-  { to: '/caja', ico: '🧾', label: 'Caja' },
-  { to: '/productos', ico: '🛒', label: 'Productos', soloDueno: true },
-  { to: '/servicios', ico: '🚿', label: 'Servicios', soloDueno: true },
+// Barra lateral (solo escritorio). En móvil la navegación es por el menú de Inicio.
+const NAV = [
+  { to: '/', ico: '🏠', label: 'Inicio', end: true },
+  { to: '/factura', ico: '🧾', label: 'Factura rápida' },
+  { to: '/historial', ico: '📋', label: 'Historial', soloDueno: true },
+  { to: '/inventario', ico: '📦', label: 'Inventario', soloDueno: true },
+  { to: '/credito', ico: '💳', label: 'Crédito', soloDueno: true },
   { to: '/gastos', ico: '🏠', label: 'Gastos', soloDueno: true },
+  { to: '/balance', ico: '⚖️', label: 'Balance', soloDueno: true },
+  { to: '/config', ico: '⚙️', label: 'Configuración', soloDueno: true },
 ]
 
 export default function App() {
@@ -29,35 +35,23 @@ export default function App() {
 
   useEffect(() => {
     (async () => {
-      // En un dispositivo nuevo (sin datos) y con internet, primero bajamos
-      // lo que ya exista en la nube; así NO sembramos datos de ejemplo
-      // duplicados. Si ya hay datos locales, arrancamos al instante (offline-first).
       const vacio = (await db.productos.count()) === 0
       if (vacio && syncDisponible && navigator.onLine) {
         try { await sync() } catch { /* sin conexión: seguimos local */ }
       }
-      await seedIfEmpty() // solo siembra si después de bajar sigue vacío
+      await seedIfEmpty()
       setReady(true)
-      startSync() // sincronización continua con la nube (si está configurada)
+      startSync()
     })()
   }, [])
 
-  // Lleva el scroll arriba al cambiar de pestaña
-  useEffect(() => {
-    window.scrollTo(0, 0)
-  }, [location.pathname])
+  useEffect(() => { window.scrollTo(0, 0) }, [location.pathname])
 
-  if (!ready) {
-    return <div className="empty">Cargando…</div>
-  }
-
-  // Sin sesión → pantalla de acceso
-  if (!user) {
-    return <Login />
-  }
+  if (!ready) return <div className="empty">Cargando…</div>
+  if (!user) return <Login />
 
   const esDueno = user.rol === 'dueño'
-  const tabs = TABS.filter((t) => esDueno || !t.soloDueno)
+  const navItems = NAV.filter((t) => esDueno || !t.soloDueno)
 
   return (
     <div className="app">
@@ -66,7 +60,7 @@ export default function App() {
           <img src={LOGO_URL} alt="Lavadero Fénix" />
           <span>Lavadero Fénix</span>
         </div>
-        {tabs.map((t) => (
+        {navItems.map((t) => (
           <NavLink key={t.to} to={t.to} end={t.end}
             className={({ isActive }) => (isActive ? 'active' : '')}>
             <span className="ico">{t.ico}</span>
@@ -82,22 +76,19 @@ export default function App() {
       <main className="main">
         <SyncBadge />
         <Routes>
+          <Route path="/" element={<Inicio />} />
+          <Route path="/factura" element={<Caja />} />
           {esDueno ? (
             <>
-              <Route path="/" element={<Reportes />} />
-              <Route path="/movimientos" element={<Movimientos />} />
-              <Route path="/caja" element={<Caja />} />
-              <Route path="/productos" element={<Productos />} />
-              <Route path="/servicios" element={<Servicios />} />
+              <Route path="/historial" element={<Movimientos />} />
+              <Route path="/inventario" element={<Productos />} />
+              <Route path="/credito" element={<Credito />} />
               <Route path="/gastos" element={<Gastos />} />
+              <Route path="/balance" element={<Reportes />} />
+              <Route path="/config" element={<Servicios />} />
             </>
-          ) : (
-            // El trabajador solo tiene acceso a la Caja
-            <>
-              <Route path="/caja" element={<Caja />} />
-              <Route path="*" element={<Navigate to="/caja" replace />} />
-            </>
-          )}
+          ) : null}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
     </div>

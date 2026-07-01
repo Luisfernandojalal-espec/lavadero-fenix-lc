@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, CATEGORIAS_PRODUCTO, emojiCategoria, stockBajo, STOCK_MIN_DEFAULT } from '../db'
 import { money } from '../format'
@@ -7,6 +8,7 @@ import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
 const emptyForm = { nombre: '', categoria: 'cerveza', precioCompra: 0, precioVenta: 0, stock: 0, stockMin: STOCK_MIN_DEFAULT }
 
 export default function Productos() {
+  const navigate = useNavigate()
   const { show, node } = useToast()
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editId, setEditId] = useState(null)
@@ -69,7 +71,7 @@ export default function Productos() {
 
   return (
     <>
-      <Header title="Productos" sub="Nevera y mecatos · margen por unidad" />
+      <Header title="Inventario" sub="Productos · precios · márgenes · stock" onBack={() => navigate('/')} />
 
       <div className="content">
         <div className="pill-row">

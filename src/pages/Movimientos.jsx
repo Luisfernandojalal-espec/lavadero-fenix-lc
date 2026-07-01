@@ -70,11 +70,9 @@ export default function Movimientos() {
 
   return (
     <>
-      <Header title="Movimientos" sub="Ventas y gastos · cierre por día" />
+      <Header title="Historial de ventas" sub="Ventas y gastos · cierre por día" onBack={() => navigate('/')} />
 
       <div className="content">
-        <button className="btn ghost" style={{ marginBottom: 12 }} onClick={() => navigate('/')}>← Volver al inicio</button>
-
         <div className="pill-row">
           {meses.map((m) => (
             <button key={m} className={`pill ${mes === m ? 'active' : ''}`} onClick={() => setMes(m)}>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, CATEGORIAS_GASTO } from '../db'
 import { money, monthKey, currentMonthKey, monthLabel, shortDate } from '../format'
@@ -12,6 +13,7 @@ function emojiGasto(id) {
 const emptyForm = { concepto: '', categoria: 'arriendo', monto: 0 }
 
 export default function Gastos() {
+  const navigate = useNavigate()
   const { show, node } = useToast()
   const mesActual = currentMonthKey()
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -60,7 +62,7 @@ export default function Gastos() {
 
   return (
     <>
-      <Header title="Gastos" sub={monthLabel(mesActual)} />
+      <Header title="Gastos" sub={monthLabel(mesActual)} onBack={() => navigate('/')} />
 
       <div className="content">
         <div className="card stat-card">

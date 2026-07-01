@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp } from '../db'
 import { money } from '../format'
@@ -7,6 +8,7 @@ import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
 const emptyServ = { nombre: '', precio: 0, comisionPct: 40 }
 
 export default function Servicios() {
+  const navigate = useNavigate()
   const { show, node } = useToast()
   const [tab, setTab] = useState('servicios') // 'servicios' | 'trabajadores'
 
@@ -67,7 +69,7 @@ export default function Servicios() {
 
   return (
     <>
-      <Header title="Servicios" sub="Lavados, precios y comisiones" />
+      <Header title="Configuración" sub="Servicios de lavado y trabajadores" onBack={() => navigate('/')} />
 
       <div className="content">
         <div className="pill-row">
