@@ -28,15 +28,22 @@ const NAV = [
   { to: '/config', label: 'Configuración', soloDueno: true },
 ]
 
+// Candado a nivel de módulo: la inicialización corre UNA sola vez aunque
+// React StrictMode monte el efecto dos veces (evita sembrar duplicados).
+let inicializado = false
+
 export default function App() {
   const [ready, setReady] = useState(false)
   const { user, logout } = useAuth()
   const location = useLocation()
 
   useEffect(() => {
-    (async () => {
-      const vacio = (await db.productos.count()) === 0
-      if (vacio && syncDisponible && navigator.onLine) {
+    if (inicializado) { setReady(true); return }
+    inicializado = true
+    ;(async () => {
+      // En un dispositivo nuevo con internet, primero bajamos lo que ya
+      // exista en la nube y SOLO sembramos si de verdad quedó vacío.
+      if (syncDisponible && navigator.onLine) {
         try { await sync() } catch { /* sin conexión: seguimos local */ }
       }
       await seedIfEmpty()

@@ -26,9 +26,19 @@ export default function Reportes() {
   const ventas = useLiveQuery(() => db.ventas.where('mes').equals(mes).toArray(), [mes], [])
   const gastos = useLiveQuery(() => db.gastos.where('mes').equals(mes).toArray(), [mes], [])
   const productos = useLiveQuery(() => db.productos.where('activo').equals(1).toArray(), [], [])
+  const todasVentas = useLiveQuery(() => db.ventas.toArray(), [], [])
+  const abonos = useLiveQuery(() => db.abonos.toArray(), [], [])
 
   // Productos por acabarse (alerta de stock bajo)
   const porAcabarse = (productos || []).filter(stockBajo).sort((a, b) => (a.stock ?? 0) - (b.stock ?? 0))
+
+  // --- Estado actual (no depende del mes) ---
+  // Cuentas por cobrar = ventas a crédito vigentes − abonos recibidos
+  const debeTotal = (todasVentas || []).filter((x) => x.metodoPago === 'credito' && !x.anulada).reduce((s, x) => s + x.total, 0)
+  const abonadoTotal = (abonos || []).reduce((s, a) => s + a.monto, 0)
+  const porCobrar = Math.max(0, debeTotal - abonadoTotal)
+  // Valor del inventario a costo
+  const valorInventario = (productos || []).reduce((s, p) => s + (p.stock || 0) * (p.precioCompra || 0), 0)
 
   // Excluir movimientos anulados de todos los cálculos
   const v = (ventas || []).filter((x) => !x.anulada)
@@ -79,6 +89,7 @@ export default function Reportes() {
       gananciaProd, ingresoProd, costoProd,
       ingresoServ, comisiones, gananciaServ,
       totalGastos, utilidad,
+      porCobrar, valorInventario,
       ranking, trabRanking,
       gastos: (gastos || []).filter((g) => !g.anulada),
     })
@@ -154,6 +165,21 @@ export default function Reportes() {
           <div className={`value ${utilidad >= 0 ? 'green' : 'red'}`}>{money(utilidad)}</div>
           <div className="meta" style={{ fontSize: 12 }}>
             Productos + servicios − comisiones − gastos
+          </div>
+        </div>
+
+        {/* Estado actual (independiente del mes) */}
+        <div className="section-title">Estado actual del negocio</div>
+        <div className="grid-2">
+          <div className="card stat-card">
+            <div className="label">Cuentas por cobrar</div>
+            <div className="value" style={{ color: 'var(--red)' }}>{money(porCobrar)}</div>
+            <div className="meta" style={{ fontSize: 12 }}>Fiado pendiente de clientes</div>
+          </div>
+          <div className="card stat-card">
+            <div className="label">Valor del inventario</div>
+            <div className="value">{money(valorInventario)}</div>
+            <div className="meta" style={{ fontSize: 12 }}>Existencias a precio de costo</div>
           </div>
         </div>
 

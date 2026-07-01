@@ -91,6 +91,19 @@ async function construirReporte(d) {
     },
   })
 
+  // --- Estado actual del negocio ---
+  autoTable(doc, {
+    startY: doc.lastAutoTable.finalY + 20,
+    head: [['Estado actual del negocio', 'Valor']],
+    body: [
+      ['Cuentas por cobrar (fiado pendiente)', m(d.porCobrar || 0)],
+      ['Valor del inventario (a costo)', m(d.valorInventario || 0)],
+    ],
+    styles: { fontSize: 10, cellPadding: 6 },
+    headStyles: { fillColor: AZUL },
+    columnStyles: { 1: { halign: 'right', cellWidth: 140 } },
+  })
+
   // --- Ranking de productos ---
   if (d.ranking && d.ranking.length) {
     autoTable(doc, {
