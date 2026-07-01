@@ -93,7 +93,7 @@ export default function Login() {
   if (sel) {
     return (
       <div className="login">
-        <div className="login-avatar">{sel.rol === 'dueño' ? '👑' : '👤'}</div>
+        <div className="login-avatar">{sel.rol === 'dueño' ? '👨🏻‍💻' : '👤'}</div>
         <h1>{sel.nombre}</h1>
         <p className="login-sub">Ingresa tu PIN</p>
         <PinPad value={pin} onChange={verificar} />
@@ -111,7 +111,7 @@ export default function Login() {
       <div className="login-users">
         {usuarios.map((u) => (
           <button key={u.id} className="login-user" onClick={() => elegir(u)}>
-            <span className="login-user-ico">{u.rol === 'dueño' ? '👑' : '👤'}</span>
+            <span className="login-user-ico">{u.rol === 'dueño' ? '👨🏻‍💻' : '👤'}</span>
             <span>{u.nombre}</span>
           </button>
         ))}
