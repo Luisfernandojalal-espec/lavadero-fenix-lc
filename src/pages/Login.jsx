@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp } from '../db'
+import { LOGO_URL } from '../format'
 import { useAuth } from '../auth'
 
 // Teclado numérico para el PIN
@@ -59,7 +60,7 @@ export default function Login() {
     }
     return (
       <div className="login">
-        <img src="/logo.jpg" alt="Lavadero Fénix" className="login-logo" />
+        <img src={LOGO_URL} alt="Lavadero Fénix" className="login-logo" />
         <h1>Bienvenido</h1>
         <p className="login-sub">Vamos a crear el usuario <b>dueño</b>. Serás quien vea las ganancias y administre todo.</p>
 
@@ -104,7 +105,7 @@ export default function Login() {
 
   return (
     <div className="login">
-      <img src="/logo.jpg" alt="Lavadero Fénix" className="login-logo" />
+      <img src={LOGO_URL} alt="Lavadero Fénix" className="login-logo" />
       <h1>¿Quién eres?</h1>
       <p className="login-sub">Toca tu usuario para entrar</p>
       <div className="login-users">

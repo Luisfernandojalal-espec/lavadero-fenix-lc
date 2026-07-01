@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
 import { db, stockBajo } from '../db'
-import { money, currentMonthKey, monthLabel } from '../format'
+import { money, currentMonthKey, monthLabel, LOGO_URL } from '../format'
 import { descargarReportePDF } from '../pdf'
 
 // Devuelve las últimas N claves de mes ("2026-06", "2026-05", ...)
@@ -86,7 +86,7 @@ export default function Reportes() {
   return (
     <>
       <div className="brand-header">
-        <img src="/logo.jpg" alt="Lavadero Fénix LC - Villa Caribe" className="brand-logo" />
+        <img src={LOGO_URL} alt="Lavadero Fénix LC - Villa Caribe" className="brand-logo" />
         <div className="sub">Resumen del negocio</div>
       </div>
 

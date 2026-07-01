@@ -10,7 +10,7 @@ function m(n) {
 // Carga el logo como dataURL para incrustarlo en el PDF.
 async function logoDataUrl() {
   try {
-    const res = await fetch('/logo.jpg')
+    const res = await fetch(import.meta.env.BASE_URL + 'logo.jpg')
     const blob = await res.blob()
     return await new Promise((resolve) => {
       const fr = new FileReader()

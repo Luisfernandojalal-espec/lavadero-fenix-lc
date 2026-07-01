@@ -1,3 +1,7 @@
+// Ruta del logo que funciona tanto en local ("/") como publicado
+// en una subcarpeta ("/lavadero-fenix-lc/"). BASE_URL lo resuelve solo.
+export const LOGO_URL = import.meta.env.BASE_URL + 'logo.jpg'
+
 // Formato de moneda colombiana (COP) y fechas
 
 const cop = new Intl.NumberFormat('es-CO', {

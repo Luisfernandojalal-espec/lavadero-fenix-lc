@@ -3,6 +3,7 @@ import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
 import { db, seedIfEmpty } from './db'
 import { startSync, sync } from './sync'
 import { syncDisponible } from './supabase'
+import { LOGO_URL } from './format'
 import { useAuth } from './auth'
 import { SyncBadge } from './components/ui'
 import Login from './pages/Login'
@@ -62,7 +63,7 @@ export default function App() {
     <div className="app">
       <nav className="nav">
         <div className="nav-brand">
-          <img src="/logo.jpg" alt="Lavadero Fénix" />
+          <img src={LOGO_URL} alt="Lavadero Fénix" />
           <span>Lavadero Fénix</span>
         </div>
         {tabs.map((t) => (
