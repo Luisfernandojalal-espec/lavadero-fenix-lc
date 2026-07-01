@@ -2,7 +2,7 @@ import { db } from './db'
 import { supabase, syncDisponible } from './supabase'
 
 // Tablas locales que se sincronizan con la tabla "registros" de Supabase.
-const TABLAS = ['productos', 'servicios', 'trabajadores', 'ventas', 'gastos', 'movimientos_inv']
+const TABLAS = ['productos', 'servicios', 'trabajadores', 'ventas', 'gastos', 'movimientos_inv', 'clientes', 'abonos']
 const LAST_PULL_KEY = 'fenix_last_pull'
 
 // --- Estado observable para mostrar en la interfaz ---

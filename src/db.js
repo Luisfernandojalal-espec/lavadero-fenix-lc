@@ -26,6 +26,18 @@ db.version(2).stores({
   movimientos_inv: '&id, productoId, tipo, mes, fecha, updatedAt',
 })
 
+// v3: crédito — clientes y abonos (fiado)
+db.version(3).stores({
+  productos: '&id, categoria, activo, updatedAt',
+  servicios: '&id, activo, updatedAt',
+  trabajadores: '&id, activo, updatedAt',
+  ventas: '&id, tipo, mes, fecha, trabajadorId, clienteId, updatedAt',
+  gastos: '&id, categoria, mes, fecha, updatedAt',
+  movimientos_inv: '&id, productoId, tipo, mes, fecha, updatedAt',
+  clientes: '&id, activo, updatedAt',
+  abonos: '&id, clienteId, mes, fecha, updatedAt',
+})
+
 export function uid() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
   return 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2)

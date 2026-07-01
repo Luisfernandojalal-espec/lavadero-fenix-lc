@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, stockBajo } from '../db'
 import { money, monthKey } from '../format'
-import { Header, useToast } from '../components/ui'
+import { Header, Sheet, useToast, SearchSelect } from '../components/ui'
 import { useAuth } from '../auth'
 
 export default function Caja() {
@@ -15,6 +15,12 @@ export default function Caja() {
   const productos = useLiveQuery(() => db.productos.where('activo').equals(1).toArray(), [], [])
   const servicios = useLiveQuery(() => db.servicios.where('activo').equals(1).toArray(), [], [])
   const trabajadores = useLiveQuery(() => db.trabajadores.where('activo').equals(1).toArray(), [], [])
+  const clientes = useLiveQuery(() => db.clientes.where('activo').equals(1).toArray(), [], [])
+
+  // Cobro a crédito: sheet para elegir/crear el cliente
+  const [credito, setCredito] = useState(null) // null | 'producto' | 'servicio'
+  const [clienteSel, setClienteSel] = useState('')
+  const [clienteNuevo, setClienteNuevo] = useState('')
 
   // Carrito de productos: { [productoId]: cantidad }
   const [carrito, setCarrito] = useState({})
@@ -48,7 +54,7 @@ export default function Caja() {
   const costoProd = itemsCarrito.reduce((s, i) => s + i.precioCompra * i.cantidad, 0)
   const gananciaProd = totalProd - costoProd
 
-  async function cobrarProductos() {
+  async function cobrarProductos(metodo = 'contado', cliente = null) {
     if (itemsCarrito.length === 0) return
     const now = Date.now()
     await db.ventas.add(stamp({
@@ -66,16 +72,19 @@ export default function Caja() {
       total: totalProd,
       costo: costoProd,
       ganancia: gananciaProd,
+      metodoPago: metodo,
+      clienteId: cliente ? cliente.id : null,
+      clienteNombre: cliente ? cliente.nombre : null,
     }))
     // Descontar stock
     for (const i of itemsCarrito) {
       await db.productos.update(i.id, stamp({ stock: Math.max(0, (i.stock || 0) - i.cantidad) }))
     }
     setCarrito({})
-    show(`Venta registrada · ${money(totalProd)}`)
+    show(metodo === 'credito' ? `Fiado a ${cliente.nombre} · ${money(totalProd)}` : `Venta registrada · ${money(totalProd)}`)
   }
 
-  async function cobrarServicio() {
+  async function cobrarServicio(metodo = 'contado', cliente = null) {
     if (!servSel) return show('Elige un servicio')
     const s = listaServ.find((x) => x.id === servSel)
     const t = (trabajadores || []).find((x) => x.id === trabSel)
@@ -96,10 +105,28 @@ export default function Caja() {
       total: s.precio,
       costo: comision,        // para el lavado, el "costo" directo es la comisión
       ganancia: s.precio - comision,
+      metodoPago: metodo,
+      clienteId: cliente ? cliente.id : null,
+      clienteNombre: cliente ? cliente.nombre : null,
     }))
     setServSel(null)
     setTrabSel(null)
-    show(`Servicio registrado · ${money(s.precio)}`)
+    show(metodo === 'credito' ? `Fiado a ${cliente.nombre} · ${money(s.precio)}` : `Servicio registrado · ${money(s.precio)}`)
+  }
+
+  async function confirmarCredito() {
+    let cliente = null
+    if (clienteNuevo.trim()) {
+      cliente = { id: uid(), nombre: clienteNuevo.trim() }
+      await db.clientes.add(stamp({ id: cliente.id, activo: 1, nombre: cliente.nombre, telefono: '' }))
+    } else {
+      cliente = (clientes || []).find((c) => c.id === clienteSel)
+    }
+    if (!cliente) return show('Elige o crea un cliente')
+    const tipo = credito
+    setCredito(null); setClienteSel(''); setClienteNuevo('')
+    if (tipo === 'producto') await cobrarProductos('credito', cliente)
+    else await cobrarServicio('credito', cliente)
   }
 
   return (
@@ -155,7 +182,10 @@ export default function Caja() {
                     <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--green)' }}>+{money(gananciaProd)}</div>
                   </div>
                 </div>
-                <button className="btn" onClick={cobrarProductos}>Cobrar {money(totalProd)}</button>
+                <div className="btn-row">
+                  <button className="btn" onClick={() => cobrarProductos('contado')}>Contado · {money(totalProd)}</button>
+                  <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setCredito('producto')}>A crédito</button>
+                </div>
               </>
             )}
           </>
@@ -209,14 +239,29 @@ export default function Caja() {
                   )
                 })()}
 
-                <button className="btn" onClick={cobrarServicio}>
-                  Cobrar {money(listaServ.find((x) => x.id === servSel).precio)}
-                </button>
+                <div className="btn-row">
+                  <button className="btn" onClick={() => cobrarServicio('contado')}>
+                    Contado · {money(listaServ.find((x) => x.id === servSel).precio)}
+                  </button>
+                  <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setCredito('servicio')}>A crédito</button>
+                </div>
               </>
             )}
           </>
         )}
       </div>
+
+      <Sheet open={!!credito} onClose={() => setCredito(null)} title="Cobrar a crédito (fiado)">
+        <label>Cliente</label>
+        <SearchSelect value={clienteSel} onChange={(v) => { setClienteSel(v); setClienteNuevo('') }}
+          options={(clientes || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre)).map((c) => ({ value: c.id, label: c.nombre }))}
+          placeholder="Buscar cliente…" />
+        <div className="helper" style={{ margin: '8px 0' }}>o crea uno nuevo:</div>
+        <label>Cliente nuevo</label>
+        <input value={clienteNuevo} placeholder="Nombre del cliente" onChange={(e) => { setClienteNuevo(e.target.value); if (e.target.value) setClienteSel('') }} />
+        <div style={{ height: 14 }} />
+        <button className="btn" onClick={confirmarCredito}>Registrar fiado</button>
+      </Sheet>
 
       {node}
     </>
