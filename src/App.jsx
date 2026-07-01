@@ -3,7 +3,7 @@ import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
 import { db, seedIfEmpty } from './db'
 import { startSync, sync } from './sync'
 import { syncDisponible } from './supabase'
-import { LOGO_URL } from './format'
+import { LOGO_URL, fechaLarga } from './format'
 import { useAuth } from './auth'
 import { SyncBadge } from './components/ui'
 import Login from './pages/Login'
@@ -16,20 +16,17 @@ import Servicios from './pages/Servicios'
 import Gastos from './pages/Gastos'
 import Credito from './pages/Credito'
 
-// Barra lateral (solo escritorio). En móvil la navegación es por el menú de Inicio.
 const NAV = [
   { to: '/', label: 'Inicio', end: true },
-  { to: '/factura', label: 'Factura rápida' },
-  { to: '/historial', label: 'Historial', soloDueno: true },
+  { to: '/factura', label: 'Facturar' },
   { to: '/inventario', label: 'Inventario', soloDueno: true },
-  { to: '/credito', label: 'Crédito', soloDueno: true },
+  { to: '/historial', label: 'Historial', soloDueno: true },
+  { to: '/credito', label: 'Créditos', soloDueno: true },
   { to: '/gastos', label: 'Gastos', soloDueno: true },
   { to: '/balance', label: 'Balance', soloDueno: true },
-  { to: '/config', label: 'Configuración', soloDueno: true },
+  { to: '/config', label: 'Admin', soloDueno: true },
 ]
 
-// Candado a nivel de módulo: la inicialización corre UNA sola vez aunque
-// React StrictMode monte el efecto dos veces (evita sembrar duplicados).
 let inicializado = false
 
 export default function App() {
@@ -41,8 +38,6 @@ export default function App() {
     if (inicializado) { setReady(true); return }
     inicializado = true
     ;(async () => {
-      // En un dispositivo nuevo con internet, primero bajamos lo que ya
-      // exista en la nube y SOLO sembramos si de verdad quedó vacío.
       if (syncDisponible && navigator.onLine) {
         try { await sync() } catch { /* sin conexión: seguimos local */ }
       }
@@ -62,24 +57,32 @@ export default function App() {
 
   return (
     <div className="app">
-      <nav className="nav">
-        <div className="nav-brand">
+      <header className="topbar">
+        <div className="topbar-brand">
           <img src={LOGO_URL} alt="Lavadero Fénix" />
-          <span>Lavadero Fénix</span>
+          <div>
+            <div className="tb-name">Lavadero Fénix LC</div>
+            <div className="tb-sub">Sistema POS</div>
+          </div>
         </div>
+        <div className="topbar-right">
+          <span className="tb-user">{user.nombre}</span>
+          <SyncBadge />
+          <span className="tb-date">{fechaLarga()}</span>
+          <button className="tb-salir" onClick={logout}>Salir</button>
+        </div>
+      </header>
+
+      <nav className="tabnav">
         {navItems.map((t) => (
           <NavLink key={t.to} to={t.to} end={t.end}
             className={({ isActive }) => (isActive ? 'active' : '')}>
-            <span>{t.label}</span>
+            {t.label}
           </NavLink>
         ))}
-        <button className="nav-logout" onClick={logout} title={`Salir (${user.nombre})`}>
-          <span>Salir</span>
-        </button>
       </nav>
 
       <main className="main">
-        <SyncBadge />
         <Routes>
           <Route path="/" element={<Inicio />} />
           <Route path="/factura" element={<Caja />} />

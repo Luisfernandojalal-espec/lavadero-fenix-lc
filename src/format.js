@@ -44,6 +44,20 @@ export function monthLabel(key) {
   return `${meses[parseInt(m, 10) - 1]} ${y}`
 }
 
+const mesesCortos = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+// "01 Jul 2026"
+export function fechaLarga(ts = Date.now()) {
+  const d = new Date(ts)
+  return `${String(d.getDate()).padStart(2, '0')} ${mesesCortos[d.getMonth()]} ${d.getFullYear()}`
+}
+
+// Clave de día "2026-07-01"
+export function dayKey(ts = Date.now()) {
+  const d = new Date(ts)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 export function shortDate(ts) {
   const d = new Date(ts)
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`

@@ -27,20 +27,109 @@ body {
   overscroll-behavior-y: none;
 }
 
-.app {
-  min-height: 100%;
-}
+.app { min-height: 100%; }
 
-/* Contenedor del contenido. En celular es una sola columna centrada;
-   en PC se ensancha y deja espacio al menú lateral (ver media query). */
 .main {
-  max-width: 480px;
+  width: 100%;
+  max-width: 1080px;
   margin: 0 auto;
-  padding-bottom: calc(env(safe-area-inset-bottom) + 28px);
+  padding: 0 16px calc(env(safe-area-inset-bottom) + 40px);
 }
 
-/* Marca del menú lateral: solo visible en escritorio */
-.nav-brand { display: none; }
+/* ===== Barra superior (marca + usuario + fecha) ===== */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  padding-top: calc(env(safe-area-inset-top) + 12px);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.topbar-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.topbar-brand img { width: 38px; height: 38px; border-radius: 8px; object-fit: cover; }
+.tb-name { font-weight: 700; font-size: 16px; line-height: 1.1; }
+.tb-sub { font-size: 11px; color: var(--muted); letter-spacing: .04em; }
+.topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.tb-user { font-size: 13px; font-weight: 600; }
+.tb-date { font-size: 13px; color: var(--muted); display: none; }
+@media (min-width: 700px) { .tb-date { display: inline; } }
+.tb-salir {
+  background: var(--surface-2); color: var(--text);
+  border-radius: 8px; padding: 7px 12px; font-size: 13px; font-weight: 600;
+}
+.tb-salir:active { background: var(--border); }
+
+/* ===== Pestañas horizontales ===== */
+.tabnav {
+  display: flex;
+  gap: 4px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 15;
+}
+.tabnav::-webkit-scrollbar { display: none; }
+.tabnav a {
+  padding: 13px 14px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  white-space: nowrap;
+  border-bottom: 2.5px solid transparent;
+}
+.tabnav a.active { color: var(--primary); border-bottom-color: var(--primary); }
+.tabnav a:hover { color: var(--text); }
+
+/* ===== Dashboard de Inicio ===== */
+.dash-logo {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  padding: 22px 0 18px;
+}
+.dash-logo img { width: 60px; height: 60px; border-radius: 12px; object-fit: cover; }
+.dash-title { font-size: 22px; font-weight: 700; }
+.dash-sub { font-size: 13px; color: var(--muted); }
+
+.kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+}
+.kpi-label { font-size: 11px; color: var(--muted); letter-spacing: .04em; }
+.kpi-value { font-size: 24px; font-weight: 700; margin-top: 4px; }
+.kpi-value.green { color: var(--green); }
+.kpi-value.red { color: var(--red); }
+
+.modgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 12px; }
+.modcard {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px 12px;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 15px;
+}
+.modcard svg { color: var(--primary); }
+.modcard:active { background: var(--surface-2); }
+
+@media (min-width: 700px) {
+  .kpi-value { font-size: 28px; }
+  .modgrid { grid-template-columns: repeat(3, 1fr); }
+  .modcard { padding: 30px 12px; cursor: pointer; }
+  .modcard:hover { border-color: var(--primary); }
+}
 
 .header {
   position: sticky;
@@ -72,15 +161,8 @@ body {
 .brand-header .sub { color: var(--muted); font-size: 14px; font-weight: 600; }
 .brand-header .hola { font-size: 20px; font-weight: 700; }
 
-/* Botón "volver" del encabezado */
-.back-btn {
-  background: transparent;
-  color: var(--primary);
-  font-size: 15px;
-  font-weight: 600;
-  padding: 4px 0;
-  margin-bottom: 4px;
-}
+/* Botón "volver" del encabezado — oculto: la navegación es por pestañas */
+.back-btn { display: none; }
 
 /* Encabezado sobrio de Inicio */
 .inicio-top {
@@ -389,10 +471,6 @@ input:focus, select:focus { outline: 2px solid var(--primary); border-color: tra
 
 /* Indicador de sincronización con la nube */
 .sync-badge {
-  position: fixed;
-  top: calc(env(safe-area-inset-top) + 10px);
-  right: 12px;
-  z-index: 30;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -403,7 +481,6 @@ input:focus, select:focus { outline: 2px solid var(--primary); border-color: tra
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--muted);
-  box-shadow: var(--shadow);
 }
 .sync-badge.ok { color: var(--green); border-color: rgba(22,163,74,.3); }
 .sync-badge.sync { color: var(--primary); border-color: rgba(14,165,233,.3); }
@@ -414,7 +491,6 @@ input:focus, select:focus { outline: 2px solid var(--primary); border-color: tra
 @keyframes pulse { 50% { opacity: .3; } }
 .sync-badge .sync-txt { display: none; }
 @media (min-width: 768px) {
-  .sync-badge { top: 16px; right: 20px; }
   .sync-badge .sync-txt { display: inline; }
 }
 .spin { display: inline-block; animation: spin 1s linear infinite; }
@@ -515,72 +591,8 @@ input:focus, select:focus { outline: 2px solid var(--primary); border-color: tra
    ESCRITORIO (PC / tablet ancha): menú lateral + contenido amplio
    ============================================================ */
 @media (min-width: 768px) {
-  .app {
-    display: grid;
-    grid-template-columns: 250px minmax(0, 1fr);
-  }
-
-  /* En escritorio sí aparece: barra lateral fija */
-  .nav {
-    display: flex;
-    position: sticky;
-    top: 0;
-    height: 100vh;
-    width: 250px;
-    background: var(--surface);
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: 4px;
-    padding: 18px 14px;
-    border-right: 1px solid var(--border);
-    z-index: 20;
-  }
-  .nav a {
-    flex: none;
-    flex-direction: row;
-    justify-content: flex-start;
-    gap: 14px;
-    width: 100%;
-    padding: 13px 14px;
-    border-radius: 12px;
-    font-size: 15px;
-  }
-  .nav a .ico { font-size: 20px; }
-  .nav a.active { background: rgba(14, 165, 233, .10); }
-  .nav a:hover { background: var(--surface-2); }
-
-  .nav-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 8px 16px;
-    margin-bottom: 8px;
-    border-bottom: 1px solid var(--border);
-    font-weight: 700;
-    font-size: 16px;
-  }
-  .nav-brand img {
-    width: 40px; height: 40px;
-    border-radius: 10px;
-    object-fit: cover;
-  }
-
-  /* Contenido: ancho cómodo y centrado dentro del área disponible.
-     width:100% es necesario para que el ítem de grid se estire al track
-     (con solo margin:auto el navegador lo encogería a su contenido). */
-  .main {
-    width: 100%;
-    max-width: 920px;
-    margin: 0 auto;
-    padding: 0 28px 48px;
-  }
-
-  .header, .brand-header { padding-left: 0; padding-right: 0; }
+  .main { padding: 0 24px 48px; }
   .content { padding: 0; }
-
-  /* La marca grande del Inicio se alinea a la izquierda en PC */
-  .brand-header { flex-direction: row; align-items: center; gap: 16px; }
-  .brand-logo { width: 84px; height: 84px; }
 
   /* Más columnas para los mosaicos de venta rápida */
   .tiles { grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); }
