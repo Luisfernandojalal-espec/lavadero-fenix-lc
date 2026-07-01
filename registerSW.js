@@ -1,0 +1,1 @@
+if('serviceWorker' in navigator) {window.addEventListener('load', () => {navigator.serviceWorker.register('/lavadero-fenix-lc/sw.js', { scope: '/lavadero-fenix-lc/' })})}
