@@ -1,0 +1,491 @@
+:root {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f1f5f9;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --muted: #64748b;
+  --primary: #0ea5e9;
+  --primary-dark: #0284c7;
+  --green: #16a34a;
+  --red: #dc2626;
+  --amber: #d97706;
+  --shadow: 0 1px 3px rgba(15, 23, 42, .06), 0 1px 2px rgba(15, 23, 42, .04);
+  --radius: 14px;
+  --nav-h: 64px;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  overscroll-behavior-y: none;
+}
+
+.app {
+  min-height: 100%;
+}
+
+/* Contenedor del contenido. En celular es una sola columna centrada;
+   en PC se ensancha y deja espacio al menú lateral (ver media query). */
+.main {
+  max-width: 480px;
+  margin: 0 auto;
+  padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 12px);
+}
+
+/* Marca del menú lateral: solo visible en escritorio */
+.nav-brand { display: none; }
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: linear-gradient(180deg, var(--bg) 70%, transparent);
+  padding: 16px 16px 8px;
+  padding-top: calc(env(safe-area-inset-top) + 12px);
+}
+.header h1 { margin: 0; font-size: 22px; font-weight: 700; }
+.header .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+/* Encabezado con logo del negocio (pantalla de Inicio) */
+.brand-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 20px 16px 8px;
+  padding-top: calc(env(safe-area-inset-top) + 16px);
+}
+.brand-logo {
+  width: 116px;
+  height: 116px;
+  border-radius: 24px;
+  object-fit: cover;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, .18);
+}
+.brand-header .sub { color: var(--muted); font-size: 14px; font-weight: 600; }
+
+.content { padding: 0 16px; }
+
+/* Cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow);
+}
+
+.stat-card { display: flex; flex-direction: column; gap: 4px; }
+.stat-card .label { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.stat-card .value { font-size: 26px; font-weight: 700; }
+.value.green { color: var(--green); }
+.value.red { color: var(--red); }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Mosaicos de Caja/productos: 2 columnas en móvil, más en pantallas anchas */
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Buttons */
+button {
+  font-family: inherit;
+  font-size: 16px;
+  cursor: pointer;
+  border: none;
+}
+.btn {
+  background: var(--primary);
+  color: white;
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  font-weight: 600;
+  width: 100%;
+}
+.btn:active { background: var(--primary-dark); }
+.btn.secondary { background: var(--surface-2); }
+.btn.danger { background: var(--red); }
+.btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
+.btn:disabled { opacity: .5; }
+
+.btn-row { display: flex; gap: 10px; }
+
+/* Tappable tiles (caja) */
+.tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 12px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 84px;
+  justify-content: center;
+  box-shadow: var(--shadow);
+}
+.tile:active { border-color: var(--primary); }
+.tile .name { font-weight: 600; font-size: 15px; }
+.tile .price { color: var(--muted); font-size: 13px; }
+.tile .emoji { font-size: 22px; }
+
+/* Forms */
+label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; }
+input, select {
+  width: 100%;
+  font-size: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+}
+input:focus, select:focus { outline: 2px solid var(--primary); border-color: transparent; }
+
+/* List rows */
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  box-shadow: var(--shadow);
+}
+.row .main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.row .title { font-weight: 600; }
+.row .meta { color: var(--muted); font-size: 13px; }
+.row .right { text-align: right; white-space: nowrap; }
+
+.badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+}
+.badge.green { background: rgba(34,197,94,.15); color: var(--green); }
+.badge.amber { background: rgba(245,158,11,.15); color: var(--amber); }
+
+.section-title { font-size: 14px; color: var(--muted); margin: 18px 0 8px; font-weight: 600; }
+
+/* Encabezado de día en Movimientos (cierre de caja diario) */
+.dia-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 18px 0 8px;
+  font-weight: 700;
+  font-size: 15px;
+}
+.dia-header .dia-total { color: var(--green); font-size: 14px; }
+
+.empty { text-align: center; color: var(--muted); padding: 32px 16px; }
+
+/* Tarjeta de alerta de stock bajo (Inicio) */
+.alerta-stock {
+  background: rgba(217, 119, 6, .08);
+  border-color: rgba(217, 119, 6, .35);
+}
+.alerta-stock .label { color: var(--amber); }
+.alerta-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  padding: 3px 0;
+}
+.alerta-item b { color: var(--amber); }
+
+.pill-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.pill {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--muted);
+}
+.pill.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+/* Bottom nav */
+.nav {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  max-width: 480px;
+  margin: 0 auto;
+  z-index: 20;
+}
+.nav a {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 11px;
+}
+.nav a.active { color: var(--primary); }
+.nav a .ico { font-size: 20px; }
+
+/* Floating action button */
+.fab {
+  position: fixed;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 16px);
+  right: max(16px, calc(50% - 240px + 16px));
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  font-size: 28px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 6px 16px rgba(0,0,0,.4);
+  z-index: 15;
+}
+
+/* Modal sheet */
+.sheet-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.5);
+  display: flex; align-items: flex-end;
+  z-index: 50;
+}
+.sheet {
+  background: var(--bg);
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  border-radius: 20px 20px 0 0;
+  padding: 16px 16px calc(env(safe-area-inset-bottom) + 16px);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.sheet h2 { margin: 4px 0 8px; font-size: 18px; }
+
+.toast {
+  position: fixed;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 24px);
+  left: 50%; transform: translateX(-50%);
+  background: var(--green);
+  color: white;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-weight: 600;
+  z-index: 60;
+  box-shadow: 0 4px 12px rgba(0,0,0,.4);
+}
+
+.helper { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+/* Indicador de sincronización con la nube */
+.sync-badge {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 10px);
+  right: 12px;
+  z-index: 30;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  box-shadow: var(--shadow);
+}
+.sync-badge.ok { color: var(--green); border-color: rgba(22,163,74,.3); }
+.sync-badge.sync { color: var(--primary); border-color: rgba(14,165,233,.3); }
+.sync-badge.off { color: var(--amber); border-color: rgba(217,119,6,.3); }
+.sync-badge.err { color: var(--red); border-color: rgba(220,38,38,.3); }
+.sync-badge .sync-txt { display: none; }
+@media (min-width: 768px) {
+  .sync-badge { top: 16px; right: 20px; }
+  .sync-badge .sync-txt { display: inline; }
+}
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ============================ LOGIN ============================ */
+.login {
+  max-width: 380px;
+  margin: 0 auto;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+}
+.login-logo { width: 96px; height: 96px; border-radius: 22px; box-shadow: 0 4px 14px rgba(15,23,42,.18); }
+.login h1 { margin: 16px 0 4px; font-size: 22px; }
+.login-sub { color: var(--muted); font-size: 14px; margin: 0 0 8px; }
+.login label { align-self: stretch; text-align: left; }
+.login input, .login select { width: 100%; }
+.login-error { color: var(--red); font-weight: 600; font-size: 14px; margin-top: 12px; }
+.login .btn { width: 100%; }
+.login-avatar { font-size: 56px; }
+
+.login-users { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 8px; }
+.login-user {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 18px;
+  font-size: 17px; font-weight: 600; color: var(--text);
+  box-shadow: var(--shadow);
+}
+.login-user:active { border-color: var(--primary); }
+.login-user-ico { font-size: 24px; }
+
+/* Teclado del PIN */
+.pin-dots { display: flex; gap: 16px; margin: 18px 0 22px; }
+.pin-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--muted); }
+.pin-dot.on { background: var(--primary); border-color: var(--primary); }
+.pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; max-width: 300px; }
+.pin-key {
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 26px; font-weight: 600; color: var(--text);
+  box-shadow: var(--shadow);
+}
+.pin-key:active { background: var(--surface-2); }
+.pin-key.empty { background: transparent; border: none; box-shadow: none; }
+
+/* Botón salir en la navegación */
+.nav-logout {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+}
+.nav-logout .ico { font-size: 20px; }
+@media (min-width: 768px) {
+  .nav-logout {
+    flex: none;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 14px;
+    width: 100%;
+    margin-top: auto;                 /* lo empuja al fondo de la barra lateral */
+    padding: 13px 14px;
+    border-radius: 12px;
+    font-size: 15px;
+  }
+  .nav-logout:hover { background: var(--surface-2); color: var(--red); }
+}
+
+/* ============================================================
+   ESCRITORIO (PC / tablet ancha): menú lateral + contenido amplio
+   ============================================================ */
+@media (min-width: 768px) {
+  .app {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+  }
+
+  /* El menú deja de estar abajo y pasa a ser una barra lateral fija */
+  .nav {
+    position: sticky;
+    top: 0;
+    left: auto; right: auto; bottom: auto;
+    height: 100vh;
+    width: 250px;
+    max-width: none;
+    margin: 0;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 4px;
+    padding: 18px 14px;
+    border-top: none;
+    border-right: 1px solid var(--border);
+  }
+  .nav a {
+    flex: none;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 14px;
+    width: 100%;
+    padding: 13px 14px;
+    border-radius: 12px;
+    font-size: 15px;
+  }
+  .nav a .ico { font-size: 20px; }
+  .nav a.active { background: rgba(14, 165, 233, .10); }
+  .nav a:hover { background: var(--surface-2); }
+
+  .nav-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px 16px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .nav-brand img {
+    width: 40px; height: 40px;
+    border-radius: 10px;
+    object-fit: cover;
+  }
+
+  /* Contenido: ancho cómodo y centrado dentro del área disponible.
+     width:100% es necesario para que el ítem de grid se estire al track
+     (con solo margin:auto el navegador lo encogería a su contenido). */
+  .main {
+    width: 100%;
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 28px 48px;
+  }
+
+  .header, .brand-header { padding-left: 0; padding-right: 0; }
+  .content { padding: 0; }
+
+  /* La marca grande del Inicio se alinea a la izquierda en PC */
+  .brand-header { flex-direction: row; align-items: center; gap: 16px; }
+  .brand-logo { width: 84px; height: 84px; }
+
+  /* Más columnas para los mosaicos de venta rápida */
+  .tiles { grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); }
+
+  /* FAB y avisos reubicados (ya no hay barra inferior) */
+  .fab { right: 36px; bottom: 36px; }
+  .toast { bottom: 32px; left: auto; right: 36px; transform: none; }
+
+  /* Los modales pasan a ser ventanas centradas, no hojas desde abajo */
+  .sheet-backdrop { align-items: center; justify-content: center; }
+  .sheet {
+    max-width: 460px;
+    border-radius: 18px;
+    max-height: 86vh;
+    margin: 0;
+  }
+
+  /* Hover sutil en filas y mosaicos clicables */
+  .row, .tile { transition: border-color .12s, box-shadow .12s; }
+  .row:hover, .tile:hover { border-color: var(--primary); cursor: pointer; }
+}
