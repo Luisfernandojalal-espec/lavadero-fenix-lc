@@ -230,6 +230,25 @@ input:focus, select:focus { outline: 2px solid var(--primary); border-color: tra
 }
 .dia-header .dia-total { color: var(--green); font-size: 14px; }
 
+/* Kardex (tabla de movimientos por producto) */
+.kardex-head, .kardex-row {
+  display: grid;
+  grid-template-columns: 1.3fr 1.2fr 0.7fr 0.7fr 0.8fr;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 6px;
+  font-size: 13px;
+}
+.kardex-head {
+  color: var(--muted);
+  font-weight: 600;
+  border-bottom: 2px solid var(--border);
+  margin-top: 12px;
+}
+.kardex-row { border-bottom: 1px solid var(--border); }
+.kardex-row.saldo-ini { color: var(--muted); font-style: italic; }
+.kardex-head .num, .kardex-row .num { text-align: right; }
+
 .empty { text-align: center; color: var(--muted); padding: 32px 16px; }
 
 /* Tarjeta de alerta de stock bajo (Inicio) */

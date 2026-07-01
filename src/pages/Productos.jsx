@@ -7,7 +7,7 @@ import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
 
 const emptyForm = { nombre: '', categoria: 'cerveza', precioCompra: 0, precioVenta: 0, stock: 0, stockMin: STOCK_MIN_DEFAULT }
 
-export default function Productos() {
+export default function Productos({ embedded }) {
   const navigate = useNavigate()
   const { show, node } = useToast()
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -71,7 +71,7 @@ export default function Productos() {
 
   return (
     <>
-      <Header title="Inventario" sub="Productos · precios · márgenes · stock" onBack={() => navigate('/')} />
+      {!embedded && <Header title="Inventario" sub="Productos · precios · márgenes · stock" onBack={() => navigate('/')} />}
 
       <div className="content">
         <div className="pill-row">

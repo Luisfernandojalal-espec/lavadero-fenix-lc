@@ -16,6 +16,16 @@ db.version(1).stores({
   gastos: '&id, categoria, mes, fecha, updatedAt',
 })
 
+// v2: movimientos de inventario (entradas/salidas) para el kardex
+db.version(2).stores({
+  productos: '&id, categoria, activo, updatedAt',
+  servicios: '&id, activo, updatedAt',
+  trabajadores: '&id, activo, updatedAt',
+  ventas: '&id, tipo, mes, fecha, trabajadorId, updatedAt',
+  gastos: '&id, categoria, mes, fecha, updatedAt',
+  movimientos_inv: '&id, productoId, tipo, mes, fecha, updatedAt',
+})
+
 export function uid() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
   return 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2)
@@ -32,6 +42,14 @@ export const CATEGORIAS_PRODUCTO = [
   { id: 'agua', label: 'Agua', emoji: '💧' },
   { id: 'mecato', label: 'Mecato', emoji: '🍟' },
   { id: 'otro', label: 'Otro', emoji: '📦' },
+]
+
+export const MOTIVOS_SALIDA = [
+  { id: 'merma', label: 'Merma / vencido' },
+  { id: 'dañado', label: 'Dañado' },
+  { id: 'consumo', label: 'Consumo propio' },
+  { id: 'ajuste', label: 'Ajuste de inventario' },
+  { id: 'otro', label: 'Otro' },
 ]
 
 export const CATEGORIAS_GASTO = [

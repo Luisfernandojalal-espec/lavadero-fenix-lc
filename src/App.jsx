@@ -11,7 +11,7 @@ import Inicio from './pages/Inicio'
 import Reportes from './pages/Reportes'
 import Movimientos from './pages/Movimientos'
 import Caja from './pages/Caja'
-import Productos from './pages/Productos'
+import Inventario from './pages/Inventario'
 import Servicios from './pages/Servicios'
 import Gastos from './pages/Gastos'
 import Credito from './pages/Credito'
@@ -81,7 +81,7 @@ export default function App() {
           {esDueno ? (
             <>
               <Route path="/historial" element={<Movimientos />} />
-              <Route path="/inventario" element={<Productos />} />
+              <Route path="/inventario" element={<Inventario />} />
               <Route path="/credito" element={<Credito />} />
               <Route path="/gastos" element={<Gastos />} />
               <Route path="/balance" element={<Reportes />} />
