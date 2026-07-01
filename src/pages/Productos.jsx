@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, CATEGORIAS_PRODUCTO, emojiCategoria, stockBajo, STOCK_MIN_DEFAULT } from '../db'
+import { db, uid, stamp, CATEGORIAS_PRODUCTO, labelCategoria, stockBajo, STOCK_MIN_DEFAULT } from '../db'
 import { money } from '../format'
-import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
+import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 
 const emptyForm = { nombre: '', categoria: 'cerveza', precioCompra: 0, precioVenta: 0, stock: 0, stockMin: STOCK_MIN_DEFAULT }
 
@@ -80,7 +80,7 @@ export default function Productos({ embedded }) {
           </button>
           {CATEGORIAS_PRODUCTO.map((c) => (
             <button key={c.id} className={`pill ${filtro === c.id ? 'active' : ''}`} onClick={() => setFiltro(c.id)}>
-              {c.emoji} {c.label}
+              {c.label}
             </button>
           ))}
         </div>
@@ -95,13 +95,13 @@ export default function Productos({ embedded }) {
           return (
             <div className="row" key={p.id} onClick={() => abrirEditar(p)}>
               <div className="main">
-                <div className="title">{emojiCategoria(p.categoria)} {p.nombre}</div>
+                <div className="title">{p.nombre}</div>
                 <div className="meta">
-                  Compra {money(p.precioCompra)} · Venta {money(p.precioVenta)}
+                  {labelCategoria(p.categoria)} · Compra {money(p.precioCompra)} · Venta {money(p.precioVenta)}
                 </div>
                 <div className="meta">
-                  Stock {p.stock}{' '}
-                  {stockBajo(p) && <span className="badge amber">⚠️ Se está acabando</span>}
+                  Existencia {p.stock}{' '}
+                  {stockBajo(p) && <span className="badge amber">Stock bajo</span>}
                 </div>
               </div>
               <div className="right">
@@ -124,11 +124,8 @@ export default function Productos({ embedded }) {
         />
 
         <label>Categoría</label>
-        <select value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })}>
-          {CATEGORIAS_PRODUCTO.map((c) => (
-            <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>
-          ))}
-        </select>
+        <SearchSelect value={form.categoria} onChange={(v) => setForm({ ...form, categoria: v })}
+          options={CATEGORIAS_PRODUCTO.map((c) => ({ value: c.id, label: c.label }))} placeholder="Buscar categoría…" />
 
         <div className="grid-2">
           <div>

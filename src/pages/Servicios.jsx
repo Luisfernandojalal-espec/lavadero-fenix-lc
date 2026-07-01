@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp } from '../db'
 import { money } from '../format'
-import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
+import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 
 const emptyServ = { nombre: '', precio: 0, comisionPct: 40 }
 
@@ -74,10 +74,10 @@ export default function Servicios() {
       <div className="content">
         <div className="pill-row">
           <button className={`pill ${tab === 'servicios' ? 'active' : ''}`} onClick={() => setTab('servicios')}>
-            🚿 Servicios
+            Servicios
           </button>
           <button className={`pill ${tab === 'trabajadores' ? 'active' : ''}`} onClick={() => setTab('trabajadores')}>
-            👤 Trabajadores
+            Trabajadores
           </button>
         </div>
 
@@ -101,7 +101,7 @@ export default function Servicios() {
           <>
             {(trabajadores || []).map((t) => (
               <div className="row" key={t.id} onClick={() => editarTrab(t)}>
-                <div className="main"><div className="title">👤 {t.nombre}</div></div>
+                <div className="main"><div className="title">{t.nombre}</div><div className="meta">{t.rol === 'dueño' ? 'Administrador' : 'Trabajador'}</div></div>
                 <div className="right meta">Editar</div>
               </div>
             ))}
@@ -144,10 +144,9 @@ export default function Servicios() {
         <div className="helper">Con este PIN entrará a la app en su celular.</div>
 
         <label>Rol</label>
-        <select value={trabForm.rol} onChange={(e) => setTrabForm({ ...trabForm, rol: e.target.value })}>
-          <option value="trabajador">Trabajador (solo Caja)</option>
-          <option value="dueño">Dueño (ve todo)</option>
-        </select>
+        <SearchSelect value={trabForm.rol} onChange={(v) => setTrabForm({ ...trabForm, rol: v })}
+          options={[{ value: 'trabajador', label: 'Trabajador (solo Factura rápida)' }, { value: 'dueño', label: 'Administrador (ve todo)' }]}
+          placeholder="Elegir rol…" />
 
         <div style={{ height: 16 }} />
         <button className="btn" onClick={guardarTrab}>{trabEdit ? 'Guardar' : 'Agregar'}</button>

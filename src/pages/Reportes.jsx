@@ -100,7 +100,7 @@ export default function Reportes() {
         {porAcabarse.length > 0 && (
           <div className="card alerta-stock" onClick={() => navigate('/inventario')}>
             <div className="label" style={{ fontWeight: 700, marginBottom: 6 }}>
-              ⚠️ {porAcabarse.length === 1 ? 'Un producto se está acabando' : `${porAcabarse.length} productos se están acabando`}
+              {porAcabarse.length === 1 ? 'Un producto con stock bajo' : `${porAcabarse.length} productos con stock bajo`}
             </div>
             {porAcabarse.slice(0, 4).map((p) => (
               <div key={p.id} className="alerta-item">
@@ -113,16 +113,16 @@ export default function Reportes() {
         )}
 
         <button className="btn ghost" style={{ marginBottom: 12 }} onClick={() => navigate('/historial')}>
-          📋 Ver historial y corregir ventas
+          Ver historial y corregir ventas
         </button>
 
         <button className="btn ghost" style={{ marginBottom: 12 }} onClick={descargarPDF}>
-          📄 Descargar reporte del mes (PDF)
+          Descargar reporte del mes (PDF)
         </button>
 
         {/* Tarjeta estrella: lo que pidió el cliente */}
         <div className="card stat-card" style={{ borderColor: 'var(--green)' }}>
-          <div className="label">🛒 Ganancia de productos (nevera y mecatos)</div>
+          <div className="label">Ganancia de productos (nevera y mecatos)</div>
           <div className="value green">{money(gananciaProd)}</div>
           <div className="meta" style={{ color: 'var(--muted)', fontSize: 13 }}>
             Vendiste {money(ingresoProd)} · te costaron {money(costoProd)}
@@ -131,26 +131,26 @@ export default function Reportes() {
 
         <div className="grid-2">
           <div className="card stat-card">
-            <div className="label">🚿 Servicios (neto)</div>
+            <div className="label">Servicios (neto)</div>
             <div className="value">{money(gananciaServ)}</div>
             <div className="meta" style={{ fontSize: 12 }}>Vendido {money(ingresoServ)}</div>
           </div>
           <div className="card stat-card">
-            <div className="label">👷 Comisiones</div>
+            <div className="label">Comisiones</div>
             <div className="value" style={{ color: 'var(--amber)' }}>{money(comisiones)}</div>
             <div className="meta" style={{ fontSize: 12 }}>A pagar a trabajadores</div>
           </div>
         </div>
 
         <div className="card stat-card">
-          <div className="label">🏠 Gastos del mes</div>
+          <div className="label">Gastos del mes</div>
           <div className="value red">{money(totalGastos)}</div>
           <div className="meta" style={{ fontSize: 12 }}>Arriendo, luz, agua y otros</div>
         </div>
 
         {/* Utilidad neta */}
         <div className="card stat-card" style={{ background: utilidad >= 0 ? 'rgba(34,197,94,.10)' : 'rgba(239,68,68,.10)', borderColor: utilidad >= 0 ? 'var(--green)' : 'var(--red)' }}>
-          <div className="label">💰 Utilidad neta del mes</div>
+          <div className="label">Utilidad neta del mes</div>
           <div className={`value ${utilidad >= 0 ? 'green' : 'red'}`}>{money(utilidad)}</div>
           <div className="meta" style={{ fontSize: 12 }}>
             Productos + servicios − comisiones − gastos
@@ -160,7 +160,7 @@ export default function Reportes() {
         {/* Ranking productos */}
         {ranking.length > 0 && (
           <>
-            <div className="section-title">Lo que más te deja 🏆</div>
+            <div className="section-title">Productos que más dejan</div>
             {ranking.slice(0, 5).map((r, i) => (
               <div className="row" key={r.nombre}>
                 <div className="main">
@@ -180,7 +180,7 @@ export default function Reportes() {
             {trabRanking.map((t) => (
               <div className="row" key={t.nombre}>
                 <div className="main">
-                  <div className="title">👤 {t.nombre}</div>
+                  <div className="title">{t.nombre}</div>
                   <div className="meta">{t.lavados} lavados</div>
                 </div>
                 <div className="right" style={{ fontWeight: 700, color: 'var(--amber)' }}>{money(t.comision)}</div>

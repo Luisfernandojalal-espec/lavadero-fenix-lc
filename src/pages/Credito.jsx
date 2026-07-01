@@ -8,7 +8,7 @@ export default function Credito() {
       <Header title="Crédito" sub="Fiado y abonos de clientes" onBack={() => navigate('/')} />
       <div className="content">
         <div className="empty">
-          💳 Este módulo estará listo en la siguiente etapa.<br /><br />
+          Este módulo estará listo en la siguiente etapa.<br /><br />
           Aquí vas a manejar los clientes que quedan debiendo (fiado),
           ver cuánto debe cada uno y registrar sus abonos.
         </div>

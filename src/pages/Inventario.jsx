@@ -1,10 +1,18 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, MOTIVOS_SALIDA, emojiCategoria } from '../db'
+import { db, uid, stamp, MOTIVOS_SALIDA } from '../db'
 import { money, monthKey, shortDate } from '../format'
-import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
+import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 import Productos from './Productos'
+
+const TABS = [
+  { id: 'productos', label: 'Productos' },
+  { id: 'saldos', label: 'Saldos iniciales' },
+  { id: 'entradas', label: 'Entradas' },
+  { id: 'salidas', label: 'Salidas' },
+  { id: 'kardex', label: 'Kardex' },
+]
 
 export default function Inventario() {
   const navigate = useNavigate()
@@ -12,21 +20,81 @@ export default function Inventario() {
 
   return (
     <>
-      <Header title="Inventario" sub="Productos, entradas, salidas y kardex" onBack={() => navigate('/')} />
+      <Header title="Inventario" sub="Productos, saldos, entradas, salidas y kardex" onBack={() => navigate('/')} />
       <div className="content">
         <div className="pill-row">
-          <button className={`pill ${tab === 'productos' ? 'active' : ''}`} onClick={() => setTab('productos')}>📦 Productos</button>
-          <button className={`pill ${tab === 'entradas' ? 'active' : ''}`} onClick={() => setTab('entradas')}>⬇️ Entradas</button>
-          <button className={`pill ${tab === 'salidas' ? 'active' : ''}`} onClick={() => setTab('salidas')}>⬆️ Salidas</button>
-          <button className={`pill ${tab === 'kardex' ? 'active' : ''}`} onClick={() => setTab('kardex')}>📒 Kardex</button>
+          {TABS.map((t) => (
+            <button key={t.id} className={`pill ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>{t.label}</button>
+          ))}
         </div>
       </div>
 
       {tab === 'productos' && <Productos embedded />}
+      {tab === 'saldos' && <SaldosIniciales />}
       {tab === 'entradas' && <Entradas />}
       {tab === 'salidas' && <Salidas />}
       {tab === 'kardex' && <Kardex />}
     </>
+  )
+}
+
+function opcionesProducto(productos) {
+  return (productos || [])
+    .slice()
+    .sort((a, b) => a.nombre.localeCompare(b.nombre))
+    .map((p) => ({ value: p.id, label: `${p.nombre} — existencia ${p.stock ?? 0}` }))
+}
+
+// ------------------- SALDOS INICIALES -------------------
+function SaldosIniciales() {
+  const { show, node } = useToast()
+  const productos = useLiveQuery(() => db.productos.where('activo').equals(1).toArray(), [], [])
+  const [valores, setValores] = useState({})
+
+  const lista = (productos || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre))
+
+  // Precargar los valores con el stock actual
+  useEffect(() => {
+    if (!productos) return
+    setValores((prev) => {
+      const next = { ...prev }
+      for (const p of productos) if (next[p.id] === undefined) next[p.id] = p.stock ?? 0
+      return next
+    })
+  }, [productos])
+
+  async function guardar() {
+    let n = 0
+    for (const p of lista) {
+      const v = parseInt(valores[p.id] ?? 0, 10)
+      if (v !== (p.stock ?? 0)) { await db.productos.update(p.id, stamp({ stock: v })); n++ }
+    }
+    show(n ? `Guardado (${n} productos)` : 'Sin cambios')
+  }
+
+  return (
+    <div className="content">
+      <div className="helper" style={{ marginBottom: 10 }}>
+        Carga aquí la existencia real de cada producto para empezar. Escribe la cantidad y guarda.
+      </div>
+      <table className="tabla">
+        <thead><tr><th>Producto</th><th className="num">Existencia</th></tr></thead>
+        <tbody>
+          {lista.map((p) => (
+            <tr key={p.id}>
+              <td>{p.nombre}</td>
+              <td className="num">
+                <input className="celda-num" inputMode="numeric" value={valores[p.id] ?? ''}
+                  onChange={(e) => setValores({ ...valores, [p.id]: e.target.value.replace(/[^\d]/g, '') })} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {lista.length === 0 && <div className="empty">No hay productos. Créalos en la pestaña Productos.</div>}
+      {lista.length > 0 && <button className="btn" style={{ marginTop: 14 }} onClick={guardar}>Guardar saldos</button>}
+      {node}
+    </div>
   )
 }
 
@@ -39,7 +107,7 @@ function Entradas() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ productoId: '', cantidad: 0, costoUnit: 0, nota: '' })
 
-  const lista = (movs || []).sort((a, b) => b.fecha - a.fecha).slice(0, 30)
+  const lista = (movs || []).sort((a, b) => b.fecha - a.fecha).slice(0, 40)
 
   function elegirProducto(id) {
     const p = (productos || []).find((x) => x.id === id)
@@ -60,37 +128,33 @@ function Entradas() {
     await db.productos.update(p.id, stamp({ stock: (p.stock || 0) + form.cantidad }))
     setOpen(false)
     setForm({ productoId: '', cantidad: 0, costoUnit: 0, nota: '' })
-    show(`Entrada registrada · +${form.cantidad}`)
+    show(`Entrada registrada (+${form.cantidad})`)
   }
 
   return (
     <div className="content">
-      <div className="helper" style={{ marginBottom: 10 }}>Registra la mercancía que compras o repones. Sube el stock.</div>
+      <div className="helper" style={{ marginBottom: 10 }}>Mercancía que compras o repones. Aumenta la existencia.</div>
+      <table className="tabla">
+        <thead><tr><th>Fecha</th><th>Producto</th><th className="num">Cant.</th><th className="num">Total</th></tr></thead>
+        <tbody>
+          {lista.map((m) => (
+            <tr key={m.id}>
+              <td className="muted-cell">{shortDate(m.fecha)}</td>
+              <td>{m.productoNombre}{m.nota ? <div className="muted-cell">{m.nota}</div> : null}</td>
+              <td className="num" style={{ color: 'var(--green)' }}>+{m.cantidad}</td>
+              <td className="num">{money(m.costoUnit * m.cantidad)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       {lista.length === 0 && <div className="empty">Sin entradas registradas.</div>}
-      {lista.map((m) => (
-        <div className="row" key={m.id}>
-          <div className="main">
-            <div className="title">{m.productoNombre}</div>
-            <div className="meta">{shortDate(m.fecha)}{m.nota ? ` · ${m.nota}` : ''}</div>
-          </div>
-          <div className="right">
-            <div style={{ fontWeight: 700, color: 'var(--green)' }}>+{m.cantidad}</div>
-            <div className="meta">{money(m.costoUnit * m.cantidad)}</div>
-          </div>
-        </div>
-      ))}
 
       <button className="fab" onClick={() => setOpen(true)} aria-label="Nueva entrada">+</button>
 
       <Sheet open={open} onClose={() => setOpen(false)} title="Nueva entrada (compra)">
         <label>Producto</label>
-        <select value={form.productoId} onChange={(e) => elegirProducto(e.target.value)}>
-          <option value="">Elige…</option>
-          {(productos || []).map((p) => (
-            <option key={p.id} value={p.id}>{emojiCategoria(p.categoria)} {p.nombre} (stock {p.stock})</option>
-          ))}
-        </select>
-
+        <SearchSelect value={form.productoId} onChange={elegirProducto}
+          options={opcionesProducto(productos)} placeholder="Buscar producto…" />
         <div className="grid-2">
           <div>
             <label>Cantidad</label>
@@ -102,10 +166,8 @@ function Entradas() {
             <MoneyInput value={form.costoUnit} onChange={(v) => setForm({ ...form, costoUnit: v })} />
           </div>
         </div>
-
-        <label>Nota (proveedor, factura…) — opcional</label>
+        <label>Nota (proveedor, factura) — opcional</label>
         <input value={form.nota} onChange={(e) => setForm({ ...form, nota: e.target.value })} placeholder="Ej: Distribuidora XYZ" />
-
         <div className="helper" style={{ marginTop: 8 }}>Total de la compra: <b>{money(form.costoUnit * form.cantidad)}</b></div>
         <div style={{ height: 14 }} />
         <button className="btn" onClick={guardar}>Registrar entrada</button>
@@ -124,7 +186,7 @@ function Salidas() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ productoId: '', cantidad: 0, motivo: 'merma', nota: '' })
 
-  const lista = (movs || []).sort((a, b) => b.fecha - a.fecha).slice(0, 30)
+  const lista = (movs || []).sort((a, b) => b.fecha - a.fecha).slice(0, 40)
   const motivoLabel = (id) => (MOTIVOS_SALIDA.find((m) => m.id === id) || {}).label || id
 
   async function guardar() {
@@ -141,34 +203,33 @@ function Salidas() {
     await db.productos.update(p.id, stamp({ stock: Math.max(0, (p.stock || 0) - form.cantidad) }))
     setOpen(false)
     setForm({ productoId: '', cantidad: 0, motivo: 'merma', nota: '' })
-    show(`Salida registrada · −${form.cantidad}`)
+    show(`Salida registrada (-${form.cantidad})`)
   }
 
   return (
     <div className="content">
-      <div className="helper" style={{ marginBottom: 10 }}>Registra mermas, dañados o ajustes. Baja el stock (no es una venta).</div>
+      <div className="helper" style={{ marginBottom: 10 }}>Mermas, dañados o ajustes. Disminuye la existencia (no es una venta).</div>
+      <table className="tabla">
+        <thead><tr><th>Fecha</th><th>Producto</th><th>Motivo</th><th className="num">Cant.</th></tr></thead>
+        <tbody>
+          {lista.map((m) => (
+            <tr key={m.id}>
+              <td className="muted-cell">{shortDate(m.fecha)}</td>
+              <td>{m.productoNombre}</td>
+              <td className="muted-cell">{motivoLabel(m.motivo)}</td>
+              <td className="num" style={{ color: 'var(--red)' }}>-{m.cantidad}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
       {lista.length === 0 && <div className="empty">Sin salidas registradas.</div>}
-      {lista.map((m) => (
-        <div className="row" key={m.id}>
-          <div className="main">
-            <div className="title">{m.productoNombre}</div>
-            <div className="meta">{motivoLabel(m.motivo)} · {shortDate(m.fecha)}</div>
-          </div>
-          <div className="right" style={{ fontWeight: 700, color: 'var(--red)' }}>−{m.cantidad}</div>
-        </div>
-      ))}
 
       <button className="fab" onClick={() => setOpen(true)} aria-label="Nueva salida">+</button>
 
       <Sheet open={open} onClose={() => setOpen(false)} title="Nueva salida">
         <label>Producto</label>
-        <select value={form.productoId} onChange={(e) => setForm({ ...form, productoId: e.target.value })}>
-          <option value="">Elige…</option>
-          {(productos || []).map((p) => (
-            <option key={p.id} value={p.id}>{emojiCategoria(p.categoria)} {p.nombre} (stock {p.stock})</option>
-          ))}
-        </select>
-
+        <SearchSelect value={form.productoId} onChange={(id) => setForm({ ...form, productoId: id })}
+          options={opcionesProducto(productos)} placeholder="Buscar producto…" />
         <div className="grid-2">
           <div>
             <label>Cantidad</label>
@@ -177,15 +238,12 @@ function Salidas() {
           </div>
           <div>
             <label>Motivo</label>
-            <select value={form.motivo} onChange={(e) => setForm({ ...form, motivo: e.target.value })}>
-              {MOTIVOS_SALIDA.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
+            <SearchSelect value={form.motivo} onChange={(v) => setForm({ ...form, motivo: v })}
+              options={MOTIVOS_SALIDA.map((m) => ({ value: m.id, label: m.label }))} placeholder="Motivo…" />
           </div>
         </div>
-
         <label>Nota — opcional</label>
         <input value={form.nota} onChange={(e) => setForm({ ...form, nota: e.target.value })} />
-
         <div style={{ height: 14 }} />
         <button className="btn danger" onClick={guardar}>Registrar salida</button>
       </Sheet>
@@ -194,7 +252,7 @@ function Salidas() {
   )
 }
 
-// ------------------- KARDEX (movimiento por producto) -------------------
+// ------------------- KARDEX -------------------
 function Kardex() {
   const productos = useLiveQuery(() => db.productos.where('activo').equals(1).toArray(), [], [])
   const [prodId, setProdId] = useState('')
@@ -207,16 +265,10 @@ function Kardex() {
 
   const prod = (productos || []).find((p) => p.id === prodId)
 
-  // Construir filas del kardex
   let filas = []
   if (prod) {
     for (const m of movs || []) {
-      const delta = m.tipo === 'entrada' ? m.cantidad : -m.cantidad
-      filas.push({
-        fecha: m.fecha,
-        concepto: m.tipo === 'entrada' ? 'Entrada' : 'Salida',
-        delta,
-      })
+      filas.push({ fecha: m.fecha, concepto: m.tipo === 'entrada' ? 'Entrada' : 'Salida', delta: m.tipo === 'entrada' ? m.cantidad : -m.cantidad })
     }
     for (const v of ventas || []) {
       if (v.anulada) continue
@@ -226,7 +278,6 @@ function Kardex() {
     filas.sort((a, b) => a.fecha - b.fecha)
   }
 
-  // Saldo inicial = stock actual − suma de todos los movimientos (cuadra al stock real)
   const sumaDelta = filas.reduce((s, f) => s + f.delta, 0)
   const saldoInicial = prod ? (prod.stock ?? 0) - sumaDelta : 0
   let saldo = saldoInicial
@@ -234,41 +285,34 @@ function Kardex() {
   return (
     <div className="content">
       <label>Producto</label>
-      <select value={prodId} onChange={(e) => setProdId(e.target.value)}>
-        <option value="">Elige un producto…</option>
-        {(productos || []).map((p) => (
-          <option key={p.id} value={p.id}>{emojiCategoria(p.categoria)} {p.nombre}</option>
-        ))}
-      </select>
+      <SearchSelect value={prodId} onChange={setProdId}
+        options={opcionesProducto(productos)} placeholder="Buscar producto…" />
 
       {!prod && <div className="empty">Elige un producto para ver su kardex.</div>}
 
       {prod && (
         <>
-          <div className="card stat-card" style={{ marginTop: 12 }}>
-            <div className="label">Stock actual de {prod.nombre}</div>
-            <div className="value">{prod.stock ?? 0} unidades</div>
-          </div>
-
-          <div className="kardex-head">
-            <span>Fecha</span><span>Concepto</span><span className="num">Entra</span><span className="num">Sale</span><span className="num">Saldo</span>
-          </div>
-          <div className="kardex-row saldo-ini">
-            <span>—</span><span>Saldo inicial</span><span className="num"></span><span className="num"></span><span className="num">{saldoInicial}</span>
-          </div>
-          {filas.map((f, i) => {
-            saldo += f.delta
-            return (
-              <div className="kardex-row" key={i}>
-                <span>{shortDate(f.fecha)}</span>
-                <span>{f.concepto}</span>
-                <span className="num" style={{ color: 'var(--green)' }}>{f.delta > 0 ? '+' + f.delta : ''}</span>
-                <span className="num" style={{ color: 'var(--red)' }}>{f.delta < 0 ? f.delta : ''}</span>
-                <span className="num"><b>{saldo}</b></span>
-              </div>
-            )
-          })}
-          {filas.length === 0 && <div className="empty">Sin movimientos todavía.</div>}
+          <div className="dato-fuerte">Existencia actual: <b>{prod.stock ?? 0}</b> unidades</div>
+          <table className="tabla">
+            <thead><tr><th>Fecha</th><th>Concepto</th><th className="num">Entra</th><th className="num">Sale</th><th className="num">Saldo</th></tr></thead>
+            <tbody>
+              <tr className="saldo-ini-row">
+                <td>—</td><td>Saldo inicial</td><td className="num"></td><td className="num"></td><td className="num"><b>{saldoInicial}</b></td>
+              </tr>
+              {filas.map((f, i) => {
+                saldo += f.delta
+                return (
+                  <tr key={i}>
+                    <td className="muted-cell">{shortDate(f.fecha)}</td>
+                    <td>{f.concepto}</td>
+                    <td className="num" style={{ color: 'var(--green)' }}>{f.delta > 0 ? '+' + f.delta : ''}</td>
+                    <td className="num" style={{ color: 'var(--red)' }}>{f.delta < 0 ? f.delta : ''}</td>
+                    <td className="num"><b>{saldo}</b></td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </>
       )}
     </div>

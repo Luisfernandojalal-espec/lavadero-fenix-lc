@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
-import { db, stamp, emojiCategoria } from '../db'
+import { db, stamp } from '../db'
 import { money, currentMonthKey, monthLabel, shortDate } from '../format'
 import { Header, Sheet, useToast } from '../components/ui'
 
@@ -154,7 +154,7 @@ function MovRow({ mov, onClick }) {
     return (
       <div className="row">
         <div className="main">
-          <div className="title">🏠 {mov.concepto}</div>
+          <div className="title">{mov.concepto}</div>
           <div className="meta">Gasto · {shortDate(mov.fecha)}</div>
         </div>
         <div className="right" style={{ fontWeight: 700, color: 'var(--red)' }}>−{money(mov.monto)}</div>
@@ -168,7 +168,7 @@ function MovRow({ mov, onClick }) {
   return (
     <div className="row" onClick={onClick}>
       <div className="main">
-        <div className="title">{esProd ? '🛒' : '🚿'} {titulo}</div>
+        <div className="title">{titulo}</div>
         <div className="meta">{esProd ? 'Productos' : (mov.trabajadorNombre || 'Servicio')} · {shortDate(mov.fecha)}</div>
       </div>
       <div className="right" style={{ fontWeight: 700 }}>{money(mov.total)}</div>

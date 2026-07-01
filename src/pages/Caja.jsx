@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, emojiCategoria, stockBajo } from '../db'
+import { db, uid, stamp, stockBajo } from '../db'
 import { money, monthKey } from '../format'
 import { Header, useToast } from '../components/ui'
 import { useAuth } from '../auth'
@@ -109,10 +109,10 @@ export default function Caja() {
       <div className="content">
         <div className="pill-row">
           <button className={`pill ${modo === 'producto' ? 'active' : ''}`} onClick={() => setModo('producto')}>
-            🛒 Productos
+            Productos
           </button>
           <button className={`pill ${modo === 'servicio' ? 'active' : ''}`} onClick={() => setModo('servicio')}>
-            🚿 Servicio
+            Servicio
           </button>
         </div>
 
@@ -121,10 +121,9 @@ export default function Caja() {
             <div className="tiles">
               {listaProd.map((p) => (
                 <button className="tile" key={p.id} onClick={() => addProducto(p)}>
-                  <span className="emoji">{emojiCategoria(p.categoria)}</span>
                   <span className="name">{p.nombre}</span>
                   <span className="price">{money(p.precioVenta)}{carrito[p.id] ? ` · x${carrito[p.id]}` : ''}</span>
-                  {stockBajo(p) && <span className="badge amber" style={{ marginTop: 2 }}>⚠️ quedan {p.stock ?? 0}</span>}
+                  {stockBajo(p) && <span className="badge amber" style={{ marginTop: 2 }}>Quedan {p.stock ?? 0}</span>}
                 </button>
               ))}
             </div>
@@ -185,7 +184,7 @@ export default function Caja() {
                 <div className="pill-row">
                   {(trabajadores || []).map((t) => (
                     <button key={t.id} className={`pill ${trabSel === t.id ? 'active' : ''}`} onClick={() => setTrabSel(t.id)}>
-                      👤 {t.nombre}
+                      {t.nombre}
                     </button>
                   ))}
                   <button className={`pill ${trabSel === null ? 'active' : ''}`} onClick={() => setTrabSel(null)}>

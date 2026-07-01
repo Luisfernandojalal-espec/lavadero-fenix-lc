@@ -10,18 +10,18 @@ export function SyncBadge() {
   if (!syncDisponible) return null
 
   const mapa = {
-    idle: { txt: 'Nube lista', cls: 'muted', ico: '☁️' },
-    sincronizando: { txt: 'Sincronizando…', cls: 'sync', ico: '🔄' },
-    ok: { txt: 'Sincronizado', cls: 'ok', ico: '✅' },
-    offline: { txt: 'Sin conexión', cls: 'off', ico: '📴' },
-    auth: { txt: 'Conectar nube', cls: 'err', ico: '🔒' },
-    error: { txt: 'Error de nube', cls: 'err', ico: '⚠️' },
+    idle: { txt: 'Nube', cls: 'muted' },
+    sincronizando: { txt: 'Sincronizando', cls: 'sync' },
+    ok: { txt: 'Sincronizado', cls: 'ok' },
+    offline: { txt: 'Sin conexión', cls: 'off' },
+    auth: { txt: 'Conectar', cls: 'err' },
+    error: { txt: 'Error de nube', cls: 'err' },
   }
   const e = mapa[estado.fase] || mapa.idle
   return (
     <>
       <button className={`sync-badge ${e.cls}`} onClick={() => setAbierto(true)} title="Estado de la nube">
-        <span className={estado.fase === 'sincronizando' ? 'spin' : ''}>{e.ico}</span>
+        <span className="sync-dot" />
         <span className="sync-txt">{e.txt}</span>
       </button>
       <NubeSheet open={abierto} onClose={() => setAbierto(false)} estado={estado} />
@@ -51,7 +51,7 @@ function NubeSheet({ open, onClose, estado }) {
       setConectado(true)
       setPass('')
       await sync()
-      setMsg('✅ Dispositivo conectado')
+      setMsg('Dispositivo conectado')
     } catch (err) {
       setMsg('No pude conectar: ' + (err?.message || 'revisa el correo y el código'))
     } finally {
@@ -71,10 +71,10 @@ function NubeSheet({ open, onClose, estado }) {
         <div className="main">
           <div className="title">Estado</div>
           <div className="meta">
-            {estado.fase === 'ok' && 'Todo sincronizado ✅'}
+            {estado.fase === 'ok' && 'Todo sincronizado'}
             {estado.fase === 'sincronizando' && 'Sincronizando…'}
             {estado.fase === 'offline' && 'Sin conexión a internet'}
-            {estado.fase === 'auth' && 'Este dispositivo necesita conectarse 🔒'}
+            {estado.fase === 'auth' && 'Este dispositivo necesita conectarse'}
             {estado.fase === 'error' && 'Hubo un error al sincronizar'}
             {estado.fase === 'idle' && 'Listo'}
           </div>
@@ -84,7 +84,7 @@ function NubeSheet({ open, onClose, estado }) {
 
       {conectado === true ? (
         <>
-          <div className="helper" style={{ marginBottom: 12 }}>Este dispositivo está conectado a la nube del negocio. ✅</div>
+          <div className="helper" style={{ marginBottom: 12 }}>Este dispositivo está conectado a la nube del negocio.</div>
           <button className="btn ghost" onClick={desconectar}>Desconectar este dispositivo</button>
         </>
       ) : (
@@ -150,6 +150,40 @@ export function useToast() {
   }, [])
   const node = msg ? <div className="toast">{msg}</div> : null
   return { show, node }
+}
+
+// Selector con barra de búsqueda (reemplaza las listas desplegables).
+// options: [{ value, label }]
+export function SearchSelect({ value, onChange, options, placeholder }) {
+  const [q, setQ] = useState('')
+  const [open, setOpen] = useState(false)
+  const sel = options.find((o) => o.value === value)
+  const filtradas = q
+    ? options.filter((o) => o.label.toLowerCase().includes(q.toLowerCase()))
+    : options
+
+  return (
+    <div className="search-select">
+      <input
+        value={open ? q : (sel ? sel.label : '')}
+        placeholder={placeholder || 'Buscar…'}
+        onFocus={() => { setOpen(true); setQ('') }}
+        onChange={(e) => setQ(e.target.value)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {open && (
+        <div className="search-options">
+          {filtradas.map((o) => (
+            <div key={o.value} className="search-option"
+              onMouseDown={() => { onChange(o.value); setOpen(false) }}>
+              {o.label}
+            </div>
+          ))}
+          {filtradas.length === 0 && <div className="search-option vacio">Sin resultados</div>}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // Input de dinero con separador de miles automático

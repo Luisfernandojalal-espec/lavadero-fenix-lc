@@ -3,11 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, CATEGORIAS_GASTO } from '../db'
 import { money, monthKey, currentMonthKey, monthLabel, shortDate } from '../format'
-import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
+import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 
-function emojiGasto(id) {
+function labelGasto(id) {
   const c = CATEGORIAS_GASTO.find((x) => x.id === id)
-  return c ? c.emoji : '📋'
+  return c ? c.label : 'Otro'
 }
 
 const emptyForm = { concepto: '', categoria: 'arriendo', monto: 0 }
@@ -65,27 +65,24 @@ export default function Gastos() {
       <Header title="Gastos" sub={monthLabel(mesActual)} onBack={() => navigate('/')} />
 
       <div className="content">
-        <div className="card stat-card">
-          <div className="label">🏠 Total de gastos del mes</div>
-          <div className="value red">{money(total)}</div>
-        </div>
+        <div className="dato-fuerte">Total de gastos del mes: <b style={{ color: 'var(--red)' }}>{money(total)}</b></div>
 
         <div className="section-title">Agregar rápido</div>
         <div className="pill-row">
           {CATEGORIAS_GASTO.map((c) => (
             <button key={c.id} className="pill" onClick={() => abrirNuevo(c.id)}>
-              {c.emoji} {c.label}
+              {c.label}
             </button>
           ))}
         </div>
 
         <div className="section-title">Movimientos</div>
-        {lista.length === 0 && <div className="empty">Sin gastos este mes.<br />Usa los botones de arriba.</div>}
+        {lista.length === 0 && <div className="empty">Sin gastos este mes.</div>}
         {lista.map((g) => (
           <div className="row" key={g.id} onClick={() => abrirEditar(g)}>
             <div className="main">
-              <div className="title">{emojiGasto(g.categoria)} {g.concepto}</div>
-              <div className="meta">{shortDate(g.fecha)}</div>
+              <div className="title">{g.concepto}</div>
+              <div className="meta">{labelGasto(g.categoria)} · {shortDate(g.fecha)}</div>
             </div>
             <div className="right" style={{ fontWeight: 700, color: 'var(--red)' }}>−{money(g.monto)}</div>
           </div>
@@ -94,9 +91,8 @@ export default function Gastos() {
 
       <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={editId ? 'Editar gasto' : 'Nuevo gasto'}>
         <label>Categoría</label>
-        <select value={form.categoria} onChange={(e) => setForm({ ...form, categoria: e.target.value })}>
-          {CATEGORIAS_GASTO.map((c) => <option key={c.id} value={c.id}>{c.emoji} {c.label}</option>)}
-        </select>
+        <SearchSelect value={form.categoria} onChange={(v) => setForm({ ...form, categoria: v })}
+          options={CATEGORIAS_GASTO.map((c) => ({ value: c.id, label: c.label }))} placeholder="Buscar categoría…" />
 
         <label>Descripción (opcional)</label>
         <input value={form.concepto} placeholder="Ej: Recibo de luz mayo"

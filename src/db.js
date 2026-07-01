@@ -37,11 +37,11 @@ export function stamp(obj) {
 }
 
 export const CATEGORIAS_PRODUCTO = [
-  { id: 'cerveza', label: 'Cerveza', emoji: '🍺' },
-  { id: 'gaseosa', label: 'Gaseosa', emoji: '🥤' },
-  { id: 'agua', label: 'Agua', emoji: '💧' },
-  { id: 'mecato', label: 'Mecato', emoji: '🍟' },
-  { id: 'otro', label: 'Otro', emoji: '📦' },
+  { id: 'cerveza', label: 'Cerveza' },
+  { id: 'gaseosa', label: 'Gaseosa' },
+  { id: 'agua', label: 'Agua' },
+  { id: 'mecato', label: 'Mecato' },
+  { id: 'otro', label: 'Otro' },
 ]
 
 export const MOTIVOS_SALIDA = [
@@ -53,17 +53,17 @@ export const MOTIVOS_SALIDA = [
 ]
 
 export const CATEGORIAS_GASTO = [
-  { id: 'arriendo', label: 'Arriendo', emoji: '🏠' },
-  { id: 'luz', label: 'Luz', emoji: '💡' },
-  { id: 'agua', label: 'Agua', emoji: '🚰' },
-  { id: 'nomina', label: 'Nómina', emoji: '👷' },
-  { id: 'insumos', label: 'Insumos', emoji: '🧴' },
-  { id: 'otro', label: 'Otro', emoji: '📋' },
+  { id: 'arriendo', label: 'Arriendo' },
+  { id: 'luz', label: 'Luz' },
+  { id: 'agua', label: 'Agua' },
+  { id: 'nomina', label: 'Nómina' },
+  { id: 'insumos', label: 'Insumos' },
+  { id: 'otro', label: 'Otro' },
 ]
 
-export function emojiCategoria(catId) {
+export function labelCategoria(catId) {
   const c = CATEGORIAS_PRODUCTO.find((x) => x.id === catId)
-  return c ? c.emoji : '📦'
+  return c ? c.label : 'Otro'
 }
 
 // Mínimo de stock por defecto si el producto no tiene uno configurado.

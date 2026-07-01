@@ -18,14 +18,14 @@ import Credito from './pages/Credito'
 
 // Barra lateral (solo escritorio). En móvil la navegación es por el menú de Inicio.
 const NAV = [
-  { to: '/', ico: '🏠', label: 'Inicio', end: true },
-  { to: '/factura', ico: '🧾', label: 'Factura rápida' },
-  { to: '/historial', ico: '📋', label: 'Historial', soloDueno: true },
-  { to: '/inventario', ico: '📦', label: 'Inventario', soloDueno: true },
-  { to: '/credito', ico: '💳', label: 'Crédito', soloDueno: true },
-  { to: '/gastos', ico: '🏠', label: 'Gastos', soloDueno: true },
-  { to: '/balance', ico: '⚖️', label: 'Balance', soloDueno: true },
-  { to: '/config', ico: '⚙️', label: 'Configuración', soloDueno: true },
+  { to: '/', label: 'Inicio', end: true },
+  { to: '/factura', label: 'Factura rápida' },
+  { to: '/historial', label: 'Historial', soloDueno: true },
+  { to: '/inventario', label: 'Inventario', soloDueno: true },
+  { to: '/credito', label: 'Crédito', soloDueno: true },
+  { to: '/gastos', label: 'Gastos', soloDueno: true },
+  { to: '/balance', label: 'Balance', soloDueno: true },
+  { to: '/config', label: 'Configuración', soloDueno: true },
 ]
 
 export default function App() {
@@ -63,12 +63,10 @@ export default function App() {
         {navItems.map((t) => (
           <NavLink key={t.to} to={t.to} end={t.end}
             className={({ isActive }) => (isActive ? 'active' : '')}>
-            <span className="ico">{t.ico}</span>
             <span>{t.label}</span>
           </NavLink>
         ))}
         <button className="nav-logout" onClick={logout} title={`Salir (${user.nombre})`}>
-          <span className="ico">⏻</span>
           <span>Salir</span>
         </button>
       </nav>
