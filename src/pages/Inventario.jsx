@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, MOTIVOS_SALIDA } from '../db'
+import { db, uid, stamp, MOTIVOS_SALIDA, CATEGORIAS_PRODUCTO, labelCategoria, STOCK_MIN_DEFAULT } from '../db'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 import Productos from './Productos'
@@ -46,14 +46,23 @@ function opcionesProducto(productos) {
 }
 
 // ------------------- SALDOS INICIALES -------------------
+const COLS = ['Producto', 'Categoria', 'Precio compra', 'Precio venta', 'Existencia', 'Stock minimo']
+
+function catId(txt) {
+  const t = String(txt || '').trim().toLowerCase()
+  const c = CATEGORIAS_PRODUCTO.find((x) => x.id === t || x.label.toLowerCase() === t)
+  return c ? c.id : 'otro'
+}
+function num(v) { const n = parseInt(String(v ?? '').replace(/[^\d]/g, ''), 10); return isNaN(n) ? 0 : n }
+
 function SaldosIniciales() {
   const { show, node } = useToast()
   const productos = useLiveQuery(() => db.productos.where('activo').equals(1).toArray(), [], [])
   const [valores, setValores] = useState({})
+  const fileRef = useRef(null)
 
   const lista = (productos || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre))
 
-  // Precargar los valores con el stock actual
   useEffect(() => {
     if (!productos) return
     setValores((prev) => {
@@ -72,11 +81,78 @@ function SaldosIniciales() {
     show(n ? `Guardado (${n} productos)` : 'Sin cambios')
   }
 
+  async function descargarPlantilla() {
+    const XLSX = await import('xlsx')
+    // Pre-llenamos con los productos actuales; el dueño solo edita la existencia.
+    const filas = lista.length
+      ? lista.map((p) => [p.nombre, labelCategoria(p.categoria), p.precioCompra, p.precioVenta, p.stock ?? 0, p.stockMin ?? ''])
+      : [['Ejemplo: Cerveza Águila', 'Cerveza', 2500, 4000, 24, 5]]
+    const aoa = [COLS, ...filas]
+    const ws = XLSX.utils.aoa_to_sheet(aoa)
+    ws['!cols'] = [{ wch: 28 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 14 }]
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Saldos')
+    XLSX.writeFile(wb, 'Plantilla saldos iniciales.xlsx')
+  }
+
+  async function subirArchivo(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const XLSX = await import('xlsx')
+      const data = await file.arrayBuffer()
+      const wb = XLSX.read(data)
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })
+      const existentes = await db.productos.where('activo').equals(1).toArray()
+      let creados = 0, actualizados = 0
+      for (const r of rows) {
+        const nombre = String(r['Producto'] ?? '').trim()
+        if (!nombre || nombre.toLowerCase().startsWith('ejemplo')) continue
+        const existencia = num(r['Existencia'])
+        const pc = num(r['Precio compra'])
+        const pv = num(r['Precio venta'])
+        const sm = num(r['Stock minimo'])
+        const prev = existentes.find((p) => p.nombre.trim().toLowerCase() === nombre.toLowerCase())
+        if (prev) {
+          const cambios = { stock: existencia }
+          if (pc) cambios.precioCompra = pc
+          if (pv) cambios.precioVenta = pv
+          if (sm) cambios.stockMin = sm
+          await db.productos.update(prev.id, stamp(cambios))
+          actualizados++
+        } else {
+          await db.productos.add(stamp({
+            id: uid(), activo: 1, nombre,
+            categoria: catId(r['Categoria']),
+            precioCompra: pc, precioVenta: pv, stock: existencia,
+            stockMin: sm || STOCK_MIN_DEFAULT,
+          }))
+          creados++
+        }
+      }
+      show(`Listo: ${actualizados} actualizados, ${creados} nuevos`)
+    } catch (err) {
+      show('No pude leer el archivo')
+    } finally {
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
   return (
     <div className="content">
       <div className="helper" style={{ marginBottom: 10 }}>
-        Carga aquí la existencia real de cada producto para empezar. Escribe la cantidad y guarda.
+        Carga la existencia real de cada producto para empezar. Puedes escribirla abajo, o usar la plantilla de Excel para subir todo de una vez.
       </div>
+
+      <div className="btn-row" style={{ marginBottom: 14 }}>
+        <button className="btn secondary" onClick={descargarPlantilla}>Descargar plantilla Excel</button>
+        <button className="btn" onClick={() => fileRef.current?.click()}>Subir archivo</button>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={subirArchivo} />
+      </div>
+      <div className="helper" style={{ marginBottom: 16 }}>
+        La plantilla trae columnas: Producto, Categoría, Precio compra, Precio venta, Existencia y Stock mínimo. Los productos que ya existan se actualizan; los nuevos se crean.
+      </div>
+
       <table className="tabla">
         <thead><tr><th>Producto</th><th className="num">Existencia</th></tr></thead>
         <tbody>
@@ -91,8 +167,8 @@ function SaldosIniciales() {
           ))}
         </tbody>
       </table>
-      {lista.length === 0 && <div className="empty">No hay productos. Créalos en la pestaña Productos.</div>}
-      {lista.length > 0 && <button className="btn" style={{ marginTop: 14 }} onClick={guardar}>Guardar saldos</button>}
+      {lista.length === 0 && <div className="empty">No hay productos. Créalos en Productos o súbelos con la plantilla.</div>}
+      {lista.length > 0 && <button className="btn" style={{ marginTop: 14 }} onClick={guardar}>Guardar saldos escritos</button>}
       {node}
     </div>
   )
