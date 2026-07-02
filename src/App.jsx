@@ -12,6 +12,7 @@ import Reportes from './pages/Reportes'
 import Movimientos from './pages/Movimientos'
 import Caja from './pages/Caja'
 import Mesas from './pages/Mesas'
+import Turno from './pages/Turno'
 import Inventario from './pages/Inventario'
 import Servicios from './pages/Servicios'
 import Gastos from './pages/Gastos'
@@ -21,6 +22,7 @@ const NAV = [
   { to: '/', label: 'Inicio', end: true },
   { to: '/mesas', label: 'Mesas' },
   { to: '/factura', label: 'Facturar' },
+  { to: '/turno', label: 'Turno' },
   { to: '/inventario', label: 'Inventario', soloDueno: true },
   { to: '/historial', label: 'Historial', soloDueno: true },
   { to: '/credito', label: 'Créditos', soloDueno: true },
@@ -89,6 +91,7 @@ export default function App() {
           <Route path="/" element={<Inicio />} />
           <Route path="/mesas" element={<Mesas />} />
           <Route path="/factura" element={<Caja />} />
+          <Route path="/turno" element={<Turno />} />
           {esDueno ? (
             <>
               <Route path="/historial" element={<Movimientos />} />

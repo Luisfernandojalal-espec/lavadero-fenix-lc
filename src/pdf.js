@@ -32,6 +32,69 @@ export async function descargarReportePDF(d) {
   doc.save(`Reporte ${d.mesLabel}.pdf`)
 }
 
+// ---------- PDF del cierre de turno ----------
+function fh(ts) {
+  const d = new Date(ts)
+  const p = (n) => String(n).padStart(2, '0')
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+export async function descargarCierrePDF(t) {
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' })
+  const W = doc.internal.pageSize.getWidth()
+  const margin = 40
+
+  const logo = await logoDataUrl()
+  if (logo) { try { doc.addImage(logo, 'JPEG', margin, 34, 56, 56) } catch { /* ignora */ } }
+  const x = margin + (logo ? 70 : 0)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(...OSCURO)
+  doc.text('LAVADERO FÉNIX LC', x, 52)
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...GRIS)
+  doc.text('Villa Caribe', x, 68)
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(...AZUL)
+  doc.text('Cierre de turno', x, 86)
+  doc.setDrawColor(226, 232, 240)
+  doc.line(margin, 100, W - margin, 100)
+
+  const r = t.resumen || {}
+  const dif = r.diferencia || 0
+  autoTable(doc, {
+    startY: 112,
+    head: [['Concepto', 'Valor']],
+    body: [
+      ['Apertura', `${fh(t.abiertoEn)} — ${t.abiertoPor || ''}`],
+      ['Cierre', `${fh(t.cerradoEn)} — ${t.cerradoPor || ''}`],
+      ['Base de caja', m(t.base)],
+      ['Ventas de contado', m(r.contado)],
+      ['Abonos recibidos', m(r.abonos)],
+      ['Gastos pagados', '- ' + m(r.gastos).slice(2)],
+      ['EFECTIVO ESPERADO EN CAJA', m(r.esperado)],
+      ['Efectivo contado', m(r.contadoReal)],
+      [dif === 0 ? 'CAJA CUADRADA' : dif > 0 ? 'SOBRANTE' : 'FALTANTE', m(Math.abs(dif))],
+      ['Ventas a crédito (no es efectivo)', m(r.credito)],
+      ['Número de ventas del turno', String(r.ventasCount ?? '')],
+    ],
+    styles: { fontSize: 10, cellPadding: 6 },
+    headStyles: { fillColor: AZUL, halign: 'left' },
+    columnStyles: { 1: { halign: 'right' } },
+    didParseCell: (data) => {
+      const c = data.row.raw[0]
+      if (c === 'EFECTIVO ESPERADO EN CAJA') data.cell.styles.fontStyle = 'bold'
+      if (c === 'CAJA CUADRADA') data.cell.styles.textColor = [22, 163, 74]
+      if (c === 'SOBRANTE') data.cell.styles.textColor = [217, 119, 6]
+      if (c === 'FALTANTE') { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = 'bold' }
+      if (data.column.index === 0 && !['Apertura', 'Cierre'].includes(c)) data.cell.styles.fontStyle ||= 'bold'
+    },
+  })
+
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GRIS)
+  doc.text('Generado por Lavadero Fénix LC · Sistema POS', margin, doc.internal.pageSize.getHeight() - 24)
+
+  const dfecha = new Date(t.cerradoEn)
+  const p = (n) => String(n).padStart(2, '0')
+  doc.save(`Cierre_${dfecha.getFullYear()}-${p(dfecha.getMonth() + 1)}-${p(dfecha.getDate())}_${p(dfecha.getHours())}${p(dfecha.getMinutes())}.pdf`)
+}
+
 // Devuelve una URL para previsualizar el PDF (usada en pruebas).
 export async function reportePDFBlobUrl(d) {
   const doc = await construirReporte(d)
