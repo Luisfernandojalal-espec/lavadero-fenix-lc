@@ -11,6 +11,7 @@ import Inicio from './pages/Inicio'
 import Reportes from './pages/Reportes'
 import Movimientos from './pages/Movimientos'
 import Caja from './pages/Caja'
+import Mesas from './pages/Mesas'
 import Inventario from './pages/Inventario'
 import Servicios from './pages/Servicios'
 import Gastos from './pages/Gastos'
@@ -18,6 +19,7 @@ import Credito from './pages/Credito'
 
 const NAV = [
   { to: '/', label: 'Inicio', end: true },
+  { to: '/mesas', label: 'Mesas' },
   { to: '/factura', label: 'Facturar' },
   { to: '/inventario', label: 'Inventario', soloDueno: true },
   { to: '/historial', label: 'Historial', soloDueno: true },
@@ -85,6 +87,7 @@ export default function App() {
       <main className="main">
         <Routes>
           <Route path="/" element={<Inicio />} />
+          <Route path="/mesas" element={<Mesas />} />
           <Route path="/factura" element={<Caja />} />
           {esDueno ? (
             <>

@@ -97,7 +97,8 @@ body {
 .dash-title { font-size: 22px; font-weight: 700; }
 .dash-sub { font-size: 13px; color: var(--muted); }
 
-.kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+.kpi-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+@media (min-width: 700px) { .kpi-row { grid-template-columns: repeat(4, 1fr); } }
 .kpi {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -228,6 +229,66 @@ body {
 
 /* Mosaicos de Caja/productos: 2 columnas en móvil, más en pantallas anchas */
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* Cantidad visible EN la tarjeta (sin abrir otra ventana) */
+.tile { position: relative; cursor: pointer; }
+.tile.sel { border-color: var(--primary); background: rgba(14, 165, 233, .05); }
+.tile-qty {
+  position: absolute;
+  top: 8px; right: 8px;
+  min-width: 24px; height: 24px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 13px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.tile-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+.tile-step { display: inline-flex; align-items: center; gap: 14px; margin-top: 8px; }
+.tile-step button {
+  width: 38px; height: 32px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 18px; font-weight: 700;
+  line-height: 1;
+}
+.tile-step button:active { background: var(--border); }
+.tile-step b { min-width: 18px; text-align: center; font-size: 16px; }
+
+/* Tarjetas de mesas */
+.mesa-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+@media (min-width: 700px) { .mesa-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
+.mesa-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px 16px;
+  min-height: 110px;
+  box-shadow: var(--shadow);
+}
+.mesa-card:active { background: var(--surface-2); }
+.mesa-estado {
+  font-size: 11px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase;
+  color: var(--muted);
+}
+.mesa-card.libre .mesa-estado { color: var(--green); }
+.mesa-card.ocupada { border-color: var(--primary); }
+.mesa-card.ocupada .mesa-estado { color: var(--primary); }
+.mesa-card.reservada { border-color: rgba(217, 119, 6, .5); }
+.mesa-card.reservada .mesa-estado { color: var(--amber); }
+.mesa-nombre { font-weight: 700; font-size: 17px; }
+.mesa-total { font-size: 21px; font-weight: 700; }
 
 /* Buttons */
 button {

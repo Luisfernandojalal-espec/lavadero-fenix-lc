@@ -6,6 +6,7 @@ import { useAuth } from '../auth'
 import { ModIcon } from '../components/icons'
 
 const MODULOS = [
+  { to: '/mesas', icon: 'mesas', label: 'Mesas' },
   { to: '/factura', icon: 'factura', label: 'Facturar' },
   { to: '/inventario', icon: 'inventario', label: 'Inventario', soloDueno: true },
   { to: '/historial', icon: 'historial', label: 'Historial', soloDueno: true },
@@ -23,6 +24,8 @@ export default function Inicio() {
 
   const ventas = useLiveQuery(() => db.ventas.toArray(), [], [])
   const abonos = useLiveQuery(() => db.abonos.toArray(), [], [])
+  const mesas = useLiveQuery(() => db.mesas.where('activo').equals(1).toArray(), [], [])
+  const abiertas = (mesas || []).filter((m) => m.estado === 'ocupada')
 
   const hoy = dayKey()
   const ventasHoy = (ventas || []).filter((v) => !v.anulada && dayKey(v.fecha) === hoy)
@@ -70,6 +73,10 @@ export default function Inicio() {
       {esDueno && (
         <div className="kpi-row">
           <div className="kpi">
+            <div className="kpi-label">ABIERTAS</div>
+            <div className="kpi-value">{abiertas.length}</div>
+          </div>
+          <div className="kpi">
             <div className="kpi-label">VENTAS DE HOY</div>
             <div className="kpi-value green">{money(totalHoy)}</div>
           </div>
@@ -95,6 +102,26 @@ export default function Inicio() {
 
       {esDueno && (
         <button className="btn ghost" style={{ marginTop: 4 }} onClick={exportarCSV}>Exportar resumen del mes (.csv)</button>
+      )}
+
+      {abiertas.length > 0 && (
+        <>
+          <div className="section-title">Mesas abiertas</div>
+          {abiertas.map((m) => {
+            const total = (m.items || []).reduce((s, l) => s + l.precioVenta * l.cantidad, 0)
+            return (
+              <div className="row" key={m.id} onClick={() => navigate('/mesas')} style={{ cursor: 'pointer' }}>
+                <div className="main">
+                  <div className="title">{m.nombre}{m.cliente ? ` · ${m.cliente}` : ''}</div>
+                  <div className="meta">
+                    {(m.items || []).map((l) => `${l.cantidad}x ${l.nombre}`).join(', ') || 'Sin consumos'}
+                  </div>
+                </div>
+                <div className="right" style={{ fontWeight: 700 }}>{money(total)}</div>
+              </div>
+            )
+          })}
+        </>
       )}
 
       {esDueno && (

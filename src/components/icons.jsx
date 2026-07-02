@@ -1,5 +1,6 @@
 // Íconos de línea, sobrios (no emojis). Heredan el color con currentColor.
 const paths = {
+  mesas: <><path d="M2 8h20" /><path d="M5 8v10M19 8v10" /><path d="M8 8v4h8V8" /></>,
   factura: <><path d="M6 2h9l3 3v17l-2-1-2 1-2-1-2 1-2-1-2 1V2z" /><path d="M9 8h6M9 12h6M9 16h4" /></>,
   inventario: <><path d="M3 7l9-4 9 4-9 4-9-4z" /><path d="M3 7v10l9 4 9-4V7" /><path d="M12 11v10" /></>,
   historial: <><rect x="4" y="4" width="16" height="18" rx="2" /><path d="M9 2h6v3H9z" /><path d="M8 10h8M8 14h8M8 18h5" /></>,
