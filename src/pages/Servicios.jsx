@@ -44,19 +44,22 @@ export default function Servicios() {
   // --- Trabajadores ---
   const [trabSheet, setTrabSheet] = useState(false)
   const [trabEdit, setTrabEdit] = useState(null)
-  const emptyTrab = { nombre: '', pin: '', rol: 'trabajador' }
+  const emptyTrab = { nombre: '', pin: '', rol: 'trabajador', pregunta: '', respuesta: '' }
   const [trabForm, setTrabForm] = useState(emptyTrab)
 
   function nuevoTrab() { setTrabEdit(null); setTrabForm(emptyTrab); setTrabSheet(true) }
   function editarTrab(t) {
     setTrabEdit(t.id)
-    setTrabForm({ nombre: t.nombre, pin: t.pin || '', rol: t.rol || 'trabajador' })
+    setTrabForm({ nombre: t.nombre, pin: t.pin || '', rol: t.rol || 'trabajador', pregunta: t.pregunta || '', respuesta: '' })
     setTrabSheet(true)
   }
   async function guardarTrab() {
     if (!trabForm.nombre.trim()) return show('Ponle un nombre')
     if (trabForm.pin && trabForm.pin.length !== 4) return show('El PIN debe tener 4 dígitos')
     const datos = { nombre: trabForm.nombre.trim(), pin: trabForm.pin, rol: trabForm.rol }
+    if (trabForm.pregunta.trim()) datos.pregunta = trabForm.pregunta.trim()
+    // Solo actualiza la respuesta si escribieron una nueva (así no se borra al editar otros campos)
+    if (trabForm.respuesta.trim()) datos.respuesta = trabForm.respuesta.trim().toLowerCase()
     if (trabEdit) await db.trabajadores.update(trabEdit, stamp(datos))
     else await db.trabajadores.add(stamp({ id: uid(), activo: 1, ...datos }))
     setTrabSheet(false); show('Trabajador guardado')
@@ -163,6 +166,15 @@ export default function Servicios() {
         <SearchSelect value={trabForm.rol} onChange={(v) => setTrabForm({ ...trabForm, rol: v })}
           options={[{ value: 'trabajador', label: 'Trabajador (solo Factura rápida)' }, { value: 'dueño', label: 'Administrador (ve todo)' }]}
           placeholder="Elegir rol…" />
+
+        <div className="divider" />
+        <label>Pregunta de seguridad (para recuperar el PIN)</label>
+        <input value={trabForm.pregunta} placeholder="Ej: ¿Nombre de mi primera mascota?"
+          onChange={(e) => setTrabForm({ ...trabForm, pregunta: e.target.value })} />
+        <label>Respuesta</label>
+        <input value={trabForm.respuesta} placeholder={trabEdit ? 'Escribe para cambiarla' : 'Respuesta secreta'}
+          onChange={(e) => setTrabForm({ ...trabForm, respuesta: e.target.value })} />
+        <div className="helper">Si olvida el PIN, podrá recuperarlo respondiendo esto.</div>
 
         <div style={{ height: 16 }} />
         <button className="btn" onClick={guardarTrab}>{trabEdit ? 'Guardar' : 'Agregar'}</button>

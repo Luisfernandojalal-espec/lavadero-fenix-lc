@@ -514,6 +514,7 @@ input:focus, select:focus { outline: 2px solid var(--primary); border-color: tra
 .login label { align-self: stretch; text-align: left; }
 .login input, .login select { width: 100%; }
 .login-error { color: var(--red); font-weight: 600; font-size: 14px; margin-top: 12px; }
+.login-link { background: transparent; color: var(--primary); font-weight: 600; font-size: 14px; margin-top: 16px; padding: 6px; }
 .login .btn { width: 100%; }
 
 .login-users { display: flex; flex-direction: column; gap: 10px; width: 100%; margin-top: 8px; }
