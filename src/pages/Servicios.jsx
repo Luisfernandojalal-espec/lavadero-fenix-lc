@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp } from '../db'
+import { db, uid, stamp, borrarTodo } from '../db'
+import { supabase } from '../supabase'
 import { money } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 
@@ -67,6 +68,14 @@ export default function Servicios() {
 
   const comisionPreview = Math.round(servForm.precio * (servForm.comisionPct / 100))
 
+  async function empezarDeCero() {
+    const ok = window.confirm('Esto BORRA TODO para dejar el sistema en blanco: productos, ventas, gastos, inventario, clientes, servicios y usuarios (en este dispositivo y en la nube). Tendrás que crear el usuario administrador otra vez. ¿Continuar?')
+    if (!ok) return
+    await borrarTodo(supabase)
+    show('Sistema en blanco. Reiniciando…')
+    setTimeout(() => location.reload(), 900)
+  }
+
   return (
     <>
       <Header title="Configuración" sub="Servicios de lavado y trabajadores" onBack={() => navigate('/')} />
@@ -109,6 +118,13 @@ export default function Servicios() {
             <button className="fab" onClick={nuevoTrab} aria-label="Nuevo trabajador">+</button>
           </>
         )}
+
+        <div className="divider" />
+        <div className="section-title" style={{ color: 'var(--red)' }}>Zona de peligro</div>
+        <div className="helper" style={{ marginBottom: 8 }}>
+          Deja el sistema en blanco (borra productos, ventas, clientes, servicios y usuarios, aquí y en la nube). Úsalo una vez para entregar el sistema limpio: al terminar, crearás el usuario administrador de nuevo.
+        </div>
+        <button className="btn danger" onClick={empezarDeCero}>Empezar de cero (borrar todo)</button>
       </div>
 
       {/* Sheet servicio */}

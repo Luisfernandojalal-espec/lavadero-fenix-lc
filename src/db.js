@@ -87,42 +87,20 @@ export function stockBajo(p) {
   return (p.stock ?? 0) <= min
 }
 
-// Datos de ejemplo la primera vez que se abre la app.
-// Guard a nivel de módulo + transacción para evitar el doble sembrado
-// que provoca React StrictMode (monta el efecto dos veces en desarrollo).
-let seedPromise = null
-export function seedIfEmpty() {
-  if (!seedPromise) seedPromise = doSeed()
-  return seedPromise
+// Sin datos de ejemplo: el sistema arranca vacío y el dueño carga sus
+// productos (con la plantilla de Excel), servicios y trabajadores reales.
+export async function seedIfEmpty() {
+  // No-op a propósito. Se conserva por compatibilidad con la inicialización.
 }
 
-async function doSeed() {
-  const productos = [
-    { nombre: 'Cerveza Águila', categoria: 'cerveza', precioCompra: 2500, precioVenta: 4000, stock: 24 },
-    { nombre: 'Cerveza Poker', categoria: 'cerveza', precioCompra: 2500, precioVenta: 4000, stock: 24 },
-    { nombre: 'Gaseosa Postobón 400ml', categoria: 'gaseosa', precioCompra: 1800, precioVenta: 3000, stock: 18 },
-    { nombre: 'Coca-Cola 400ml', categoria: 'gaseosa', precioCompra: 2000, precioVenta: 3500, stock: 18 },
-    { nombre: 'Agua Cristal 600ml', categoria: 'agua', precioCompra: 900, precioVenta: 2000, stock: 12 },
-    { nombre: 'Papas Margarita', categoria: 'mecato', precioCompra: 1500, precioVenta: 2500, stock: 20 },
-    { nombre: 'Detodito', categoria: 'mecato', precioCompra: 1700, precioVenta: 2800, stock: 15 },
-  ]
-
-  const servicios = [
-    { nombre: 'Lavado carro sencillo', precio: 20000, comisionPct: 40 },
-    { nombre: 'Lavado carro + brillado', precio: 35000, comisionPct: 40 },
-    { nombre: 'Lavado moto', precio: 10000, comisionPct: 50 },
-    { nombre: 'Lavado camioneta', precio: 28000, comisionPct: 40 },
-  ]
-
-  const trabajadores = [
-    { nombre: 'Trabajador 1', activo: 1 },
-  ]
-
-  await db.transaction('rw', db.productos, db.servicios, db.trabajadores, async () => {
-    // Las transacciones rw se serializan: si otra ya sembró, aquí ya hay datos.
-    if ((await db.productos.count()) > 0) return
-    await db.productos.bulkAdd(productos.map((p) => stamp({ id: uid(), activo: 1, ...p })))
-    await db.servicios.bulkAdd(servicios.map((s) => stamp({ id: uid(), activo: 1, ...s })))
-    await db.trabajadores.bulkAdd(trabajadores.map((t) => stamp({ id: uid(), ...t })))
-  })
+// Borra TODOS los datos (local y nube) para dejar el sistema en blanco.
+// Después de esto la app pide crear el usuario administrador de nuevo.
+export async function borrarTodo(supabase) {
+  const tablas = ['productos', 'ventas', 'gastos', 'movimientos_inv', 'clientes', 'abonos', 'servicios', 'trabajadores']
+  for (const t of tablas) await db[t].clear()
+  if (supabase) {
+    for (const t of tablas) await supabase.from('registros').delete().eq('tabla', t)
+  }
+  localStorage.removeItem('fenix_session')
+  localStorage.removeItem('fenix_last_pull')
 }
