@@ -22,9 +22,9 @@ export default function Inventario() {
     <>
       <Header title="Inventario" sub="Productos, saldos, entradas, salidas y kardex" onBack={() => navigate('/')} />
       <div className="content">
-        <div className="pill-row">
+        <div className="subtabs">
           {TABS.map((t) => (
-            <button key={t.id} className={`pill ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>{t.label}</button>
+            <button key={t.id} className={`subtab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>{t.label}</button>
           ))}
         </div>
       </div>

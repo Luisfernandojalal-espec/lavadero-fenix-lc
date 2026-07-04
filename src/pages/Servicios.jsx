@@ -124,14 +124,14 @@ export default function Servicios() {
       <Header title="Configuración" sub="Servicios de lavado y trabajadores" onBack={() => navigate('/')} />
 
       <div className="content">
-        <div className="pill-row">
-          <button className={`pill ${tab === 'servicios' ? 'active' : ''}`} onClick={() => setTab('servicios')}>
+        <div className="subtabs">
+          <button className={`subtab ${tab === 'servicios' ? 'active' : ''}`} onClick={() => setTab('servicios')}>
             Servicios
           </button>
-          <button className={`pill ${tab === 'trabajadores' ? 'active' : ''}`} onClick={() => setTab('trabajadores')}>
+          <button className={`subtab ${tab === 'trabajadores' ? 'active' : ''}`} onClick={() => setTab('trabajadores')}>
             Trabajadores
           </button>
-          <button className={`pill ${tab === 'comisiones' ? 'active' : ''}`} onClick={() => setTab('comisiones')}>
+          <button className={`subtab ${tab === 'comisiones' ? 'active' : ''}`} onClick={() => setTab('comisiones')}>
             Comisiones
           </button>
         </div>

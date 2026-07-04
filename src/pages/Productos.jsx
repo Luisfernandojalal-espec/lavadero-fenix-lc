@@ -14,6 +14,7 @@ export default function Productos({ embedded }) {
   const [editId, setEditId] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [filtro, setFiltro] = useState('todos')
+  const [q, setQ] = useState('')
 
   const productos = useLiveQuery(
     () => db.productos.where('activo').equals(1).toArray(),
@@ -21,9 +22,14 @@ export default function Productos({ embedded }) {
     []
   )
 
+  const sinTildes = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
   const visibles = (productos || [])
     .filter((p) => filtro === 'todos' || p.categoria === filtro)
+    .filter((p) => !q.trim() || sinTildes(p.nombre).includes(sinTildes(q)))
     .sort((a, b) => a.nombre.localeCompare(b.nombre))
+
+  const valorInventario = (productos || []).reduce((s, p) => s + (p.stock || 0) * (p.precioCompra || 0), 0)
+  const bajos = (productos || []).filter(stockBajo).length
 
   function abrirNuevo() {
     setEditId(null)
@@ -74,6 +80,25 @@ export default function Productos({ embedded }) {
       {!embedded && <Header title="Inventario" sub="Productos · precios · márgenes · stock" onBack={() => navigate('/')} />}
 
       <div className="content">
+        {/* Indicadores del inventario */}
+        <div className="mini-kpis">
+          <div className="mini-kpi">
+            <div className="label">Productos</div>
+            <div className="value">{(productos || []).length}</div>
+          </div>
+          <div className="mini-kpi">
+            <div className="label">Valor a costo</div>
+            <div className="value">{money(valorInventario)}</div>
+          </div>
+          <div className="mini-kpi">
+            <div className="label">Stock bajo</div>
+            <div className={`value ${bajos > 0 ? 'alerta' : ''}`}>{bajos}</div>
+          </div>
+        </div>
+
+        <input className="buscador" inputMode="search" placeholder="Buscar producto…"
+          value={q} onChange={(e) => setQ(e.target.value)} />
+
         <div className="pill-row">
           <button className={`pill ${filtro === 'todos' ? 'active' : ''}`} onClick={() => setFiltro('todos')}>
             Todos
@@ -86,31 +111,58 @@ export default function Productos({ embedded }) {
         </div>
 
         {visibles.length === 0 && (
-          <div className="empty">No hay productos en esta categoría.<br />Toca el botón + para agregar.</div>
+          <div className="empty">
+            {q ? <>Sin resultados para “{q}”.</> : (
+              <>
+                No hay productos todavía.
+                <div style={{ height: 14 }} />
+                <button className="btn" style={{ maxWidth: 320 }} onClick={abrirNuevo}>Agregar producto</button>
+                <div className="helper" style={{ marginTop: 10 }}>
+                  o súbelos todos de una vez con la plantilla de Excel en la pestaña <b>Saldos iniciales</b>.
+                </div>
+              </>
+            )}
+          </div>
         )}
 
-        {visibles.map((p) => {
-          const m = p.precioVenta - p.precioCompra
-          const pct = p.precioVenta > 0 ? Math.round((m / p.precioVenta) * 100) : 0
-          return (
-            <div className="row" key={p.id} onClick={() => abrirEditar(p)}>
-              <div className="main">
-                <div className="title">{p.nombre}</div>
-                <div className="meta">
-                  {labelCategoria(p.categoria)} · Compra {money(p.precioCompra)} · Venta {money(p.precioVenta)}
-                </div>
-                <div className="meta">
-                  Existencia {p.stock}{' '}
-                  {stockBajo(p) && <span className="badge amber">Stock bajo</span>}
-                </div>
-              </div>
-              <div className="right">
-                <div style={{ fontWeight: 700, color: 'var(--green)' }}>+{money(m)}</div>
-                <span className="badge green">{pct}%</span>
-              </div>
-            </div>
-          )
-        })}
+        {visibles.length > 0 && (
+          <table className="tabla compacta">
+            <thead>
+              <tr>
+                <th>Producto</th>
+                <th className="num">Compra</th>
+                <th className="num">Venta</th>
+                <th className="num">Margen</th>
+                <th className="num">Exist.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibles.map((p) => {
+                const m = p.precioVenta - p.precioCompra
+                const pct = p.precioVenta > 0 ? Math.round((m / p.precioVenta) * 100) : 0
+                const bajo = stockBajo(p)
+                return (
+                  <tr key={p.id} onClick={() => abrirEditar(p)} style={{ cursor: 'pointer' }}>
+                    <td>
+                      {p.nombre}
+                      <div className="muted-cell">{labelCategoria(p.categoria)}</div>
+                    </td>
+                    <td className="num muted-cell">{money(p.precioCompra)}</td>
+                    <td className="num" style={{ fontWeight: 600 }}>{money(p.precioVenta)}</td>
+                    <td className="num" style={{ color: 'var(--green)' }}>
+                      +{money(m)}
+                      <div className="muted-cell">{pct}%</div>
+                    </td>
+                    <td className="num" style={bajo ? { color: 'var(--amber)', fontWeight: 700 } : { fontWeight: 600 }}>
+                      {p.stock ?? 0}
+                      {bajo && <div className="muted-cell" style={{ color: 'var(--amber)' }}>bajo</div>}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
 
       <button className="fab" onClick={abrirNuevo} aria-label="Agregar producto">+</button>
