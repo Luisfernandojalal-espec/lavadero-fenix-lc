@@ -80,6 +80,22 @@ db.version(6).stores({
   pagos_comision: '&id, trabajadorId, mes, updatedAt',
 })
 
+// v7: plantilla de gastos fijos (arriendo, luz, agua…) con control mensual
+db.version(7).stores({
+  productos: '&id, categoria, activo, updatedAt',
+  servicios: '&id, activo, updatedAt',
+  trabajadores: '&id, activo, updatedAt',
+  ventas: '&id, tipo, mes, fecha, trabajadorId, clienteId, updatedAt',
+  gastos: '&id, categoria, mes, fecha, updatedAt',
+  movimientos_inv: '&id, productoId, tipo, mes, fecha, updatedAt',
+  clientes: '&id, activo, updatedAt',
+  abonos: '&id, clienteId, mes, fecha, updatedAt',
+  mesas: '&id, estado, activo, updatedAt',
+  turnos: '&id, estado, mes, updatedAt',
+  pagos_comision: '&id, trabajadorId, mes, updatedAt',
+  gastos_fijos: '&id, activo, updatedAt',
+})
+
 export function uid() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
   return 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2)
@@ -116,6 +132,17 @@ export const CATEGORIAS_GASTO = [
   { id: 'otro', label: 'Otro' },
 ]
 
+// Clasificación fijo/variable de un gasto. Si el gasto no la trae guardada
+// (registros viejos), se deduce por la categoría.
+const CATEGORIAS_FIJAS = ['arriendo', 'luz', 'agua', 'nomina']
+export function tipoGasto(g) {
+  if (g.tipo === 'fijo' || g.tipo === 'variable') return g.tipo
+  return CATEGORIAS_FIJAS.includes(g.categoria) ? 'fijo' : 'variable'
+}
+export function tipoPorCategoria(catId) {
+  return CATEGORIAS_FIJAS.includes(catId) ? 'fijo' : 'variable'
+}
+
 export function labelCategoria(catId) {
   const c = CATEGORIAS_PRODUCTO.find((x) => x.id === catId)
   return c ? c.label : 'Otro'
@@ -139,7 +166,7 @@ export async function seedIfEmpty() {
 // Borra TODOS los datos (local y nube) para dejar el sistema en blanco.
 // Después de esto la app pide crear el usuario administrador de nuevo.
 export async function borrarTodo(supabase) {
-  const tablas = ['productos', 'ventas', 'gastos', 'movimientos_inv', 'clientes', 'abonos', 'servicios', 'trabajadores', 'mesas', 'turnos', 'pagos_comision']
+  const tablas = ['productos', 'ventas', 'gastos', 'movimientos_inv', 'clientes', 'abonos', 'servicios', 'trabajadores', 'mesas', 'turnos', 'pagos_comision', 'gastos_fijos']
   for (const t of tablas) await db[t].clear()
   if (supabase) {
     for (const t of tablas) await supabase.from('registros').delete().eq('tabla', t)

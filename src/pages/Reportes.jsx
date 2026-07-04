@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
-import { db, stockBajo } from '../db'
+import { db, stockBajo, tipoGasto } from '../db'
 import { money, currentMonthKey, monthLabel } from '../format'
 import { Header } from '../components/ui'
 import { descargarReportePDF } from '../pdf'
@@ -60,7 +60,10 @@ export default function Reportes() {
   // la comisión ya está descontada del neto de servicios. Restarlos otra
   // vez duplicaría el descuento. (Sí cuentan en el cierre de turno, porque
   // ahí lo que importa es el efectivo que salió de la caja.)
-  const totalGastos = (gastos || []).filter((x) => !x.anulada && x.categoria !== 'comisiones').reduce((s, x) => s + x.monto, 0)
+  const gastosMes = (gastos || []).filter((x) => !x.anulada && x.categoria !== 'comisiones')
+  const totalGastos = gastosMes.reduce((s, x) => s + x.monto, 0)
+  const gastosFijos = gastosMes.filter((x) => tipoGasto(x) === 'fijo').reduce((s, x) => s + x.monto, 0)
+  const gastosVariables = totalGastos - gastosFijos
 
   // --- Utilidad neta ---
   const utilidad = gananciaProd + gananciaServ - totalGastos
@@ -160,7 +163,7 @@ export default function Reportes() {
         <div className="card stat-card">
           <div className="label">Gastos del mes</div>
           <div className="value red">{money(totalGastos)}</div>
-          <div className="meta" style={{ fontSize: 12 }}>Arriendo, luz, agua y otros</div>
+          <div className="meta" style={{ fontSize: 12 }}>Fijos {money(gastosFijos)} · Variables {money(gastosVariables)}</div>
         </div>
 
         {/* Utilidad neta */}
