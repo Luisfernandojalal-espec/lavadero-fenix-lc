@@ -3,6 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
 import { db, stamp } from '../db'
 import { money, currentMonthKey, monthLabel, shortDate } from '../format'
+import { folio, labelMedio } from '../ventas'
 import { Header, Sheet, useToast } from '../components/ui'
 
 function ultimosMeses(n) {
@@ -103,7 +104,11 @@ export default function Movimientos() {
       <Sheet open={!!detalle} onClose={() => setDetalle(null)} title="Detalle de la venta">
         {detalle && (
           <>
-            <div className="meta" style={{ marginBottom: 10 }}>{shortDate(detalle.fecha)}</div>
+            <div className="meta" style={{ marginBottom: 10 }}>
+              {detalle.factura ? folio(detalle.factura) + ' · ' : ''}{shortDate(detalle.fecha)} · {labelMedio(detalle.metodoPago)}
+              {detalle.origen ? ` · ${detalle.origen}` : ''}
+              {detalle.clienteNombre ? ` · ${detalle.clienteNombre}` : ''}
+            </div>
             {detalle.tipo === 'producto' ? (
               <>
                 {(detalle.items || []).map((it, i) => (
@@ -124,7 +129,7 @@ export default function Movimientos() {
               <>
                 <div className="row">
                   <div className="main">
-                    <div className="title">{detalle.servicioNombre}</div>
+                    <div className="title">{(detalle.cantidad || 1) > 1 ? `${detalle.cantidad} × ` : ''}{detalle.servicioNombre}</div>
                     <div className="meta">{detalle.trabajadorNombre || 'Sin asignar'}</div>
                   </div>
                   <div className="right" style={{ fontWeight: 700 }}>{money(detalle.total)}</div>

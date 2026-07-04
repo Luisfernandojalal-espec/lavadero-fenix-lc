@@ -107,7 +107,7 @@ export default function Login() {
   }
 
   function iniciarRecuperacion() {
-    if (!sel.pregunta) {
+    if (!sel.pregunta || !sel.respuesta) {
       setError('Este usuario no tiene pregunta de seguridad. Pídele a un administrador que te la configure en Admin → Trabajadores.')
       return
     }

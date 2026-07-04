@@ -230,6 +230,9 @@ body {
 /* Mosaicos de Caja/productos: 2 columnas en móvil, más en pantallas anchas */
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
+/* Buscador de la cuadrícula de venta */
+.buscador { margin-bottom: 12px; }
+
 /* Cantidad visible EN la tarjeta (sin abrir otra ventana) */
 .tile { position: relative; cursor: pointer; }
 .tile.sel { border-color: var(--primary); background: rgba(14, 165, 233, .05); }

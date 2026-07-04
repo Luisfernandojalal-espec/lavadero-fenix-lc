@@ -1,5 +1,8 @@
+import { useState } from 'react'
 import { money } from '../format'
 import { stockBajo } from '../db'
+
+const sinTildes = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 
 // Convierte un ítem de la cuadrícula en una línea de carrito/cuenta.
 export function lineaDesde(it) {
@@ -20,7 +23,9 @@ export function lineaDesde(it) {
 // sin abrir otra ventana.
 // carrito: { [key]: { cantidad, ... } }
 export function ItemsGrid({ servicios, productos, carrito, onAdd, onSub }) {
-  const items = [
+  const [q, setQ] = useState('')
+
+  let items = [
     ...(servicios || []).slice().sort((a, b) => a.precio - b.precio)
       .map((s) => ({ key: 'servicio:' + s.id, tipo: 'servicio', ref: s, nombre: s.nombre, precio: s.precio })),
     ...(productos || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre))
@@ -31,7 +36,13 @@ export function ItemsGrid({ servicios, productos, carrito, onAdd, onSub }) {
     return <div className="empty">No hay servicios ni productos. Créalos en Inventario y Admin.</div>
   }
 
+  if (q.trim()) items = items.filter((it) => sinTildes(it.nombre).includes(sinTildes(q)))
+
   return (
+    <>
+    <input className="buscador" inputMode="search" placeholder="Buscar producto o servicio…"
+      value={q} onChange={(e) => setQ(e.target.value)} />
+    {items.length === 0 && <div className="empty">Sin resultados para “{q}”.</div>}
     <div className="tiles">
       {items.map((it) => {
         const qty = carrito[it.key]?.cantidad || 0
@@ -56,5 +67,6 @@ export function ItemsGrid({ servicios, productos, carrito, onAdd, onSub }) {
         )
       })}
     </div>
+    </>
   )
 }

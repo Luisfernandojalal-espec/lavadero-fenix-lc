@@ -78,7 +78,7 @@ export default function Reportes() {
   for (const s of ventasServ) {
     const nombre = s.trabajadorNombre || 'Sin asignar'
     if (!porTrabajador[nombre]) porTrabajador[nombre] = { nombre, lavados: 0, comision: 0 }
-    porTrabajador[nombre].lavados += 1
+    porTrabajador[nombre].lavados += (s.cantidad || 1)
     porTrabajador[nombre].comision += s.comision || 0
   }
   const trabRanking = Object.values(porTrabajador).sort((a, b) => b.comision - a.comision)

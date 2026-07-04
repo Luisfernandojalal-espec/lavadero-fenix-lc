@@ -4,7 +4,7 @@ import { db, uid, stamp } from '../db'
 import { money, shortDate } from '../format'
 import { Header, Sheet, useToast, SearchSelect } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
-import { facturarItems, totalDe } from '../ventas'
+import { facturarItems, totalDe, labelMedio } from '../ventas'
 import { useAuth } from '../auth'
 
 const ESTADOS = {
@@ -153,10 +153,10 @@ export default function Mesas() {
       if (!cliente) return show('Elige o crea un cliente')
     }
     const t = (trabajadores || []).find((x) => x.id === trabSel) || null
-    const total = await facturarItems({ items: mesa.items || [], trabajador: t, metodo, cliente, origen: mesa.nombre })
+    const { total } = await facturarItems({ items: mesa.items || [], trabajador: t, metodo, cliente, origen: mesa.nombre })
     await db.mesas.update(mesa.id, stamp({
       estado: 'libre', items: [], cliente: '',
-      eventos: conEvento(mesa, `Cuenta cobrada ${money(total)} · ${metodo === 'credito' ? 'fiado a ' + cliente.nombre : 'contado'}`, user?.nombre),
+      eventos: conEvento(mesa, `Cuenta cobrada ${money(total)} · ${metodo === 'credito' ? 'fiado a ' + cliente.nombre : labelMedio(metodo).toLowerCase()}`, user?.nombre),
     }))
     setCobroOpen(false); setClienteSel(''); setClienteNuevo(''); setDetId(null)
     show(`Mesa cobrada · ${money(total)}`)
@@ -248,7 +248,10 @@ export default function Mesas() {
               </div>
             </>
           )}
-          <button className="btn" style={{ marginTop: 10 }} onClick={() => cobrarMesa('contado')}>Contado · {money(total)}</button>
+          <div className="btn-row" style={{ marginTop: 10 }}>
+            <button className="btn" onClick={() => cobrarMesa('efectivo')}>Efectivo · {money(total)}</button>
+            <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => cobrarMesa('transferencia')}>Transferencia</button>
+          </div>
           <div className="divider" />
           <div className="section-title" style={{ margin: '0 0 8px' }}>O fiar a un cliente</div>
           <SearchSelect value={clienteSel} onChange={(v) => { setClienteSel(v); setClienteNuevo('') }}

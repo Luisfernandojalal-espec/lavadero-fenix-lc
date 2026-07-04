@@ -4,6 +4,7 @@ import { db, uid, stamp } from '../db'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
 import { descargarCierrePDF } from '../pdf'
+import { esEfectivo } from '../ventas'
 import { useAuth } from '../auth'
 
 export default function Turno() {
@@ -24,16 +25,22 @@ export default function Turno() {
   // Resumen en vivo del turno abierto
   const desde = abierto?.abiertoEn || 0
   const vTurno = (ventas || []).filter((v) => !v.anulada && v.fecha >= desde)
-  const contado = vTurno.filter((v) => v.metodoPago !== 'credito').reduce((s, v) => s + v.total, 0)
+  const efectivoV = vTurno.filter(esEfectivo)
+  const efectivo = efectivoV.reduce((s, v) => s + v.total, 0)
+  const transferencias = vTurno.filter((v) => v.metodoPago === 'transferencia').reduce((s, v) => s + v.total, 0)
   const credito = vTurno.filter((v) => v.metodoPago === 'credito').reduce((s, v) => s + v.total, 0)
   const abonosT = (abonos || []).filter((a) => a.fecha >= desde).reduce((s, a) => s + a.monto, 0)
   const gastosT = (gastos || []).filter((g) => !g.anulada && g.fecha >= desde).reduce((s, g) => s + g.monto, 0)
-  const esperado = (abierto?.base || 0) + contado + abonosT - gastosT
+  // Solo el efectivo entra a la caja física (transferencias van al banco)
+  const esperado = (abierto?.base || 0) + efectivo + abonosT - gastosT
 
   // --- Abrir turno ---
   const [abrirOpen, setAbrirOpen] = useState(false)
   const [base, setBase] = useState(0)
   async function abrirTurno() {
+    // Evita dos turnos abiertos (ej. otro dispositivo lo abrió hace un momento)
+    const yaAbierto = (await db.turnos.toArray()).some((t) => t.estado === 'abierto')
+    if (yaAbierto) { setAbrirOpen(false); return show('Ya hay un turno abierto') }
     const now = Date.now()
     await db.turnos.add(stamp({
       id: uid(), estado: 'abierto', mes: monthKey(now),
@@ -51,7 +58,7 @@ export default function Turno() {
     const cerrado = {
       estado: 'cerrado', cerradoEn: Date.now(), cerradoPor: user?.nombre || '',
       resumen: {
-        contado, credito, abonos: abonosT, gastos: gastosT,
+        contado: efectivo, transferencias, credito, abonos: abonosT, gastos: gastosT,
         esperado, contadoReal, diferencia, ventasCount: vTurno.length,
       },
     }
@@ -88,11 +95,12 @@ export default function Turno() {
             <table className="tabla">
               <tbody>
                 <tr><td>Base de caja</td><td className="num">{money(abierto.base)}</td></tr>
-                <tr><td>Ventas de contado ({vTurno.filter((v) => v.metodoPago !== 'credito').length})</td><td className="num" style={{ color: 'var(--green)', fontWeight: 700 }}>{money(contado)}</td></tr>
+                <tr><td>Ventas en efectivo ({efectivoV.length})</td><td className="num" style={{ color: 'var(--green)', fontWeight: 700 }}>{money(efectivo)}</td></tr>
                 <tr><td>Abonos recibidos</td><td className="num" style={{ color: 'var(--green)' }}>{money(abonosT)}</td></tr>
                 <tr><td>Gastos pagados</td><td className="num" style={{ color: 'var(--red)' }}>−{money(gastosT)}</td></tr>
                 <tr><td><b>Efectivo esperado en caja</b></td><td className="num"><b>{money(esperado)}</b></td></tr>
-                <tr><td className="muted-cell">Ventas a crédito (no es efectivo)</td><td className="num muted-cell">{money(credito)}</td></tr>
+                <tr><td className="muted-cell">Ventas por transferencia (al banco)</td><td className="num muted-cell">{money(transferencias)}</td></tr>
+                <tr><td className="muted-cell">Ventas a crédito (fiado)</td><td className="num muted-cell">{money(credito)}</td></tr>
               </tbody>
             </table>
 
@@ -170,7 +178,8 @@ export default function Turno() {
                 <tr><td>Apertura</td><td className="num">{shortDate(det.abiertoEn)} · {det.abiertoPor}</td></tr>
                 <tr><td>Cierre</td><td className="num">{shortDate(det.cerradoEn)} · {det.cerradoPor}</td></tr>
                 <tr><td>Base de caja</td><td className="num">{money(det.base)}</td></tr>
-                <tr><td>Ventas de contado</td><td className="num">{money(det.resumen?.contado)}</td></tr>
+                <tr><td>Ventas en efectivo</td><td className="num">{money(det.resumen?.contado)}</td></tr>
+                <tr><td>Ventas por transferencia</td><td className="num">{money(det.resumen?.transferencias || 0)}</td></tr>
                 <tr><td>Abonos recibidos</td><td className="num">{money(det.resumen?.abonos)}</td></tr>
                 <tr><td>Gastos pagados</td><td className="num">−{money(det.resumen?.gastos)}</td></tr>
                 <tr><td><b>Efectivo esperado</b></td><td className="num"><b>{money(det.resumen?.esperado)}</b></td></tr>

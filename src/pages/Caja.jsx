@@ -4,7 +4,7 @@ import { db, uid, stamp } from '../db'
 import { money } from '../format'
 import { Header, Sheet, useToast, SearchSelect } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
-import { facturarItems, gananciaDe, totalDe } from '../ventas'
+import { facturarItems, gananciaDe, totalDe, compartirRecibo, folio, labelMedio } from '../ventas'
 import { useAuth } from '../auth'
 
 export default function Caja() {
@@ -25,6 +25,8 @@ export default function Caja() {
   const [creditoOpen, setCreditoOpen] = useState(false)
   const [clienteSel, setClienteSel] = useState('')
   const [clienteNuevo, setClienteNuevo] = useState('')
+  // Recibo de la última venta (para compartir)
+  const [recibo, setRecibo] = useState(null)
 
   function add(it) {
     setCarrito((c) => {
@@ -51,9 +53,14 @@ export default function Caja() {
   async function cobrar(metodo, cliente = null) {
     if (lineas.length === 0) return
     const t = (trabajadores || []).find((x) => x.id === trabSel) || null
-    await facturarItems({ items: lineas, trabajador: t, metodo, cliente })
+    const { factura } = await facturarItems({ items: lineas, trabajador: t, metodo, cliente })
+    setRecibo({ factura, fecha: Date.now(), items: lineas, total, metodo, cliente: cliente?.nombre })
     setCarrito({})
-    show(metodo === 'credito' ? `Fiado a ${cliente.nombre} · ${money(total)}` : `Venta registrada · ${money(total)}`)
+  }
+
+  async function compartir() {
+    const r = await compartirRecibo(recibo)
+    show(r === 'compartido' ? 'Recibo compartido' : r === 'copiado' ? 'Recibo copiado al portapapeles' : 'No se pudo compartir')
   }
 
   async function confirmarCredito() {
@@ -119,8 +126,9 @@ export default function Caja() {
             </div>
 
             <div className="btn-row">
-              <button className="btn" onClick={() => cobrar('contado')}>Contado · {money(total)}</button>
-              <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setCreditoOpen(true)}>A crédito</button>
+              <button className="btn" onClick={() => cobrar('efectivo')}>Efectivo · {money(total)}</button>
+              <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => cobrar('transferencia')}>Transferencia</button>
+              <button className="btn ghost" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setCreditoOpen(true)}>Crédito</button>
             </div>
           </>
         )}
@@ -137,6 +145,35 @@ export default function Caja() {
           onChange={(e) => { setClienteNuevo(e.target.value); if (e.target.value) setClienteSel('') }} />
         <div style={{ height: 14 }} />
         <button className="btn" onClick={confirmarCredito}>Registrar fiado</button>
+      </Sheet>
+
+      {/* Recibo de la venta registrada */}
+      <Sheet open={!!recibo} onClose={() => setRecibo(null)} title="Venta registrada">
+        {recibo && (
+          <>
+            <div className="dato-fuerte">
+              {folio(recibo.factura)} · <b>{money(recibo.total)}</b>
+            </div>
+            <div className="helper" style={{ marginBottom: 10 }}>
+              Pago: {labelMedio(recibo.metodo)}{recibo.cliente ? ` · Cliente: ${recibo.cliente}` : ''}
+            </div>
+            <table className="tabla">
+              <tbody>
+                {recibo.items.map((l) => (
+                  <tr key={l.key}>
+                    <td>{l.nombre}</td>
+                    <td className="num muted-cell">{l.cantidad} × {money(l.precioVenta)}</td>
+                    <td className="num">{money(l.precioVenta * l.cantidad)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ height: 12 }} />
+            <button className="btn" onClick={compartir}>Compartir recibo</button>
+            <div style={{ height: 8 }} />
+            <button className="btn ghost" onClick={() => setRecibo(null)}>Listo</button>
+          </>
+        )}
       </Sheet>
 
       {node}

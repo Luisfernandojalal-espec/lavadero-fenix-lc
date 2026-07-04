@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../db'
 import { LOGO_URL, money, dayKey, shortDate, currentMonthKey, monthLabel } from '../format'
+import { labelMedio } from '../ventas'
 import { useAuth } from '../auth'
 import { ModIcon } from '../components/icons'
 
@@ -50,7 +51,7 @@ export default function Inicio() {
     const cab = ['Fecha', 'Tipo', 'Detalle', 'Cliente', 'Metodo', 'Total', 'Ganancia']
     const esc = (s) => `"${String(s ?? '').replace(/"/g, '""')}"`
     const lineas = filas.map((v) => [
-      shortDate(v.fecha), v.tipo, detalleVenta(v), v.clienteNombre || '', v.metodoPago || 'contado', v.total, v.ganancia || 0,
+      shortDate(v.fecha), v.tipo, detalleVenta(v), v.clienteNombre || '', labelMedio(v.metodoPago), v.total, v.ganancia || 0,
     ].map(esc).join(','))
     const csv = '﻿' + [cab.join(','), ...lineas].join('\n')
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
