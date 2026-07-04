@@ -84,8 +84,29 @@ export default function Mesas() {
     const items = [...(mesa.items || [])]
     const i = items.findIndex((x) => x.key === it.key)
     if (i >= 0) items[i] = { ...items[i], cantidad: items[i].cantidad + 1 }
-    else items.push(lineaDesde(it))
+    else {
+      const linea = lineaDesde(it)
+      // Si registra un trabajador, sus servicios quedan asignados a él
+      if (linea.tipo === 'servicio' && user && user.rol !== 'dueño') {
+        linea.trabajadorId = user.id
+        linea.trabajadorNombre = user.nombre
+      }
+      items.push(linea)
+    }
     await db.mesas.update(mesa.id, stamp({ items, eventos: conEvento(mesa, `+1 ${it.nombre}`, user?.nombre) }))
+  }
+
+  // Asignar lavador a una línea de servicio de la mesa
+  const [asignando, setAsignando] = useState(null)
+  async function asignarLavador(key, t) {
+    const items = (mesa.items || []).map((l) =>
+      l.key === key ? { ...l, trabajadorId: t ? t.id : null, trabajadorNombre: t ? t.nombre : null } : l)
+    const linea = items.find((l) => l.key === key)
+    await db.mesas.update(mesa.id, stamp({
+      items,
+      eventos: conEvento(mesa, `${linea.nombre} asignado a ${t ? t.nombre : 'sin asignar'}`, user?.nombre),
+    }))
+    setAsignando(null)
   }
   async function subItem(it) {
     const items = [...(mesa.items || [])]
@@ -137,7 +158,6 @@ export default function Mesas() {
 
   // --- Cobro de la mesa ---
   const [cobroOpen, setCobroOpen] = useState(false)
-  const [trabSel, setTrabSel] = useState(user && user.rol !== 'dueño' ? user.id : null)
   const [clienteSel, setClienteSel] = useState('')
   const [clienteNuevo, setClienteNuevo] = useState('')
 
@@ -152,8 +172,7 @@ export default function Mesas() {
       }
       if (!cliente) return show('Elige o crea un cliente')
     }
-    const t = (trabajadores || []).find((x) => x.id === trabSel) || null
-    const { total } = await facturarItems({ items: mesa.items || [], trabajador: t, metodo, cliente, origen: mesa.nombre })
+    const { total } = await facturarItems({ items: mesa.items || [], metodo, cliente, origen: mesa.nombre })
     await db.mesas.update(mesa.id, stamp({
       estado: 'libre', items: [], cliente: '',
       eventos: conEvento(mesa, `Cuenta cobrada ${money(total)} · ${metodo === 'credito' ? 'fiado a ' + cliente.nombre : labelMedio(metodo).toLowerCase()}`, user?.nombre),
@@ -184,7 +203,16 @@ export default function Mesas() {
               <tbody>
                 {items.map((l) => (
                   <tr key={l.key}>
-                    <td>{l.nombre}{l.tipo === 'servicio' ? <span className="muted-cell"> · Servicio</span> : null}</td>
+                    <td>
+                      {l.nombre}
+                      {l.tipo === 'servicio' && (
+                        <div>
+                          <button className="chip-lavador" onClick={() => setAsignando(l.key)}>
+                            {l.trabajadorNombre ? `Lavador: ${l.trabajadorNombre}` : 'Asignar lavador'}
+                          </button>
+                        </div>
+                      )}
+                    </td>
                     <td className="num muted-cell">{l.cantidad} × {money(l.precioVenta)}</td>
                     <td className="num" style={{ fontWeight: 700 }}>{money(l.precioVenta * l.cantidad)}</td>
                     <td className="num">
@@ -235,18 +263,23 @@ export default function Mesas() {
           <button className="btn" onClick={hacerTransferencia}>Transferir</button>
         </Sheet>
 
+        {/* Asignar lavador a un servicio de la mesa */}
+        <Sheet open={!!asignando} onClose={() => setAsignando(null)} title="¿Quién hace este servicio?">
+          <div className="pill-row">
+            {(trabajadores || []).map((t) => (
+              <button key={t.id} className="pill" onClick={() => asignarLavador(asignando, t)}>{t.nombre}</button>
+            ))}
+            <button className="pill" onClick={() => asignarLavador(asignando, null)}>Sin asignar</button>
+          </div>
+          <div className="helper">La comisión de esta lavada se le acumula al lavador elegido.</div>
+        </Sheet>
+
         {/* Cobrar mesa */}
         <Sheet open={cobroOpen} onClose={() => setCobroOpen(false)} title={`Cobrar ${mesa.nombre} · ${money(total)}`}>
-          {hayServicios && (
-            <>
-              <label>¿Quién hizo el servicio?</label>
-              <div className="pill-row">
-                {(trabajadores || []).map((t) => (
-                  <button key={t.id} className={`pill ${trabSel === t.id ? 'active' : ''}`} onClick={() => setTrabSel(t.id)}>{t.nombre}</button>
-                ))}
-                <button className={`pill ${trabSel === null ? 'active' : ''}`} onClick={() => setTrabSel(null)}>Sin asignar</button>
-              </div>
-            </>
+          {hayServicios && items.some((l) => l.tipo === 'servicio' && !l.trabajadorId) && (
+            <div className="helper" style={{ color: 'var(--amber)', marginBottom: 8 }}>
+              Hay servicios sin lavador asignado: esas comisiones no se le acumularán a nadie.
+            </div>
           )}
           <div className="btn-row" style={{ marginTop: 10 }}>
             <button className="btn" onClick={() => cobrarMesa('efectivo')}>Efectivo · {money(total)}</button>

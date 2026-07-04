@@ -66,12 +66,14 @@ export async function facturarItems({ items, trabajador = null, metodo = 'efecti
     const comisionUnit = Math.round(s.precioVenta * ((s.comisionPct || 0) / 100))
     const totalServ = s.precioVenta * s.cantidad
     const comision = comisionUnit * s.cantidad
+    // Cada línea de servicio lleva SU lavador (si no trae, usa el general)
+    const t = s.trabajadorId ? { id: s.trabajadorId, nombre: s.trabajadorNombre } : trabajador
     await db.ventas.add(stamp({
       id: uid(), tipo: 'servicio', ...base,
       servicioId: s.refId, servicioNombre: s.nombre, cantidad: s.cantidad,
       precio: s.precioVenta, comisionPct: s.comisionPct || 0, comision,
-      trabajadorId: trabajador ? trabajador.id : null,
-      trabajadorNombre: trabajador ? trabajador.nombre : null,
+      trabajadorId: t ? t.id : null,
+      trabajadorNombre: t ? t.nombre : null,
       total: totalServ, costo: comision, ganancia: totalServ - comision,
     }))
     total += totalServ

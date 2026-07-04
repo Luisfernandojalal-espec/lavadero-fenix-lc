@@ -3,18 +3,58 @@ import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, borrarTodo } from '../db'
 import { supabase } from '../supabase'
-import { money } from '../format'
+import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
+import { useAuth } from '../auth'
 
 const emptyServ = { nombre: '', precio: 0, comisionPct: 40 }
 
 export default function Servicios() {
   const navigate = useNavigate()
   const { show, node } = useToast()
-  const [tab, setTab] = useState('servicios') // 'servicios' | 'trabajadores'
+  const { user } = useAuth()
+  const [tab, setTab] = useState('servicios') // 'servicios' | 'trabajadores' | 'comisiones'
 
   const servicios = useLiveQuery(() => db.servicios.where('activo').equals(1).toArray(), [], [])
   const trabajadores = useLiveQuery(() => db.trabajadores.where('activo').equals(1).toArray(), [], [])
+  const ventas = useLiveQuery(() => db.ventas.toArray(), [], [])
+  const pagos = useLiveQuery(() => db.pagos_comision.toArray(), [], [])
+
+  // --- Comisiones: pendiente = todo lo generado − todo lo pagado ---
+  const ventasServ = (ventas || []).filter((v) => v.tipo === 'servicio' && !v.anulada && v.trabajadorId)
+  function resumenDe(tId) {
+    const mias = ventasServ.filter((v) => v.trabajadorId === tId)
+    const generado = mias.reduce((s, v) => s + (v.comision || 0), 0)
+    const lavadas = mias.reduce((s, v) => s + (v.cantidad || 1), 0)
+    const pagado = (pagos || []).filter((p) => p.trabajadorId === tId).reduce((s, p) => s + p.monto, 0)
+    return { generado, pagado, pendiente: generado - pagado, lavadas }
+  }
+
+  const [pagoA, setPagoA] = useState(null)   // trabajador al que se le paga
+  const [montoPago, setMontoPago] = useState(0)
+
+  function abrirPago(t) {
+    setPagoA(t)
+    setMontoPago(Math.max(0, resumenDe(t.id).pendiente))
+  }
+
+  async function pagarComision() {
+    if (montoPago <= 0) return show('Escribe el valor a pagar')
+    const now = Date.now()
+    await db.pagos_comision.add(stamp({
+      id: uid(), trabajadorId: pagoA.id, trabajadorNombre: pagoA.nombre,
+      monto: montoPago, fecha: now, mes: monthKey(now), pagadoPor: user?.nombre || '',
+    }))
+    // Sale plata de la caja: queda como gasto (cuenta en el cierre de turno).
+    // En el Balance NO se resta otra vez (la comisión ya está descontada del
+    // neto de servicios) — por eso la categoría 'comisiones' se excluye allá.
+    await db.gastos.add(stamp({
+      id: uid(), concepto: `Comisiones ${pagoA.nombre}`, categoria: 'comisiones',
+      monto: montoPago, fecha: now, mes: monthKey(now),
+    }))
+    setPagoA(null); setMontoPago(0)
+    show('Pago de comisiones registrado')
+  }
 
   // --- Servicios ---
   const [servSheet, setServSheet] = useState(false)
@@ -91,6 +131,9 @@ export default function Servicios() {
           <button className={`pill ${tab === 'trabajadores' ? 'active' : ''}`} onClick={() => setTab('trabajadores')}>
             Trabajadores
           </button>
+          <button className={`pill ${tab === 'comisiones' ? 'active' : ''}`} onClick={() => setTab('comisiones')}>
+            Comisiones
+          </button>
         </div>
 
         {tab === 'servicios' && (
@@ -119,6 +162,48 @@ export default function Servicios() {
             ))}
             {(trabajadores || []).length === 0 && <div className="empty">Sin trabajadores. Toca + para agregar.</div>}
             <button className="fab" onClick={nuevoTrab} aria-label="Nuevo trabajador">+</button>
+          </>
+        )}
+
+        {tab === 'comisiones' && (
+          <>
+            <div className="helper" style={{ marginBottom: 10 }}>
+              Lo que se le debe a cada lavador (comisiones generadas menos pagos hechos). Al pagar, el valor sale de la caja y queda en el historial.
+            </div>
+            {(trabajadores || []).map((t) => {
+              const r = resumenDe(t.id)
+              if (r.generado === 0 && r.pendiente === 0) return null
+              return (
+                <div className="row" key={t.id}>
+                  <div className="main">
+                    <div className="title">{t.nombre}</div>
+                    <div className="meta">{r.lavadas} lavadas · generado {money(r.generado)} · pagado {money(r.pagado)}</div>
+                  </div>
+                  <div className="right">
+                    <div style={{ fontWeight: 700, color: r.pendiente > 0 ? 'var(--red)' : 'var(--green)' }}>{money(r.pendiente)}</div>
+                    {r.pendiente > 0 && (
+                      <button className="chip-lavador" onClick={() => abrirPago(t)}>Pagar</button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+            {ventasServ.length === 0 && <div className="empty">Aún no hay servicios con lavador asignado.</div>}
+
+            {(pagos || []).length > 0 && (
+              <>
+                <div className="section-title">Pagos realizados</div>
+                {(pagos || []).slice().sort((a, b) => b.fecha - a.fecha).slice(0, 15).map((p) => (
+                  <div className="row" key={p.id}>
+                    <div className="main">
+                      <div className="title">{p.trabajadorNombre}</div>
+                      <div className="meta">{shortDate(p.fecha)} · pagó {p.pagadoPor}</div>
+                    </div>
+                    <div className="right" style={{ fontWeight: 700 }}>{money(p.monto)}</div>
+                  </div>
+                ))}
+              </>
+            )}
           </>
         )}
 
@@ -179,6 +264,20 @@ export default function Servicios() {
         <div style={{ height: 16 }} />
         <button className="btn" onClick={guardarTrab}>{trabEdit ? 'Guardar' : 'Agregar'}</button>
         {trabEdit && <><div style={{ height: 10 }} /><button className="btn danger" onClick={borrarTrab}>Eliminar</button></>}
+      </Sheet>
+
+      {/* Pagar comisiones a un lavador */}
+      <Sheet open={!!pagoA} onClose={() => setPagoA(null)} title={pagoA ? `Pagar comisiones · ${pagoA.nombre}` : ''}>
+        {pagoA && (
+          <>
+            <div className="dato-fuerte">Pendiente: <b style={{ color: 'var(--red)' }}>{money(resumenDe(pagoA.id).pendiente)}</b></div>
+            <label>Valor a pagar (puede ser parcial)</label>
+            <MoneyInput value={montoPago} onChange={setMontoPago} />
+            <div className="helper">Quedará registrado como salida de caja y se descuenta del pendiente.</div>
+            <div style={{ height: 14 }} />
+            <button className="btn" onClick={pagarComision}>Registrar pago de {money(montoPago)}</button>
+          </>
+        )}
       </Sheet>
 
       {node}

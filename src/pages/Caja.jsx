@@ -18,8 +18,8 @@ export default function Caja() {
 
   // Carrito mixto: { [key]: linea } — la cantidad se refleja en cada tarjeta.
   const [carrito, setCarrito] = useState({})
-  // Trabajador que hizo los servicios (si la sesión es de un trabajador, él mismo)
-  const [trabSel, setTrabSel] = useState(user && user.rol !== 'dueño' ? user.id : null)
+  // Línea de servicio a la que se le está asignando lavador
+  const [asignando, setAsignando] = useState(null)
 
   // Cobro a crédito
   const [creditoOpen, setCreditoOpen] = useState(false)
@@ -31,8 +31,20 @@ export default function Caja() {
   function add(it) {
     setCarrito((c) => {
       const prev = c[it.key]
-      return { ...c, [it.key]: prev ? { ...prev, cantidad: prev.cantidad + 1 } : lineaDesde(it) }
+      if (prev) return { ...c, [it.key]: { ...prev, cantidad: prev.cantidad + 1 } }
+      const linea = lineaDesde(it)
+      // Si vende un trabajador, sus servicios quedan asignados a él por defecto
+      if (linea.tipo === 'servicio' && user && user.rol !== 'dueño') {
+        linea.trabajadorId = user.id
+        linea.trabajadorNombre = user.nombre
+      }
+      return { ...c, [it.key]: linea }
     })
+  }
+
+  function asignarLavador(key, t) {
+    setCarrito((c) => ({ ...c, [key]: { ...c[key], trabajadorId: t ? t.id : null, trabajadorNombre: t ? t.nombre : null } }))
+    setAsignando(null)
   }
   function sub(it) {
     setCarrito((c) => {
@@ -48,12 +60,10 @@ export default function Caja() {
   const lineas = Object.values(carrito)
   const total = totalDe(lineas)
   const ganancia = gananciaDe(lineas)
-  const hayServicios = lineas.some((l) => l.tipo === 'servicio')
 
   async function cobrar(metodo, cliente = null) {
     if (lineas.length === 0) return
-    const t = (trabajadores || []).find((x) => x.id === trabSel) || null
-    const { factura } = await facturarItems({ items: lineas, trabajador: t, metodo, cliente })
+    const { factura } = await facturarItems({ items: lineas, metodo, cliente })
     setRecibo({ factura, fecha: Date.now(), items: lineas, total, metodo, cliente: cliente?.nombre })
     setCarrito({})
   }
@@ -90,29 +100,22 @@ export default function Caja() {
               <tbody>
                 {lineas.map((l) => (
                   <tr key={l.key}>
-                    <td>{l.nombre}{l.tipo === 'servicio' ? <span className="muted-cell"> · Servicio</span> : null}</td>
+                    <td>
+                      {l.nombre}
+                      {l.tipo === 'servicio' && (
+                        <div>
+                          <button className="chip-lavador" onClick={() => setAsignando(l.key)}>
+                            {l.trabajadorNombre ? `Lavador: ${l.trabajadorNombre}` : 'Asignar lavador'}
+                          </button>
+                        </div>
+                      )}
+                    </td>
                     <td className="num muted-cell">{l.cantidad} × {money(l.precioVenta)}</td>
                     <td className="num" style={{ fontWeight: 700 }}>{money(l.precioVenta * l.cantidad)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-
-            {hayServicios && (
-              <>
-                <div className="section-title">¿Quién hizo el servicio?</div>
-                <div className="pill-row">
-                  {(trabajadores || []).map((t) => (
-                    <button key={t.id} className={`pill ${trabSel === t.id ? 'active' : ''}`} onClick={() => setTrabSel(t.id)}>
-                      {t.nombre}
-                    </button>
-                  ))}
-                  <button className={`pill ${trabSel === null ? 'active' : ''}`} onClick={() => setTrabSel(null)}>
-                    Sin asignar
-                  </button>
-                </div>
-              </>
-            )}
 
             <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
@@ -145,6 +148,17 @@ export default function Caja() {
           onChange={(e) => { setClienteNuevo(e.target.value); if (e.target.value) setClienteSel('') }} />
         <div style={{ height: 14 }} />
         <button className="btn" onClick={confirmarCredito}>Registrar fiado</button>
+      </Sheet>
+
+      {/* Asignar lavador a una línea de servicio */}
+      <Sheet open={!!asignando} onClose={() => setAsignando(null)} title="¿Quién hace este servicio?">
+        <div className="pill-row">
+          {(trabajadores || []).map((t) => (
+            <button key={t.id} className="pill" onClick={() => asignarLavador(asignando, t)}>{t.nombre}</button>
+          ))}
+          <button className="pill" onClick={() => asignarLavador(asignando, null)}>Sin asignar</button>
+        </div>
+        <div className="helper">La comisión de esta lavada se le acumula al lavador elegido.</div>
       </Sheet>
 
       {/* Recibo de la venta registrada */}

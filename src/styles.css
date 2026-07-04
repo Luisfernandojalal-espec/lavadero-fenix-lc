@@ -233,6 +233,18 @@ body {
 /* Buscador de la cuadrícula de venta */
 .buscador { margin-bottom: 12px; }
 
+/* Chip para asignar/mostrar el lavador de un servicio */
+.chip-lavador {
+  margin-top: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(14, 165, 233, .10);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.chip-lavador:active { background: rgba(14, 165, 233, .2); }
+
 /* Cantidad visible EN la tarjeta (sin abrir otra ventana) */
 .tile { position: relative; cursor: pointer; }
 .tile.sel { border-color: var(--primary); background: rgba(14, 165, 233, .05); }

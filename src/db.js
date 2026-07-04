@@ -65,6 +65,21 @@ db.version(5).stores({
   turnos: '&id, estado, mes, updatedAt',
 })
 
+// v6: pagos de comisiones a lavadores (liquidación de nómina por comisión)
+db.version(6).stores({
+  productos: '&id, categoria, activo, updatedAt',
+  servicios: '&id, activo, updatedAt',
+  trabajadores: '&id, activo, updatedAt',
+  ventas: '&id, tipo, mes, fecha, trabajadorId, clienteId, updatedAt',
+  gastos: '&id, categoria, mes, fecha, updatedAt',
+  movimientos_inv: '&id, productoId, tipo, mes, fecha, updatedAt',
+  clientes: '&id, activo, updatedAt',
+  abonos: '&id, clienteId, mes, fecha, updatedAt',
+  mesas: '&id, estado, activo, updatedAt',
+  turnos: '&id, estado, mes, updatedAt',
+  pagos_comision: '&id, trabajadorId, mes, updatedAt',
+})
+
 export function uid() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
   return 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2)
@@ -96,6 +111,7 @@ export const CATEGORIAS_GASTO = [
   { id: 'luz', label: 'Luz' },
   { id: 'agua', label: 'Agua' },
   { id: 'nomina', label: 'Nómina' },
+  { id: 'comisiones', label: 'Comisiones' },
   { id: 'insumos', label: 'Insumos' },
   { id: 'otro', label: 'Otro' },
 ]
@@ -123,7 +139,7 @@ export async function seedIfEmpty() {
 // Borra TODOS los datos (local y nube) para dejar el sistema en blanco.
 // Después de esto la app pide crear el usuario administrador de nuevo.
 export async function borrarTodo(supabase) {
-  const tablas = ['productos', 'ventas', 'gastos', 'movimientos_inv', 'clientes', 'abonos', 'servicios', 'trabajadores', 'mesas', 'turnos']
+  const tablas = ['productos', 'ventas', 'gastos', 'movimientos_inv', 'clientes', 'abonos', 'servicios', 'trabajadores', 'mesas', 'turnos', 'pagos_comision']
   for (const t of tablas) await db[t].clear()
   if (supabase) {
     for (const t of tablas) await supabase.from('registros').delete().eq('tabla', t)

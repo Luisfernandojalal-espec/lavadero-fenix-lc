@@ -56,7 +56,11 @@ export default function Reportes() {
   const gananciaServ = ingresoServ - comisiones
 
   // --- Gastos ---
-  const totalGastos = (gastos || []).filter((x) => !x.anulada).reduce((s, x) => s + x.monto, 0)
+  // Los pagos de comisiones (categoría 'comisiones') NO se restan aquí:
+  // la comisión ya está descontada del neto de servicios. Restarlos otra
+  // vez duplicaría el descuento. (Sí cuentan en el cierre de turno, porque
+  // ahí lo que importa es el efectivo que salió de la caja.)
+  const totalGastos = (gastos || []).filter((x) => !x.anulada && x.categoria !== 'comisiones').reduce((s, x) => s + x.monto, 0)
 
   // --- Utilidad neta ---
   const utilidad = gananciaProd + gananciaServ - totalGastos
