@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../db'
+import { db, tipoGasto } from '../db'
 import { LOGO_URL, money, dayKey, shortDate, currentMonthKey, monthLabel } from '../format'
 import { labelMedio } from '../ventas'
 import { useAuth } from '../auth'
@@ -28,6 +28,8 @@ export default function Inicio() {
   const abonos = useLiveQuery(() => db.abonos.toArray(), [], [])
   const mesas = useLiveQuery(() => db.mesas.where('activo').equals(1).toArray(), [], [])
   const abiertas = (mesas || []).filter((m) => m.estado === 'ocupada')
+  const gastosAll = useLiveQuery(() => db.gastos.toArray(), [], [])
+  const fijosPlantilla = useLiveQuery(() => db.gastos_fijos.where('activo').equals(1).toArray(), [], [])
 
   const hoy = dayKey()
   const ventasHoy = (ventas || []).filter((v) => !v.anulada && dayKey(v.fecha) === hoy)
@@ -36,6 +38,16 @@ export default function Inicio() {
   const debe = (ventas || []).filter((v) => v.metodoPago === 'credito' && !v.anulada).reduce((s, v) => s + v.total, 0)
   const abonado = (abonos || []).reduce((s, a) => s + a.monto, 0)
   const porCobrar = Math.max(0, debe - abonado)
+
+  // Utilidad estimada de HOY: ganancia operativa del día, menos los gastos
+  // variables de hoy, menos la tajada diaria de los gastos fijos (plantilla ÷ 30).
+  // Los fijos registrados no se restan aquí (los cubre el prorrateo) y las
+  // comisiones tampoco (ya vienen descontadas en la ganancia de servicios).
+  const gastosVarHoy = (gastosAll || [])
+    .filter((g) => !g.anulada && g.categoria !== 'comisiones' && dayKey(g.fecha) === hoy && tipoGasto(g) === 'variable')
+    .reduce((s, g) => s + g.monto, 0)
+  const fijoDiario = Math.round((fijosPlantilla || []).reduce((s, f) => s + (f.montoEstimado || 0), 0) / 30)
+  const utilidadHoy = gananciaHoy - gastosVarHoy - fijoDiario
 
   const recientes = ventasHoy.slice().sort((a, b) => b.fecha - a.fecha).slice(0, 6)
 
@@ -89,6 +101,16 @@ export default function Inicio() {
           <div className="kpi">
             <div className="kpi-label">POR COBRAR</div>
             <div className="kpi-value red">{money(porCobrar)}</div>
+          </div>
+        </div>
+      )}
+
+      {esDueno && (
+        <div className="card stat-card" style={{ borderColor: utilidadHoy >= 0 ? 'var(--green)' : 'var(--red)' }}>
+          <div className="label">Utilidad estimada de hoy</div>
+          <div className={`value ${utilidadHoy >= 0 ? 'green' : 'red'}`}>{money(utilidadHoy)}</div>
+          <div className="meta" style={{ fontSize: 12 }}>
+            Ganancia {money(gananciaHoy)} − gastos variables de hoy {money(gastosVarHoy)} − fijos del día {money(fijoDiario)}
           </div>
         </div>
       )}
