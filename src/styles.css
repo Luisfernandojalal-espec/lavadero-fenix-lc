@@ -315,6 +315,19 @@ body {
 .tile-step button:active { background: var(--border); }
 .tile-step b { min-width: 18px; text-align: center; font-size: 16px; }
 
+/* Stepper compacto dentro de la cuenta (mesas y factura) */
+.line-step { display: inline-flex; align-items: center; gap: 12px; margin-top: 6px; }
+.line-step button {
+  width: 34px; height: 30px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 17px; font-weight: 700;
+  line-height: 1;
+}
+.line-step button:active { background: var(--border); }
+.line-step b { min-width: 16px; text-align: center; font-size: 15px; }
+
 /* Tarjetas de mesas */
 .mesa-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 @media (min-width: 700px) { .mesa-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }

@@ -117,6 +117,16 @@ export default function Mesas() {
     await db.mesas.update(mesa.id, stamp({ items, eventos: conEvento(mesa, `−1 ${it.nombre}`, user?.nombre) }))
   }
 
+  // Cancela la cuenta y deja la mesa libre (queda en la trazabilidad)
+  async function liberarDesdeDetalle() {
+    await db.mesas.update(mesa.id, stamp({
+      estado: 'libre', cliente: '', items: [],
+      eventos: conEvento(mesa, 'Cuenta cancelada · mesa liberada', user?.nombre),
+    }))
+    setDetId(null)
+    show('Mesa liberada')
+  }
+
   // --- Transferencias ---
   const [transfer, setTransfer] = useState(null) // { key } para una línea, o { todo: true }
   const [destinoId, setDestinoId] = useState('')
@@ -197,14 +207,19 @@ export default function Mesas() {
           <ItemsGrid servicios={servicios} productos={productos} carrito={carritoMesa} onAdd={addItem} onSub={subItem} />
 
           <div className="section-title">Cuenta de la mesa</div>
-          {items.length === 0 && <div className="empty">Sin consumos todavía. Toca un servicio o producto para agregarlo.</div>}
+          {items.length === 0 && (
+            <>
+              <div className="empty" style={{ paddingBottom: 10 }}>Sin consumos. Agrega desde arriba, o libera la mesa.</div>
+              <button className="btn ghost" onClick={liberarDesdeDetalle}>Liberar mesa (cancelar cuenta)</button>
+            </>
+          )}
           {items.length > 0 && (
             <table className="tabla">
               <tbody>
                 {items.map((l) => (
                   <tr key={l.key}>
                     <td>
-                      {l.nombre}
+                      {l.nombre} <span className="muted-cell">{money(l.precioVenta)} c/u</span>
                       {l.tipo === 'servicio' && (
                         <div>
                           <button className="chip-lavador" onClick={() => setAsignando(l.key)}>
@@ -212,8 +227,12 @@ export default function Mesas() {
                           </button>
                         </div>
                       )}
+                      <div className="line-step">
+                        <button onClick={() => subItem(l)} aria-label="Quitar uno">−</button>
+                        <b>{l.cantidad}</b>
+                        <button onClick={() => addItem(l)} aria-label="Agregar uno">+</button>
+                      </div>
                     </td>
-                    <td className="num muted-cell">{l.cantidad} × {money(l.precioVenta)}</td>
                     <td className="num" style={{ fontWeight: 700 }}>{money(l.precioVenta * l.cantidad)}</td>
                     <td className="num">
                       <button className="btn ghost" style={{ width: 'auto', padding: '6px 10px', fontSize: 13 }}

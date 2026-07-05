@@ -101,7 +101,7 @@ export default function Caja() {
                 {lineas.map((l) => (
                   <tr key={l.key}>
                     <td>
-                      {l.nombre}
+                      {l.nombre} <span className="muted-cell">{money(l.precioVenta)} c/u</span>
                       {l.tipo === 'servicio' && (
                         <div>
                           <button className="chip-lavador" onClick={() => setAsignando(l.key)}>
@@ -109,8 +109,12 @@ export default function Caja() {
                           </button>
                         </div>
                       )}
+                      <div className="line-step">
+                        <button onClick={() => sub(l)} aria-label="Quitar uno">−</button>
+                        <b>{l.cantidad}</b>
+                        <button onClick={() => add(l)} aria-label="Agregar uno">+</button>
+                      </div>
                     </td>
-                    <td className="num muted-cell">{l.cantidad} × {money(l.precioVenta)}</td>
                     <td className="num" style={{ fontWeight: 700 }}>{money(l.precioVenta * l.cantidad)}</td>
                   </tr>
                 ))}
