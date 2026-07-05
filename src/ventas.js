@@ -12,6 +12,21 @@ export const esEfectivo = (v) => v.metodoPago === 'efectivo' || v.metodoPago ===
 export const labelMedio = (id) =>
   id === 'transferencia' ? 'Transferencia' : id === 'credito' ? 'Crédito (fiado)' : 'Efectivo'
 
+// Asigna un lavador a una línea de servicio resolviendo el % de comisión:
+// manda el % propio del trabajador; si no tiene, aplica el % del servicio.
+export function asignarComision(linea, trabajador) {
+  const pctServicio = linea.comisionPctServicio ?? linea.comisionPct ?? 0
+  const pctTrabajador = trabajador && trabajador.comisionPct != null && trabajador.comisionPct !== ''
+    ? Number(trabajador.comisionPct) : null
+  return {
+    ...linea,
+    trabajadorId: trabajador ? trabajador.id : null,
+    trabajadorNombre: trabajador ? trabajador.nombre : null,
+    comisionPctServicio: pctServicio,
+    comisionPct: pctTrabajador ?? pctServicio,
+  }
+}
+
 // Consecutivo de factura: máximo conocido + 1. Con la sincronización todos
 // los dispositivos convergen al mismo consecutivo; si dos venden exactamente
 // a la vez sin internet puede repetirse un número (limitación aceptada).

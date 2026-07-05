@@ -32,6 +32,34 @@ export default function Servicios() {
 
   const [pagoA, setPagoA] = useState(null)   // trabajador al que se le paga
   const [montoPago, setMontoPago] = useState(0)
+  const [detalleT, setDetalleT] = useState(null) // planilla de lavadas de un lavador
+
+  // Planilla: cada lavada del lavador desde su último pago (si no hay pagos, todas)
+  function planillaDe(tId) {
+    const ultimoPago = (pagos || []).filter((p) => p.trabajadorId === tId)
+      .reduce((m, p) => Math.max(m, p.fecha), 0)
+    return ventasServ
+      .filter((v) => v.trabajadorId === tId && v.fecha > ultimoPago)
+      .sort((a, b) => b.fecha - a.fecha)
+  }
+
+  async function compartirPlanilla(t) {
+    const filas = planillaDe(t.id)
+    const total = filas.reduce((s, v) => s + (v.comision || 0), 0)
+    const cop = (n) => '$' + Math.round(n).toLocaleString('es-CO')
+    const texto = [
+      `LAVADERO FÉNIX LC — Comisiones de ${t.nombre}`,
+      'Lavadas desde el último pago:',
+      '--------------------------',
+      ...filas.map((v) => `${shortDate(v.fecha)} · ${(v.cantidad || 1)}x ${v.servicioNombre} (${v.comisionPct}%) → ${cop(v.comision || 0)}`),
+      '--------------------------',
+      `TOTAL A PAGAR: ${cop(total)}`,
+    ].join('\n')
+    try {
+      if (navigator.share) { await navigator.share({ text: texto }); show('Planilla compartida') }
+      else { await navigator.clipboard.writeText(texto); show('Planilla copiada al portapapeles') }
+    } catch { try { await navigator.clipboard.writeText(texto); show('Planilla copiada al portapapeles') } catch { show('No se pudo compartir') } }
+  }
 
   function abrirPago(t) {
     setPagoA(t)
@@ -84,19 +112,25 @@ export default function Servicios() {
   // --- Trabajadores ---
   const [trabSheet, setTrabSheet] = useState(false)
   const [trabEdit, setTrabEdit] = useState(null)
-  const emptyTrab = { nombre: '', pin: '', rol: 'trabajador', pregunta: '', respuesta: '' }
+  const emptyTrab = { nombre: '', pin: '', rol: 'trabajador', pregunta: '', respuesta: '', comisionPct: '' }
   const [trabForm, setTrabForm] = useState(emptyTrab)
 
   function nuevoTrab() { setTrabEdit(null); setTrabForm(emptyTrab); setTrabSheet(true) }
   function editarTrab(t) {
     setTrabEdit(t.id)
-    setTrabForm({ nombre: t.nombre, pin: t.pin || '', rol: t.rol || 'trabajador', pregunta: t.pregunta || '', respuesta: '' })
+    setTrabForm({
+      nombre: t.nombre, pin: t.pin || '', rol: t.rol || 'trabajador',
+      pregunta: t.pregunta || '', respuesta: '',
+      comisionPct: t.comisionPct != null ? String(t.comisionPct) : '',
+    })
     setTrabSheet(true)
   }
   async function guardarTrab() {
     if (!trabForm.nombre.trim()) return show('Ponle un nombre')
     if (trabForm.pin && trabForm.pin.length !== 4) return show('El PIN debe tener 4 dígitos')
     const datos = { nombre: trabForm.nombre.trim(), pin: trabForm.pin, rol: trabForm.rol }
+    // % propio del lavador: vacío = usa el % definido en cada servicio
+    datos.comisionPct = trabForm.comisionPct === '' ? null : Math.min(100, parseInt(trabForm.comisionPct, 10) || 0)
     if (trabForm.pregunta.trim()) datos.pregunta = trabForm.pregunta.trim()
     // Solo actualiza la respuesta si escribieron una nueva (así no se borra al editar otros campos)
     if (trabForm.respuesta.trim()) datos.respuesta = trabForm.respuesta.trim().toLowerCase()
@@ -156,7 +190,7 @@ export default function Servicios() {
           <>
             {(trabajadores || []).map((t) => (
               <div className="row" key={t.id} onClick={() => editarTrab(t)}>
-                <div className="main"><div className="title">{t.nombre}</div><div className="meta">{t.rol === 'dueño' ? 'Administrador' : 'Trabajador'}</div></div>
+                <div className="main"><div className="title">{t.nombre}</div><div className="meta">{t.rol === 'dueño' ? 'Administrador' : 'Trabajador'}{t.comisionPct != null ? ` · Comisión propia ${t.comisionPct}%` : ''}</div></div>
                 <div className="right meta">Editar</div>
               </div>
             ))}
@@ -178,6 +212,7 @@ export default function Servicios() {
                   <div className="main">
                     <div className="title">{t.nombre}</div>
                     <div className="meta">{r.lavadas} lavadas · generado {money(r.generado)} · pagado {money(r.pagado)}</div>
+                    <button className="chip-lavador" onClick={() => setDetalleT(t)}>Ver detalle de lavadas</button>
                   </div>
                   <div className="right">
                     <div style={{ fontWeight: 700, color: r.pendiente > 0 ? 'var(--red)' : 'var(--green)' }}>{money(r.pendiente)}</div>
@@ -252,6 +287,13 @@ export default function Servicios() {
           options={[{ value: 'trabajador', label: 'Trabajador (solo Factura rápida)' }, { value: 'dueño', label: 'Administrador (ve todo)' }]}
           placeholder="Elegir rol…" />
 
+        <label>Comisión propia (%) — opcional</label>
+        <input inputMode="numeric" value={trabForm.comisionPct} placeholder="Ej: 45"
+          onChange={(e) => setTrabForm({ ...trabForm, comisionPct: e.target.value.replace(/[^\d]/g, '').slice(0, 3) })} />
+        <div className="helper">
+          Si lo defines, este lavador gana este % en TODOS sus servicios. Si lo dejas vacío, aplica el % de cada servicio.
+        </div>
+
         <div className="divider" />
         <label>Pregunta de seguridad (para recuperar el PIN)</label>
         <input value={trabForm.pregunta} placeholder="Ej: ¿Nombre de mi primera mascota?"
@@ -264,6 +306,41 @@ export default function Servicios() {
         <div style={{ height: 16 }} />
         <button className="btn" onClick={guardarTrab}>{trabEdit ? 'Guardar' : 'Agregar'}</button>
         {trabEdit && <><div style={{ height: 10 }} /><button className="btn danger" onClick={borrarTrab}>Eliminar</button></>}
+      </Sheet>
+
+      {/* Planilla de lavadas de un lavador */}
+      <Sheet open={!!detalleT} onClose={() => setDetalleT(null)} title={detalleT ? `Lavadas de ${detalleT.nombre}` : ''}>
+        {detalleT && (() => {
+          const filas = planillaDe(detalleT.id)
+          const total = filas.reduce((s, v) => s + (v.comision || 0), 0)
+          return (
+            <>
+              <div className="helper" style={{ marginBottom: 8 }}>Servicios desde el último pago. Cada lavada con su % y lo que ganó.</div>
+              {filas.length === 0 && <div className="empty">Sin lavadas pendientes de pago.</div>}
+              {filas.length > 0 && (
+                <table className="tabla compacta">
+                  <thead><tr><th>Fecha</th><th>Servicio</th><th className="num">%</th><th className="num">Comisión</th></tr></thead>
+                  <tbody>
+                    {filas.map((v) => (
+                      <tr key={v.id}>
+                        <td className="muted-cell" style={{ whiteSpace: 'nowrap' }}>{shortDate(v.fecha)}</td>
+                        <td>{(v.cantidad || 1) > 1 ? `${v.cantidad}x ` : ''}{v.servicioNombre}<div className="muted-cell">{money(v.total)}</div></td>
+                        <td className="num muted-cell">{v.comisionPct}%</td>
+                        <td className="num" style={{ fontWeight: 700 }}>{money(v.comision || 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <div className="dato-fuerte" style={{ marginTop: 10 }}>Total a pagar: <b style={{ color: 'var(--red)' }}>{money(total)}</b></div>
+              <div style={{ height: 10 }} />
+              <div className="btn-row">
+                <button className="btn" onClick={() => { setDetalleT(null); abrirPago(detalleT) }}>Pagar</button>
+                <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => compartirPlanilla(detalleT)}>Compartir</button>
+              </div>
+            </>
+          )
+        })()}
       </Sheet>
 
       {/* Pagar comisiones a un lavador */}

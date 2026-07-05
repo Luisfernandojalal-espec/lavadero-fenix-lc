@@ -46,7 +46,9 @@ export function lineaDesde(it) {
   if (it.tipo === 'servicio') {
     return {
       key: it.key, tipo: 'servicio', refId: it.ref.id, nombre: it.ref.nombre,
-      precioVenta: it.ref.precio, comisionPct: it.ref.comisionPct || 0, cantidad: 1,
+      precioVenta: it.ref.precio, cantidad: 1,
+      comisionPct: it.ref.comisionPct || 0,
+      comisionPctServicio: it.ref.comisionPct || 0, // respaldo si la línea queda sin lavador
     }
   }
   return {

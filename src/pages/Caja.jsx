@@ -4,7 +4,7 @@ import { db, uid, stamp } from '../db'
 import { money } from '../format'
 import { Header, Sheet, useToast, SearchSelect } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
-import { facturarItems, gananciaDe, totalDe, compartirRecibo, folio, labelMedio } from '../ventas'
+import { facturarItems, gananciaDe, totalDe, compartirRecibo, folio, labelMedio, asignarComision } from '../ventas'
 import { useAuth } from '../auth'
 
 export default function Caja() {
@@ -32,18 +32,19 @@ export default function Caja() {
     setCarrito((c) => {
       const prev = c[it.key]
       if (prev) return { ...c, [it.key]: { ...prev, cantidad: prev.cantidad + 1 } }
-      const linea = lineaDesde(it)
+      let linea = lineaDesde(it)
       // Si vende un trabajador, sus servicios quedan asignados a él por defecto
+      // (con su % propio de comisión, si lo tiene definido)
       if (linea.tipo === 'servicio' && user && user.rol !== 'dueño') {
-        linea.trabajadorId = user.id
-        linea.trabajadorNombre = user.nombre
+        const yo = (trabajadores || []).find((x) => x.id === user.id)
+        linea = asignarComision(linea, yo || { id: user.id, nombre: user.nombre })
       }
       return { ...c, [it.key]: linea }
     })
   }
 
   function asignarLavador(key, t) {
-    setCarrito((c) => ({ ...c, [key]: { ...c[key], trabajadorId: t ? t.id : null, trabajadorNombre: t ? t.nombre : null } }))
+    setCarrito((c) => ({ ...c, [key]: asignarComision(c[key], t) }))
     setAsignando(null)
   }
   function sub(it) {

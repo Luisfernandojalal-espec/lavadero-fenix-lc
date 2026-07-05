@@ -4,7 +4,7 @@ import { db, uid, stamp } from '../db'
 import { money, shortDate } from '../format'
 import { Header, Sheet, useToast, SearchSelect } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
-import { facturarItems, totalDe, labelMedio } from '../ventas'
+import { facturarItems, totalDe, labelMedio, asignarComision } from '../ventas'
 import { useAuth } from '../auth'
 
 const ESTADOS = {
@@ -85,11 +85,12 @@ export default function Mesas() {
     const i = items.findIndex((x) => x.key === it.key)
     if (i >= 0) items[i] = { ...items[i], cantidad: items[i].cantidad + 1 }
     else {
-      const linea = lineaDesde(it)
+      let linea = lineaDesde(it)
       // Si registra un trabajador, sus servicios quedan asignados a él
+      // (con su % propio de comisión, si lo tiene definido)
       if (linea.tipo === 'servicio' && user && user.rol !== 'dueño') {
-        linea.trabajadorId = user.id
-        linea.trabajadorNombre = user.nombre
+        const yo = (trabajadores || []).find((x) => x.id === user.id)
+        linea = asignarComision(linea, yo || { id: user.id, nombre: user.nombre })
       }
       items.push(linea)
     }
@@ -100,7 +101,7 @@ export default function Mesas() {
   const [asignando, setAsignando] = useState(null)
   async function asignarLavador(key, t) {
     const items = (mesa.items || []).map((l) =>
-      l.key === key ? { ...l, trabajadorId: t ? t.id : null, trabajadorNombre: t ? t.nombre : null } : l)
+      l.key === key ? asignarComision(l, t) : l)
     const linea = items.find((l) => l.key === key)
     await db.mesas.update(mesa.id, stamp({
       items,
