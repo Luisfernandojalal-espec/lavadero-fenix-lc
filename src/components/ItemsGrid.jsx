@@ -1,8 +1,45 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { money } from '../format'
 import { stockBajo } from '../db'
+import { useAuth } from '../auth'
 
 const sinTildes = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+
+// Catálogo vacío: en vez de un callejón sin salida, guía a cargarlo.
+function CatalogoVacio({ sinServicios, sinProductos }) {
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const esDueno = user?.rol === 'dueño'
+
+  return (
+    <div className="empty">
+      Aún no hay nada para vender: falta cargar el catálogo.
+      {esDueno ? (
+        <div style={{ maxWidth: 360, margin: '14px auto 0' }}>
+          {sinServicios && (
+            <button className="btn" onClick={() => navigate('/config')}>
+              Crear servicios de lavado (Admin)
+            </button>
+          )}
+          {sinServicios && sinProductos && <div style={{ height: 10 }} />}
+          {sinProductos && (
+            <button className="btn secondary" onClick={() => navigate('/inventario')}>
+              Cargar productos (Inventario)
+            </button>
+          )}
+          <div className="helper" style={{ marginTop: 10 }}>
+            Los productos se cargan de una vez con la plantilla de Excel en Inventario → Saldos iniciales.
+          </div>
+        </div>
+      ) : (
+        <div className="helper" style={{ marginTop: 8 }}>
+          Pídele al administrador que cargue los productos y servicios.
+        </div>
+      )}
+    </div>
+  )
+}
 
 // Convierte un ítem de la cuadrícula en una línea de carrito/cuenta.
 export function lineaDesde(it) {
@@ -33,7 +70,7 @@ export function ItemsGrid({ servicios, productos, carrito, onAdd, onSub }) {
   ]
 
   if (items.length === 0) {
-    return <div className="empty">No hay servicios ni productos. Créalos en Inventario y Admin.</div>
+    return <CatalogoVacio sinServicios={!(servicios || []).length} sinProductos={!(productos || []).length} />
   }
 
   if (q.trim()) items = items.filter((it) => sinTildes(it.nombre).includes(sinTildes(q)))

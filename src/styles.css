@@ -371,7 +371,7 @@ button {
   width: 100%;
 }
 .btn:active { background: var(--primary-dark); }
-.btn.secondary { background: var(--surface-2); }
+.btn.secondary { background: var(--surface-2); color: var(--text); }
 .btn.danger { background: var(--red); }
 .btn.ghost { background: transparent; border: 1px solid var(--border); color: var(--text); }
 .btn:disabled { opacity: .5; }
