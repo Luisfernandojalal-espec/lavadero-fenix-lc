@@ -13,6 +13,7 @@ import Movimientos from './pages/Movimientos'
 import Caja from './pages/Caja'
 import Mesas from './pages/Mesas'
 import Ordenes from './pages/Ordenes'
+import Lavadores from './pages/Lavadores'
 import Turno from './pages/Turno'
 import Inventario from './pages/Inventario'
 import Servicios from './pages/Servicios'
@@ -25,6 +26,7 @@ const NAV = [
   { to: '/mesas', label: 'Mesas' },
   { to: '/factura', label: 'Facturar' },
   { to: '/turno', label: 'Turno' },
+  { to: '/lavadores', label: 'Lavadores', soloDueno: true },
   { to: '/inventario', label: 'Inventario', soloDueno: true },
   { to: '/historial', label: 'Historial', soloDueno: true },
   { to: '/credito', label: 'Créditos', soloDueno: true },
@@ -97,6 +99,7 @@ export default function App() {
           <Route path="/turno" element={<Turno />} />
           {esDueno ? (
             <>
+              <Route path="/lavadores" element={<Lavadores />} />
               <Route path="/historial" element={<Movimientos />} />
               <Route path="/inventario" element={<Inventario />} />
               <Route path="/credito" element={<Credito />} />

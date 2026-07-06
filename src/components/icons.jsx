@@ -9,6 +9,7 @@ const paths = {
   gastos: <><rect x="2" y="6" width="20" height="13" rx="2" /><path d="M2 10h20" /><circle cx="17" cy="14" r="1.5" /></>,
   balance: <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>,
   config: <><circle cx="12" cy="12" r="3.2" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2" /></>,
+  lavadores: <><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" /></>,
 }
 
 export function ModIcon({ name, size = 30 }) {

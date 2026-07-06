@@ -330,6 +330,29 @@ body {
 
 /* Tarjetas de mesas */
 .mesa-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+
+/* Tarjetas de lavadores (estilo estación, tipo Luxury Barber) */
+.lav-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 6px; }
+@media (min-width: 700px) { .lav-grid { grid-template-columns: repeat(4, 1fr); } }
+.lav-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 12px;
+  text-align: center;
+}
+.lav-avatar {
+  width: 46px; height: 46px; border-radius: 50%;
+  background: var(--surface-2); color: var(--text);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 16px; margin: 0 auto 8px;
+}
+.lav-nombre { font-weight: 700; font-size: 15px; }
+.lav-serv { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.lav-total { font-size: 20px; font-weight: 800; margin-top: 8px; }
+.lav-meta { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.lav-actions { display: flex; gap: 6px; justify-content: center; margin-top: 10px; flex-wrap: wrap; }
 @media (min-width: 700px) { .mesa-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); } }
 .mesa-card {
   display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
