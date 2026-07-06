@@ -395,6 +395,7 @@ function Compras() {
     const codigos = nuevos.map((l) => l.codigo.trim()).filter(Boolean)
     if (new Set(codigos).size !== codigos.length) return show('Hay códigos de barras repetidos en la factura')
 
+    let creadosNuevos = 0
     try {
       await db.transaction('rw', db.productos, db.movimientos_inv, db.compras, db.proveedores, async () => {
         const now = Date.now()
@@ -430,6 +431,7 @@ function Compras() {
               }
               await db.productos.add(stamp(prod))
               existentes.push(prod)
+              creadosNuevos++
             }
           } else {
             prod = await db.productos.get(l.productoId)
@@ -453,7 +455,9 @@ function Compras() {
           mes: monthKey(now),
         }))
       })
-      show('Factura de entrada guardada · inventario actualizado')
+      show(creadosNuevos
+        ? `Factura guardada · ${creadosNuevos} producto${creadosNuevos > 1 ? 's' : ''} nuevo${creadosNuevos > 1 ? 's' : ''} creado${creadosNuevos > 1 ? 's' : ''} en el catálogo`
+        : 'Factura guardada · inventario actualizado')
       setModo('lista')
     } catch (e) {
       show('No se pudo guardar la factura')
@@ -521,6 +525,9 @@ function Compras() {
           </table>
         )}
         <button className="btn secondary" onClick={abrirLinea}>Agregar producto</button>
+        <div className="helper" style={{ marginTop: 6 }}>
+          ¿El producto no existe todavía? Al agregarlo elige <b>“Crear nuevo”</b>: se crea en el catálogo y suma al inventario al guardar la factura.
+        </div>
 
         <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
           <div className="meta">Total de la factura</div>
@@ -534,6 +541,7 @@ function Compras() {
             <button className={`pill ${linea.modo === 'existente' ? 'active' : ''}`} onClick={() => setLinea({ ...linea, modo: 'existente' })}>Ya existe</button>
             <button className={`pill ${linea.modo === 'nuevo' ? 'active' : ''}`} onClick={() => setLinea({ ...linea, modo: 'nuevo' })}>Crear nuevo</button>
           </div>
+          <div className="helper">Si no está en el catálogo, usa <b>“Crear nuevo”</b> para registrarlo sin salir de la factura.</div>
 
           {linea.modo === 'existente' ? (
             <>
