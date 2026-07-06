@@ -176,8 +176,8 @@ export function stamp(obj) {
 export const TIPOS_VEHICULO = [
   { id: 'automovil', label: 'Automóvil' },
   { id: 'camioneta', label: 'Camioneta' },
-  { id: 'moto100', label: 'Moto 100/125' },
-  { id: 'moto150', label: 'Moto 150/300' },
+  { id: 'moto100', label: 'Moto pequeña' },  // 100/125
+  { id: 'moto150', label: 'Moto grande' },   // 150/300
 ]
 export const labelTipoVeh = (id) => TIPOS_VEHICULO.find((t) => t.id === id)?.label || ''
 

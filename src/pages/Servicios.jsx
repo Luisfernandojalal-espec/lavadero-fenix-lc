@@ -10,6 +10,24 @@ import { useAuth } from '../auth'
 const preciosVacios = () => Object.fromEntries(TIPOS_VEHICULO.map((t) => [t.id, 0]))
 const emptyServ = { nombre: '', precios: preciosVacios(), comisionPct: 40 }
 
+// Lista de precios OFICIAL de la cartelera del local (matriz dispersa:
+// los tipos de vehículo sin precio no ofrecen ese servicio).
+const LISTA_OFICIAL = [
+  { nombre: 'Lavado General', precios: { automovil: 25000, camioneta: 30000, moto100: 7000, moto150: 8000 } },
+  { nombre: 'Con Todo', precios: { moto100: 10000, moto150: 12000 } },
+  { nombre: 'Furgón', precios: { automovil: 30000, camioneta: 35000 } },
+  { nombre: 'Pulida', precios: { automovil: 15000, camioneta: 20000 } },
+  { nombre: 'Brillada', precios: { automovil: 7000, camioneta: 10000 } },
+  { nombre: 'Polichada', precios: { automovil: 40000, camioneta: 70000 } },
+  { nombre: 'Grafitada', precios: { automovil: 10000, camioneta: 10000 } },
+  { nombre: 'Limpieza Motor', precios: { automovil: 10000, camioneta: 15000 } },
+  { nombre: 'Cojinería', precios: { automovil: 70000, camioneta: 100000 } },
+  { nombre: 'Limpieza Techo', precios: { automovil: 30000, camioneta: 40000 } },
+  { nombre: 'Overhaul', precios: { automovil: 180000, camioneta: 250000 } },
+  { nombre: 'Farolas', precios: { automovil: 30000, camioneta: 40000 } },
+  { nombre: 'Hidratación de Cojinería', precios: { automovil: 40000, camioneta: 50000 } },
+]
+
 export default function Servicios() {
   const navigate = useNavigate()
   const { show, node } = useToast()
@@ -122,6 +140,24 @@ export default function Servicios() {
     setServSheet(false); show('Servicio eliminado')
   }
 
+  // Crea de una vez los servicios de la cartelera que falten (no toca los existentes).
+  async function cargarListaOficial() {
+    const existentes = await db.servicios.where('activo').equals(1).toArray()
+    let creados = 0
+    for (const s of LISTA_OFICIAL) {
+      if (existentes.some((x) => x.nombre.trim().toLowerCase() === s.nombre.toLowerCase())) continue
+      const precios = { ...preciosVacios(), ...s.precios }
+      await db.servicios.add(stamp({
+        id: uid(), activo: 1, nombre: s.nombre, precios,
+        precio: precioMinServicio({ precios }), comisionPct: 40,
+      }))
+      creados++
+    }
+    show(creados
+      ? `${creados} servicios creados con los precios de la cartelera`
+      : 'Ya tienes todos los servicios de la cartelera')
+  }
+
   // --- Trabajadores ---
   const [trabSheet, setTrabSheet] = useState(false)
   const [trabEdit, setTrabEdit] = useState(null)
@@ -200,7 +236,23 @@ export default function Servicios() {
                 </div>
               )
             })}
-            {(servicios || []).length === 0 && <div className="empty">Sin servicios. Toca + para crear uno.</div>}
+            {(servicios || []).length === 0 && (
+              <div className="empty">
+                Sin servicios.
+                <div style={{ height: 12 }} />
+                <button className="btn" style={{ maxWidth: 340 }} onClick={cargarListaOficial}>
+                  Cargar lista de precios de la cartelera
+                </button>
+                <div className="helper" style={{ marginTop: 8 }}>
+                  Crea los {LISTA_OFICIAL.length} servicios con sus precios por tipo de vehículo. O toca + para crear uno a mano.
+                </div>
+              </div>
+            )}
+            {(servicios || []).length > 0 && (
+              <button className="btn ghost" style={{ marginTop: 8 }} onClick={cargarListaOficial}>
+                Cargar servicios de la cartelera que falten
+              </button>
+            )}
             <button className="fab" onClick={nuevoServ} aria-label="Nuevo servicio">+</button>
           </>
         )}
