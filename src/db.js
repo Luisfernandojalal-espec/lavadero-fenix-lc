@@ -96,6 +96,32 @@ db.version(7).stores({
   gastos_fijos: '&id, activo, updatedAt',
 })
 
+// v8: órdenes de servicio (control operativo del lavadero, base de facturación)
+db.version(8).stores({
+  productos: '&id, categoria, activo, updatedAt',
+  servicios: '&id, activo, updatedAt',
+  trabajadores: '&id, activo, updatedAt',
+  ventas: '&id, tipo, mes, fecha, trabajadorId, clienteId, updatedAt',
+  gastos: '&id, categoria, mes, fecha, updatedAt',
+  movimientos_inv: '&id, productoId, tipo, mes, fecha, updatedAt',
+  clientes: '&id, activo, updatedAt',
+  abonos: '&id, clienteId, mes, fecha, updatedAt',
+  mesas: '&id, estado, activo, updatedAt',
+  turnos: '&id, estado, mes, updatedAt',
+  pagos_comision: '&id, trabajadorId, mes, updatedAt',
+  gastos_fijos: '&id, activo, updatedAt',
+  ordenes: '&id, estado, numero, mes, fecha, updatedAt',
+})
+
+// Estados de una orden de servicio (flujo operativo).
+export const ESTADOS_ORDEN = [
+  { id: 'pendiente', label: 'Pendiente' },
+  { id: 'proceso', label: 'En proceso' },
+  { id: 'terminado', label: 'Terminado' },
+  { id: 'entregado', label: 'Entregado' },
+]
+export const labelEstadoOrden = (id) => ESTADOS_ORDEN.find((e) => e.id === id)?.label || id
+
 export function uid() {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID()
   return 'id-' + Date.now() + '-' + Math.random().toString(16).slice(2)
@@ -224,7 +250,7 @@ export async function seedIfEmpty() {
 // Borra TODOS los datos (local y nube) para dejar el sistema en blanco.
 // Después de esto la app pide crear el usuario administrador de nuevo.
 export async function borrarTodo(supabase) {
-  const tablas = ['productos', 'ventas', 'gastos', 'movimientos_inv', 'clientes', 'abonos', 'servicios', 'trabajadores', 'mesas', 'turnos', 'pagos_comision', 'gastos_fijos']
+  const tablas = ['productos', 'ventas', 'gastos', 'movimientos_inv', 'clientes', 'abonos', 'servicios', 'trabajadores', 'mesas', 'turnos', 'pagos_comision', 'gastos_fijos', 'ordenes']
   for (const t of tablas) await db[t].clear()
   if (supabase) {
     for (const t of tablas) await supabase.from('registros').delete().eq('tabla', t)
