@@ -10,7 +10,6 @@ const TABS = [
   { id: 'productos', label: 'Productos' },
   { id: 'compras', label: 'Factura de entrada' },
   { id: 'saldos', label: 'Saldos iniciales' },
-  { id: 'entradas', label: 'Entradas' },
   { id: 'salidas', label: 'Salidas' },
   { id: 'kardex', label: 'Kardex' },
 ]
@@ -33,7 +32,6 @@ export default function Inventario() {
       {tab === 'productos' && <Productos embedded />}
       {tab === 'compras' && <Compras />}
       {tab === 'saldos' && <SaldosIniciales />}
-      {tab === 'entradas' && <Entradas />}
       {tab === 'salidas' && <Salidas />}
       {tab === 'kardex' && <Kardex />}
     </>
@@ -197,85 +195,6 @@ function SaldosIniciales() {
       </table>
       {lista.length === 0 && <div className="empty">No hay productos. Créalos en Productos o súbelos con la plantilla.</div>}
       {lista.length > 0 && <button className="btn" style={{ marginTop: 14 }} onClick={guardar}>Guardar saldos escritos</button>}
-      {node}
-    </div>
-  )
-}
-
-// ------------------- ENTRADAS (compras / reposición) -------------------
-function Entradas() {
-  const { show, node } = useToast()
-  const productos = useLiveQuery(() => db.productos.where('activo').equals(1).toArray(), [], [])
-  const movs = useLiveQuery(() => db.movimientos_inv.where('tipo').equals('entrada').toArray(), [], [])
-
-  const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({ productoId: '', cantidad: 0, costoUnit: 0, nota: '' })
-
-  const lista = (movs || []).sort((a, b) => b.fecha - a.fecha).slice(0, 40)
-
-  function elegirProducto(id) {
-    const p = (productos || []).find((x) => x.id === id)
-    setForm({ ...form, productoId: id, costoUnit: p ? p.precioCompra : 0 })
-  }
-
-  async function guardar() {
-    if (!form.productoId) return show('Elige un producto')
-    if (form.cantidad <= 0) return show('Falta la cantidad')
-    const p = productos.find((x) => x.id === form.productoId)
-    const now = Date.now()
-    await db.movimientos_inv.add(stamp({
-      id: uid(), tipo: 'entrada',
-      productoId: p.id, productoNombre: p.nombre,
-      cantidad: form.cantidad, costoUnit: form.costoUnit, nota: form.nota.trim(),
-      fecha: now, mes: monthKey(now),
-    }))
-    await db.productos.update(p.id, stamp({ stock: (p.stock || 0) + form.cantidad }))
-    setOpen(false)
-    setForm({ productoId: '', cantidad: 0, costoUnit: 0, nota: '' })
-    show(`Entrada registrada (+${form.cantidad})`)
-  }
-
-  return (
-    <div className="content">
-      <div className="helper" style={{ marginBottom: 10 }}>Mercancía que compras o repones. Aumenta la existencia.</div>
-      <table className="tabla">
-        <thead><tr><th>Fecha</th><th>Producto</th><th className="num">Cant.</th><th className="num">Total</th></tr></thead>
-        <tbody>
-          {lista.map((m) => (
-            <tr key={m.id}>
-              <td className="muted-cell">{shortDate(m.fecha)}</td>
-              <td>{m.productoNombre}{m.nota ? <div className="muted-cell">{m.nota}</div> : null}</td>
-              <td className="num" style={{ color: 'var(--green)' }}>+{m.cantidad}</td>
-              <td className="num">{money(m.costoUnit * m.cantidad)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {lista.length === 0 && <div className="empty">Sin entradas registradas.</div>}
-
-      <button className="fab" onClick={() => setOpen(true)} aria-label="Nueva entrada">+</button>
-
-      <Sheet open={open} onClose={() => setOpen(false)} title="Nueva entrada (compra)">
-        <label>Producto</label>
-        <SearchSelect value={form.productoId} onChange={elegirProducto}
-          options={opcionesProducto(productos)} placeholder="Buscar producto…" />
-        <div className="grid-2">
-          <div>
-            <label>Cantidad</label>
-            <input inputMode="numeric" value={form.cantidad}
-              onChange={(e) => setForm({ ...form, cantidad: parseInt(e.target.value.replace(/[^\d]/g, '') || '0', 10) })} />
-          </div>
-          <div>
-            <label>Costo por unidad</label>
-            <MoneyInput value={form.costoUnit} onChange={(v) => setForm({ ...form, costoUnit: v })} />
-          </div>
-        </div>
-        <label>Nota (proveedor, factura) — opcional</label>
-        <input value={form.nota} onChange={(e) => setForm({ ...form, nota: e.target.value })} placeholder="Ej: Distribuidora XYZ" />
-        <div className="helper" style={{ marginTop: 8 }}>Total de la compra: <b>{money(form.costoUnit * form.cantidad)}</b></div>
-        <div style={{ height: 14 }} />
-        <button className="btn" onClick={guardar}>Registrar entrada</button>
-      </Sheet>
       {node}
     </div>
   )
