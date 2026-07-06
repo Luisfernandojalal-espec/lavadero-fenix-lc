@@ -21,6 +21,7 @@ export default function Gastos() {
   const mesActual = currentMonthKey()
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editId, setEditId] = useState(null)
+  const [modoVariable, setModoVariable] = useState(false) // formulario simple (solo concepto + valor)
   const [form, setForm] = useState(emptyForm)
 
   const gastos = useLiveQuery(() => db.gastos.where('mes').equals(mesActual).toArray(), [mesActual], [])
@@ -30,18 +31,22 @@ export default function Gastos() {
   const total = lista.reduce((s, g) => s + g.monto, 0)
   const totalFijo = lista.filter((g) => tipoGasto(g) === 'fijo').reduce((s, g) => s + g.monto, 0)
   const totalVariable = total - totalFijo
+  // Historial de gastos variables del mes (excluye pagos de comisión)
+  const variablesLista = lista.filter((g) => tipoGasto(g) === 'variable' && g.categoria !== 'comisiones')
 
   // ¿Este gasto fijo ya se registró este mes?
   const registroDe = (fijoId) => lista.find((g) => g.fijoId === fijoId)
 
   // --- Registrar / editar un gasto ---
-  function abrirNuevo(catId) {
-    setEditId(null)
-    setForm({ ...emptyForm, categoria: catId || 'otro', tipo: tipoPorCategoria(catId || 'otro'), responsable: user?.nombre || '' })
+  // Gasto variable: formulario simple (concepto + valor).
+  function abrirVariable() {
+    setEditId(null); setModoVariable(true)
+    setForm({ ...emptyForm, categoria: 'otro', tipo: 'variable', concepto: '', responsable: user?.nombre || '', medioPago: 'caja' })
     setSheetOpen(true)
   }
   function abrirEditar(g) {
     setEditId(g.id)
+    setModoVariable(tipoGasto(g) === 'variable' && !g.fijoId)
     setForm({
       concepto: g.concepto, categoria: g.categoria, monto: g.monto, tipo: tipoGasto(g), fijoId: g.fijoId || null,
       medioPago: g.medioPago || 'caja', responsable: g.responsable || '', comprobante: g.comprobante || '',
@@ -50,12 +55,13 @@ export default function Gastos() {
   }
   // Registrar un gasto fijo del mes (prellenado con el estimado)
   function abrirDesdeFijo(f) {
-    setEditId(null)
+    setEditId(null); setModoVariable(false)
     setForm({ ...emptyForm, concepto: f.nombre, categoria: f.categoria, monto: f.montoEstimado, tipo: 'fijo', fijoId: f.id, responsable: user?.nombre || '' })
     setSheetOpen(true)
   }
 
   async function guardar() {
+    if (modoVariable && !form.concepto.trim()) return show('Escribe el concepto')
     if (form.monto <= 0) return show('Falta el monto')
     const cat = CATEGORIAS_GASTO.find((c) => c.id === form.categoria)
     const concepto = form.concepto.trim() || (cat ? cat.label : 'Gasto')
@@ -124,15 +130,21 @@ export default function Gastos() {
         </div>
 
         {/* Gastos variables del día a día (arriba porque se registran a diario) */}
-        <div className="section-title" style={{ marginTop: 4 }}>Registrar gasto variable (día a día)</div>
-        <div className="helper" style={{ marginBottom: 6 }}>Insumos y gastos del día. Se descuentan de la utilidad de hoy y del mes.</div>
-        <div className="pill-row">
-          {CATEGORIAS_GASTO.filter((c) => c.id !== 'comisiones' && tipoPorCategoria(c.id) === 'variable').map((c) => (
-            <button key={c.id} className="pill" onClick={() => abrirNuevo(c.id)}>
-              {c.label}
-            </button>
-          ))}
-        </div>
+        <div className="section-title" style={{ marginTop: 4 }}>Gastos variables (día a día)</div>
+        <button className="btn" onClick={abrirVariable}>Agregar gasto variable</button>
+        <div className="helper" style={{ margin: '6px 0 4px' }}>Insumos y gastos del día. Se descuentan de la utilidad de hoy y del mes.</div>
+        {variablesLista.length === 0 && <div className="empty" style={{ padding: '10px 0' }}>Aún no hay gastos variables este mes.</div>}
+        {variablesLista.map((g) => (
+          <div className="row" key={g.id} onClick={() => abrirEditar(g)} style={{ cursor: 'pointer' }}>
+            <div className="main">
+              <div className="title">{g.concepto}</div>
+              <div className="meta">{shortDate(g.fecha)}{g.medioPago && g.medioPago !== 'caja' ? ` · ${labelMedioGasto(g.medioPago)}` : ''}{g.responsable ? ` · ${g.responsable}` : ''}</div>
+            </div>
+            <div className="right" style={{ fontWeight: 700, color: 'var(--red)' }}>−{money(g.monto)}</div>
+          </div>
+        ))}
+
+        <div className="divider" />
 
         {/* Gastos fijos del mes: control registrado / pendiente */}
         <div className="section-title">
@@ -165,32 +177,22 @@ export default function Gastos() {
           )
         })}
         <button className="btn ghost" style={{ marginBottom: 4 }} onClick={nuevoFijo}>Agregar gasto fijo</button>
-
-        <div className="section-title">Movimientos del mes</div>
-        {lista.length === 0 && <div className="empty">Sin gastos este mes.</div>}
-        {lista.map((g) => (
-          <div className="row" key={g.id} onClick={() => abrirEditar(g)}>
-            <div className="main">
-              <div className="title">{g.concepto}</div>
-              <div className="meta">
-                {labelGasto(g.categoria)} · {tipoGasto(g) === 'fijo' ? 'Fijo' : 'Variable'}
-                {g.medioPago && g.medioPago !== 'caja' ? ` · ${labelMedioGasto(g.medioPago)}` : ''} · {shortDate(g.fecha)}
-              </div>
-            </div>
-            <div className="right" style={{ fontWeight: 700, color: 'var(--red)' }}>−{money(g.monto)}</div>
-          </div>
-        ))}
       </div>
 
       {/* Registrar / editar gasto */}
-      <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={editId ? 'Editar gasto' : 'Registrar gasto'}>
-        <label>Categoría</label>
-        <SearchSelect value={form.categoria}
-          onChange={(v) => setForm({ ...form, categoria: v, tipo: form.fijoId ? 'fijo' : tipoPorCategoria(v) })}
-          options={CATEGORIAS_GASTO.map((c) => ({ value: c.id, label: c.label }))} placeholder="Buscar categoría…" />
+      <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)}
+        title={editId ? 'Editar gasto' : (modoVariable ? 'Gasto variable' : 'Registrar gasto')}>
+        {!modoVariable && (
+          <>
+            <label>Categoría</label>
+            <SearchSelect value={form.categoria}
+              onChange={(v) => setForm({ ...form, categoria: v, tipo: form.fijoId ? 'fijo' : tipoPorCategoria(v) })}
+              options={CATEGORIAS_GASTO.map((c) => ({ value: c.id, label: c.label }))} placeholder="Buscar categoría…" />
+          </>
+        )}
 
-        <label>Descripción (opcional)</label>
-        <input value={form.concepto} placeholder="Ej: Recibo de luz julio"
+        <label>{modoVariable ? 'Concepto' : 'Descripción (opcional)'}</label>
+        <input value={form.concepto} placeholder={modoVariable ? 'Ej: Jabón, silicona, combustible…' : 'Ej: Recibo de luz julio'}
           onChange={(e) => setForm({ ...form, concepto: e.target.value })} />
 
         <label>Monto</label>
@@ -215,11 +217,15 @@ export default function Gastos() {
         <input value={form.comprobante} placeholder="Ej: N° de recibo o factura"
           onChange={(e) => setForm({ ...form, comprobante: e.target.value })} />
 
-        <label>Tipo</label>
-        <div className="pill-row">
-          <button className={`pill ${form.tipo === 'fijo' ? 'active' : ''}`} onClick={() => setForm({ ...form, tipo: 'fijo' })}>Fijo</button>
-          <button className={`pill ${form.tipo === 'variable' ? 'active' : ''}`} onClick={() => setForm({ ...form, tipo: 'variable' })}>Variable</button>
-        </div>
+        {!modoVariable && (
+          <>
+            <label>Tipo</label>
+            <div className="pill-row">
+              <button className={`pill ${form.tipo === 'fijo' ? 'active' : ''}`} onClick={() => setForm({ ...form, tipo: 'fijo' })}>Fijo</button>
+              <button className={`pill ${form.tipo === 'variable' ? 'active' : ''}`} onClick={() => setForm({ ...form, tipo: 'variable' })}>Variable</button>
+            </div>
+          </>
+        )}
 
         <div style={{ height: 14 }} />
         <button className="btn" onClick={guardar}>{editId ? 'Guardar' : 'Registrar gasto'}</button>
