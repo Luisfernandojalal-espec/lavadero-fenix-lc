@@ -5,6 +5,7 @@ import { LOGO_URL, money, dayKey, shortDate, currentMonthKey, monthLabel } from 
 import { labelMedio } from '../ventas'
 import { useAuth } from '../auth'
 import { ModIcon } from '../components/icons'
+import Lavadores from './Lavadores'
 
 const MODULOS = [
   { to: '/mesas', icon: 'mesas', label: 'Mesas' },
@@ -128,6 +129,8 @@ export default function Inicio() {
       {esDueno && (
         <button className="btn ghost" style={{ marginTop: 4 }} onClick={exportarCSV}>Exportar resumen del mes (.csv)</button>
       )}
+
+      {esDueno && <Lavadores embedded />}
 
       {abiertas.length > 0 && (
         <>

@@ -10,7 +10,8 @@ import { useAuth } from '../auth'
 const iniciales = (nombre) => String(nombre || '')
   .trim().split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || '·'
 
-export default function Lavadores() {
+// embedded: se muestra dentro de otra página (Inicio), sin Header ni KPIs.
+export default function Lavadores({ embedded }) {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { show, node } = useToast()
@@ -58,7 +59,6 @@ export default function Lavadores() {
       id: uid(), trabajadorId: pagoA.id, trabajadorNombre: pagoA.nombre,
       monto: montoPago, fecha: now, mes: monthKey(now), pagadoPor: user?.nombre || '',
     }))
-    // Sale de la caja: queda como gasto categoría 'comisiones' (no se doble-cuenta en Balance).
     await db.gastos.add(stamp({
       id: uid(), concepto: `Comisiones ${pagoA.nombre}`, categoria: 'comisiones',
       monto: montoPago, tipo: 'variable', medioPago: 'caja', fecha: now, mes: monthKey(now),
@@ -69,48 +69,44 @@ export default function Lavadores() {
   const lista = (trabajadores || []).filter((t) => t.rol !== 'dueño')
     .slice().sort((a, b) => a.nombre.localeCompare(b.nombre))
 
-  return (
-    <>
-      <Header title="Lavadores" sub={fechaLarga()} onBack={() => navigate('/')} />
-      <div className="content">
-        <div className="kpi-row">
-          <div className="kpi"><div className="kpi-label">SERVICIOS DE HOY</div><div className="kpi-value">{kServicios}</div></div>
-          <div className="kpi"><div className="kpi-label">EFECTIVO</div><div className="kpi-value green">{money(kEfectivo)}</div></div>
-          <div className="kpi"><div className="kpi-label">TRANSFERENCIA</div><div className="kpi-value">{money(kTransfer)}</div></div>
-          <div className="kpi"><div className="kpi-label">TOTAL DE HOY</div><div className="kpi-value">{money(kTotal)}</div></div>
+  const vacio = lista.length === 0 && (
+    embedded
+      ? <div className="helper">Aún no hay lavadores. Créalos en Admin → Trabajadores.</div>
+      : (
+        <div className="empty">
+          No hay lavadores todavía.
+          <div style={{ height: 12 }} />
+          <button className="btn" style={{ maxWidth: 320 }} onClick={() => navigate('/config')}>Crear lavadores (Admin)</button>
         </div>
+      )
+  )
 
-        {lista.length === 0 && (
-          <div className="empty">
-            No hay lavadores todavía.
-            <div style={{ height: 12 }} />
-            <button className="btn" style={{ maxWidth: 320 }} onClick={() => navigate('/config')}>Crear lavadores (Admin)</button>
+  const tarjetas = (
+    <div className="lav-grid">
+      {lista.map((t) => {
+        const st = statsDe(t.id)
+        return (
+          <div className="lav-card" key={t.id}>
+            <div className="lav-avatar">{iniciales(t.nombre)}</div>
+            <div className="lav-nombre">{t.nombre}</div>
+            <div className="lav-serv">{st.servicios} servicio{st.servicios === 1 ? '' : 's'} hoy</div>
+            <div className="lav-total">{money(st.total)}</div>
+            <div className="lav-meta">Comisión hoy {money(st.comisionHoy)}</div>
+            <div className="lav-meta">
+              Pendiente <b style={{ color: st.pendiente > 0 ? 'var(--red)' : 'var(--green)' }}>{money(st.pendiente)}</b>
+            </div>
+            <div className="lav-actions">
+              <button className="chip-lavador" onClick={() => setDetalle(t)}>Ver detalle</button>
+              {st.pendiente > 0 && <button className="chip-lavador" onClick={() => abrirPago(t)}>Pagar</button>}
+            </div>
           </div>
-        )}
+        )
+      })}
+    </div>
+  )
 
-        <div className="lav-grid">
-          {lista.map((t) => {
-            const st = statsDe(t.id)
-            return (
-              <div className="lav-card" key={t.id}>
-                <div className="lav-avatar">{iniciales(t.nombre)}</div>
-                <div className="lav-nombre">{t.nombre}</div>
-                <div className="lav-serv">{st.servicios} servicio{st.servicios === 1 ? '' : 's'} hoy</div>
-                <div className="lav-total">{money(st.total)}</div>
-                <div className="lav-meta">Comisión hoy {money(st.comisionHoy)}</div>
-                <div className="lav-meta">
-                  Pendiente <b style={{ color: st.pendiente > 0 ? 'var(--red)' : 'var(--green)' }}>{money(st.pendiente)}</b>
-                </div>
-                <div className="lav-actions">
-                  <button className="chip-lavador" onClick={() => setDetalle(t)}>Ver detalle</button>
-                  {st.pendiente > 0 && <button className="chip-lavador" onClick={() => abrirPago(t)}>Pagar</button>}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      </div>
-
+  const hojas = (
+    <>
       {/* Detalle de lavadas (planilla) */}
       <Sheet open={!!detalle} onClose={() => setDetalle(null)} title={detalle ? `Lavadas de ${detalle.nombre}` : ''}>
         {detalle && (() => {
@@ -160,7 +156,37 @@ export default function Lavadores() {
           </>
         )}
       </Sheet>
+    </>
+  )
 
+  // --- Modo embebido (dentro de Inicio) ---
+  if (embedded) {
+    return (
+      <>
+        <div className="section-title">Lavadores · hoy</div>
+        {vacio}
+        {lista.length > 0 && tarjetas}
+        {hojas}
+        {node}
+      </>
+    )
+  }
+
+  // --- Página completa (pestaña Lavadores) ---
+  return (
+    <>
+      <Header title="Lavadores" sub={fechaLarga()} onBack={() => navigate('/')} />
+      <div className="content">
+        <div className="kpi-row">
+          <div className="kpi"><div className="kpi-label">SERVICIOS DE HOY</div><div className="kpi-value">{kServicios}</div></div>
+          <div className="kpi"><div className="kpi-label">EFECTIVO</div><div className="kpi-value green">{money(kEfectivo)}</div></div>
+          <div className="kpi"><div className="kpi-label">TRANSFERENCIA</div><div className="kpi-value">{money(kTransfer)}</div></div>
+          <div className="kpi"><div className="kpi-label">TOTAL DE HOY</div><div className="kpi-value">{money(kTotal)}</div></div>
+        </div>
+        {vacio}
+        {lista.length > 0 && tarjetas}
+      </div>
+      {hojas}
       {node}
     </>
   )
