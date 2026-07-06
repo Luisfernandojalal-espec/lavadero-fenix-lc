@@ -187,6 +187,12 @@ export default function Caja() {
               </div>
             </div>
 
+            {lineas.some((l) => l.tipo === 'servicio' && !l.trabajadorId) && (
+              <div className="helper" style={{ color: 'var(--amber)', marginBottom: 8 }}>
+                Hay servicios sin lavador asignado: esas comisiones no se le acumularán a nadie.
+              </div>
+            )}
+
             <div className="btn-row">
               <button className="btn" onClick={() => cobrar('efectivo')}>Efectivo · {money(total)}</button>
               <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => cobrar('transferencia')}>Transferencia</button>
