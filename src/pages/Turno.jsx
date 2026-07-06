@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp } from '../db'
+import { db, uid, stamp, gastoDeCaja } from '../db'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
 import { descargarCierrePDF } from '../pdf'
@@ -30,7 +30,8 @@ export default function Turno() {
   const transferencias = vTurno.filter((v) => v.metodoPago === 'transferencia').reduce((s, v) => s + v.total, 0)
   const credito = vTurno.filter((v) => v.metodoPago === 'credito').reduce((s, v) => s + v.total, 0)
   const abonosT = (abonos || []).filter((a) => a.fecha >= desde).reduce((s, a) => s + a.monto, 0)
-  const gastosT = (gastos || []).filter((g) => !g.anulada && g.fecha >= desde).reduce((s, g) => s + g.monto, 0)
+  // Solo los gastos pagados DE CAJA descuadran el efectivo; los de transferencia/banco no.
+  const gastosT = (gastos || []).filter((g) => !g.anulada && g.fecha >= desde && gastoDeCaja(g)).reduce((s, g) => s + g.monto, 0)
   // Solo el efectivo entra a la caja física (transferencias van al banco)
   const esperado = (abierto?.base || 0) + efectivo + abonosT - gastosT
 
@@ -97,7 +98,7 @@ export default function Turno() {
                 <tr><td>Base de caja</td><td className="num">{money(abierto.base)}</td></tr>
                 <tr><td>Ventas en efectivo ({efectivoV.length})</td><td className="num" style={{ color: 'var(--green)', fontWeight: 700 }}>{money(efectivo)}</td></tr>
                 <tr><td>Abonos recibidos</td><td className="num" style={{ color: 'var(--green)' }}>{money(abonosT)}</td></tr>
-                <tr><td>Gastos pagados</td><td className="num" style={{ color: 'var(--red)' }}>−{money(gastosT)}</td></tr>
+                <tr><td>Gastos pagados de caja</td><td className="num" style={{ color: 'var(--red)' }}>−{money(gastosT)}</td></tr>
                 <tr><td><b>Efectivo esperado en caja</b></td><td className="num"><b>{money(esperado)}</b></td></tr>
                 <tr><td className="muted-cell">Ventas por transferencia (al banco)</td><td className="num muted-cell">{money(transferencias)}</td></tr>
                 <tr><td className="muted-cell">Ventas a crédito (fiado)</td><td className="num muted-cell">{money(credito)}</td></tr>

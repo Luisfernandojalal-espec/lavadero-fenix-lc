@@ -1,20 +1,22 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, CATEGORIAS_GASTO, tipoGasto, tipoPorCategoria } from '../db'
+import { db, uid, stamp, CATEGORIAS_GASTO, MEDIOS_PAGO_GASTO, labelMedioGasto, tipoGasto, tipoPorCategoria } from '../db'
 import { money, monthKey, currentMonthKey, monthLabel, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
+import { useAuth } from '../auth'
 
 function labelGasto(id) {
   const c = CATEGORIAS_GASTO.find((x) => x.id === id)
   return c ? c.label : 'Otro'
 }
 
-const emptyForm = { concepto: '', categoria: 'arriendo', monto: 0, tipo: 'fijo', fijoId: null }
+const emptyForm = { concepto: '', categoria: 'arriendo', monto: 0, tipo: 'fijo', fijoId: null, medioPago: 'caja', responsable: '', comprobante: '' }
 const emptyFijo = { nombre: '', categoria: 'arriendo', montoEstimado: 0 }
 
 export default function Gastos() {
   const navigate = useNavigate()
+  const { user } = useAuth()
   const { show, node } = useToast()
   const mesActual = currentMonthKey()
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -35,18 +37,21 @@ export default function Gastos() {
   // --- Registrar / editar un gasto ---
   function abrirNuevo(catId) {
     setEditId(null)
-    setForm({ ...emptyForm, categoria: catId || 'otro', tipo: tipoPorCategoria(catId || 'otro') })
+    setForm({ ...emptyForm, categoria: catId || 'otro', tipo: tipoPorCategoria(catId || 'otro'), responsable: user?.nombre || '' })
     setSheetOpen(true)
   }
   function abrirEditar(g) {
     setEditId(g.id)
-    setForm({ concepto: g.concepto, categoria: g.categoria, monto: g.monto, tipo: tipoGasto(g), fijoId: g.fijoId || null })
+    setForm({
+      concepto: g.concepto, categoria: g.categoria, monto: g.monto, tipo: tipoGasto(g), fijoId: g.fijoId || null,
+      medioPago: g.medioPago || 'caja', responsable: g.responsable || '', comprobante: g.comprobante || '',
+    })
     setSheetOpen(true)
   }
   // Registrar un gasto fijo del mes (prellenado con el estimado)
   function abrirDesdeFijo(f) {
     setEditId(null)
-    setForm({ concepto: f.nombre, categoria: f.categoria, monto: f.montoEstimado, tipo: 'fijo', fijoId: f.id })
+    setForm({ ...emptyForm, concepto: f.nombre, categoria: f.categoria, monto: f.montoEstimado, tipo: 'fijo', fijoId: f.id, responsable: user?.nombre || '' })
     setSheetOpen(true)
   }
 
@@ -54,14 +59,19 @@ export default function Gastos() {
     if (form.monto <= 0) return show('Falta el monto')
     const cat = CATEGORIAS_GASTO.find((c) => c.id === form.categoria)
     const concepto = form.concepto.trim() || (cat ? cat.label : 'Gasto')
+    const extra = {
+      medioPago: form.medioPago || 'caja',
+      responsable: form.responsable.trim(),
+      comprobante: form.comprobante.trim(),
+    }
     if (editId) {
-      await db.gastos.update(editId, stamp({ concepto, categoria: form.categoria, monto: form.monto, tipo: form.tipo }))
+      await db.gastos.update(editId, stamp({ concepto, categoria: form.categoria, monto: form.monto, tipo: form.tipo, ...extra }))
       show('Gasto actualizado')
     } else {
       const now = Date.now()
       await db.gastos.add(stamp({
         id: uid(), concepto, categoria: form.categoria, monto: form.monto,
-        tipo: form.tipo, fijoId: form.fijoId || null,
+        tipo: form.tipo, fijoId: form.fijoId || null, ...extra,
         fecha: now, mes: monthKey(now),
       }))
       show('Gasto registrado')
@@ -161,7 +171,10 @@ export default function Gastos() {
           <div className="row" key={g.id} onClick={() => abrirEditar(g)}>
             <div className="main">
               <div className="title">{g.concepto}</div>
-              <div className="meta">{labelGasto(g.categoria)} · {tipoGasto(g) === 'fijo' ? 'Fijo' : 'Variable'} · {shortDate(g.fecha)}</div>
+              <div className="meta">
+                {labelGasto(g.categoria)} · {tipoGasto(g) === 'fijo' ? 'Fijo' : 'Variable'}
+                {g.medioPago && g.medioPago !== 'caja' ? ` · ${labelMedioGasto(g.medioPago)}` : ''} · {shortDate(g.fecha)}
+              </div>
             </div>
             <div className="right" style={{ fontWeight: 700, color: 'var(--red)' }}>−{money(g.monto)}</div>
           </div>
@@ -181,6 +194,25 @@ export default function Gastos() {
 
         <label>Monto</label>
         <MoneyInput value={form.monto} onChange={(v) => setForm({ ...form, monto: v })} />
+
+        <label>Medio de pago</label>
+        <div className="pill-row">
+          {MEDIOS_PAGO_GASTO.map((m) => (
+            <button key={m.id} className={`pill ${form.medioPago === m.id ? 'active' : ''}`}
+              onClick={() => setForm({ ...form, medioPago: m.id })}>{m.label}</button>
+          ))}
+        </div>
+        {form.medioPago !== 'caja' && (
+          <div className="helper">No sale del efectivo de la caja (no afecta el cuadre del turno).</div>
+        )}
+
+        <label>Responsable (opcional)</label>
+        <input value={form.responsable} placeholder="Ej: quién hizo el gasto"
+          onChange={(e) => setForm({ ...form, responsable: e.target.value })} />
+
+        <label>Comprobante / referencia (opcional)</label>
+        <input value={form.comprobante} placeholder="Ej: N° de recibo o factura"
+          onChange={(e) => setForm({ ...form, comprobante: e.target.value })} />
 
         <label>Tipo</label>
         <div className="pill-row">

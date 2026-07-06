@@ -128,9 +128,34 @@ export const CATEGORIAS_GASTO = [
   { id: 'agua', label: 'Agua' },
   { id: 'nomina', label: 'Nómina' },
   { id: 'comisiones', label: 'Comisiones' },
-  { id: 'insumos', label: 'Insumos' },
+  // Insumos y gastos variables típicos de un lavadero
+  { id: 'jabon', label: 'Jabón' },
+  { id: 'silicona', label: 'Silicona' },
+  { id: 'desengrasante', label: 'Desengrasante' },
+  { id: 'trapos', label: 'Trapos' },
+  { id: 'cepillos', label: 'Cepillos' },
+  { id: 'combustible', label: 'Combustible' },
+  { id: 'transporte', label: 'Transporte' },
+  { id: 'insumos', label: 'Otros insumos' },
   { id: 'otro', label: 'Otro' },
 ]
+
+// Medio con que se PAGA un gasto. 'caja' = sale del efectivo de la caja física
+// (descuadra el turno); transferencia/banco NO tocan el efectivo de la caja.
+export const MEDIOS_PAGO_GASTO = [
+  { id: 'caja', label: 'Caja (efectivo)' },
+  { id: 'transferencia', label: 'Transferencia' },
+  { id: 'banco', label: 'Cuenta bancaria' },
+]
+export const labelMedioGasto = (id) => {
+  const m = MEDIOS_PAGO_GASTO.find((x) => x.id === id)
+  return m ? m.label : 'Caja (efectivo)'
+}
+// ¿Este gasto sale del efectivo de la caja física? Los registros viejos sin
+// medio de pago se consideran de caja (así el cierre de turno no cambia).
+export function gastoDeCaja(g) {
+  return !g.medioPago || g.medioPago === 'caja'
+}
 
 // Clasificación fijo/variable de un gasto. Si el gasto no la trae guardada
 // (registros viejos), se deduce por la categoría.
