@@ -41,10 +41,24 @@ export default function Lavadores({ embedded }) {
     return { servicios, total, comisionHoy, pendiente: Math.max(0, generado - pagado) }
   }
 
-  // Planilla de lavadas desde el último pago (para "Ver detalle")
+  // Planilla de lavadas desde el último pago (para el detalle)
   function planillaDe(tId) {
     const ultimoPago = (pagos || []).filter((p) => p.trabajadorId === tId).reduce((m, p) => Math.max(m, p.fecha), 0)
     return ventasServ.filter((v) => v.trabajadorId === tId && v.fecha > ultimoPago).sort((a, b) => b.fecha - a.fecha)
+  }
+
+  // Productos vendidos en las MISMAS facturas donde el lavador hizo servicios
+  // (solo informativo: los productos NO generan comisión).
+  function productosDe(filasServicio) {
+    const facturas = new Set(filasServicio.map((v) => v.factura).filter((f) => f != null))
+    if (facturas.size === 0) return []
+    return (ventas || [])
+      .filter((v) => v.tipo === 'producto' && !v.anulada && v.factura != null && facturas.has(v.factura))
+      .sort((a, b) => b.fecha - a.fecha)
+      .flatMap((v) => (v.items || []).map((i, idx) => ({
+        key: v.id + ':' + idx, fecha: v.fecha, nombre: i.nombre,
+        cantidad: i.cantidad, total: i.precioVenta * i.cantidad,
+      })))
   }
 
   const [detalle, setDetalle] = useState(null)
@@ -86,7 +100,8 @@ export default function Lavadores({ embedded }) {
       {lista.map((t) => {
         const st = statsDe(t.id)
         return (
-          <div className="lav-card" key={t.id}>
+          <div className="lav-card" key={t.id} role="button" tabIndex={0}
+            style={{ cursor: 'pointer' }} onClick={() => setDetalle(t)}>
             <div className="lav-avatar">{iniciales(t.nombre)}</div>
             <div className="lav-nombre">{t.nombre}</div>
             <div className="lav-serv">{st.servicios} servicio{st.servicios === 1 ? '' : 's'} hoy</div>
@@ -96,8 +111,8 @@ export default function Lavadores({ embedded }) {
               Pendiente <b style={{ color: st.pendiente > 0 ? 'var(--red)' : 'var(--green)' }}>{money(st.pendiente)}</b>
             </div>
             <div className="lav-actions">
-              <button className="chip-lavador" onClick={() => setDetalle(t)}>Ver detalle</button>
-              {st.pendiente > 0 && <button className="chip-lavador" onClick={() => abrirPago(t)}>Pagar</button>}
+              <button className="chip-lavador" onClick={(e) => { e.stopPropagation(); setDetalle(t) }}>Ver detalle</button>
+              {st.pendiente > 0 && <button className="chip-lavador" onClick={(e) => { e.stopPropagation(); abrirPago(t) }}>Pagar</button>}
             </div>
           </div>
         )
@@ -112,6 +127,7 @@ export default function Lavadores({ embedded }) {
         {detalle && (() => {
           const filas = planillaDe(detalle.id)
           const total = filas.reduce((s, v) => s + (v.comision || 0), 0)
+          const prods = productosDe(filas)
           return (
             <>
               <div className="helper" style={{ marginBottom: 8 }}>Servicios desde el último pago. Cada lavada con su comisión.</div>
@@ -130,6 +146,25 @@ export default function Lavadores({ embedded }) {
                     ))}
                   </tbody>
                 </table>
+              )}
+
+              {prods.length > 0 && (
+                <>
+                  <div className="section-title" style={{ marginTop: 12 }}>Productos de esas cuentas · sin comisión</div>
+                  <table className="tabla compacta">
+                    <tbody>
+                      {prods.map((p) => (
+                        <tr key={p.key}>
+                          <td className="muted-cell" style={{ whiteSpace: 'nowrap' }}>{shortDate(p.fecha)}</td>
+                          <td className="muted-cell">{p.cantidad}x {p.nombre}</td>
+                          <td className="num muted-cell">{money(p.total)}</td>
+                          <td className="num muted-cell">—</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="helper">Los productos no generan comisión: no suman al total a pagar.</div>
+                </>
               )}
               <div className="dato-fuerte" style={{ marginTop: 10 }}>Total a pagar: <b style={{ color: 'var(--red)' }}>{money(total)}</b></div>
               {total > 0 && (
