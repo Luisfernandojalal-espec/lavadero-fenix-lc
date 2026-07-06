@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
 import { db, stockBajo, tipoGasto } from '../db'
-import { money, currentMonthKey, monthLabel } from '../format'
+import { money, currentMonthKey, monthLabel, dayKey } from '../format'
 import { Header } from '../components/ui'
 import { descargarReportePDF } from '../pdf'
 
@@ -18,9 +18,67 @@ function ultimosMeses(n) {
   return out
 }
 
+// Formato compacto para etiquetas de barras: 57600 → "58k".
+const kMoney = (n) => (n >= 1000 ? Math.round(n / 1000) + 'k' : String(Math.round(n)))
+
+// Buckets de días (últimos n, de más viejo a más nuevo).
+function ultimosDias(n) {
+  const out = []
+  const base = new Date(); base.setHours(0, 0, 0, 0)
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(base); d.setDate(base.getDate() - i)
+    out.push({ key: dayKey(d.getTime()), label: String(d.getDate()) })
+  }
+  return out
+}
+// Lunes de la semana de un timestamp (clave de semana).
+function lunesKey(ts) {
+  const d = new Date(ts); d.setHours(0, 0, 0, 0)
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7))
+  return dayKey(d.getTime())
+}
+function ultimasSemanas(n) {
+  const out = []
+  const base = new Date(); base.setHours(0, 0, 0, 0)
+  base.setDate(base.getDate() - ((base.getDay() + 6) % 7))
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(base); d.setDate(base.getDate() - i * 7)
+    out.push({ key: dayKey(d.getTime()), label: `${d.getDate()}/${d.getMonth() + 1}` })
+  }
+  return out
+}
+
+// Gráfico de barras SVG (sin librerías). data: [{ label, value }].
+function BarChart({ data }) {
+  const max = Math.max(1, ...data.map((d) => d.value))
+  const W = 320, H = 110, gap = 6
+  const n = data.length || 1
+  const bw = (W - gap * (n + 1)) / n
+  return (
+    <svg viewBox={`0 0 ${W} ${H + 30}`} width="100%" role="img" style={{ display: 'block' }}>
+      {data.map((d, i) => {
+        const bh = Math.round((d.value / max) * (H - 16))
+        const x = gap + i * (bw + gap)
+        const y = H - bh
+        return (
+          <g key={i}>
+            <rect x={x} y={y} width={bw} height={Math.max(bh, 1)} rx="3"
+              fill={d.value >= max ? 'var(--green)' : '#93c5fd'} />
+            <text x={x + bw / 2} y={y - 4} fontSize="9" textAnchor="middle" fill="var(--muted)">
+              {d.value > 0 ? kMoney(d.value) : ''}
+            </text>
+            <text x={x + bw / 2} y={H + 12} fontSize="9" textAnchor="middle" fill="var(--muted)">{d.label}</text>
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
 export default function Reportes() {
   const navigate = useNavigate()
   const [mes, setMes] = useState(currentMonthKey())
+  const [periodo, setPeriodo] = useState('mes') // dia | semana | mes (para la tendencia)
   const meses = ultimosMeses(6)
 
   const ventas = useLiveQuery(() => db.ventas.where('mes').equals(mes).toArray(), [mes], [])
@@ -65,8 +123,47 @@ export default function Reportes() {
   const gastosFijos = gastosMes.filter((x) => tipoGasto(x) === 'fijo').reduce((s, x) => s + x.monto, 0)
   const gastosVariables = totalGastos - gastosFijos
 
-  // --- Utilidad neta ---
-  const utilidad = gananciaProd + gananciaServ - totalGastos
+  // --- Utilidad bruta (antes de gastos) y neta ---
+  const utilidadBruta = gananciaProd + gananciaServ
+  const utilidad = utilidadBruta - totalGastos
+
+  // --- Ticket promedio: total vendido ÷ número de facturas del mes ---
+  const ingresoTotal = ingresoProd + ingresoServ
+  const numFacturas = new Set(v.map((x) => x.factura).filter((f) => f != null)).size
+  const ticketPromedio = numFacturas ? Math.round(ingresoTotal / numFacturas) : 0
+
+  // --- Ventas por servicio (ingreso + cantidad) ---
+  const porServicio = {}
+  for (const s of ventasServ) {
+    const nombre = s.servicioNombre || 'Servicio'
+    if (!porServicio[nombre]) porServicio[nombre] = { nombre, cantidad: 0, ingreso: 0 }
+    porServicio[nombre].cantidad += (s.cantidad || 1)
+    porServicio[nombre].ingreso += s.total || 0
+  }
+  const servRanking = Object.values(porServicio).sort((a, b) => b.ingreso - a.ingreso)
+  const servMasVendidos = Object.values(porServicio).slice().sort((a, b) => b.cantidad - a.cantidad)
+
+  // --- Ventas por lavador (ingreso generado en servicios) ---
+  const ventasLavador = {}
+  for (const s of ventasServ) {
+    const nombre = s.trabajadorNombre || 'Sin asignar'
+    if (!ventasLavador[nombre]) ventasLavador[nombre] = { nombre, lavados: 0, ingreso: 0, comision: 0 }
+    ventasLavador[nombre].lavados += (s.cantidad || 1)
+    ventasLavador[nombre].ingreso += s.total || 0
+    ventasLavador[nombre].comision += s.comision || 0
+  }
+  const lavadorRanking = Object.values(ventasLavador).sort((a, b) => b.ingreso - a.ingreso)
+
+  // --- Tendencia (comparativo por día / semana / mes) sobre TODAS las ventas ---
+  const buckets = periodo === 'dia' ? ultimosDias(7)
+    : periodo === 'semana' ? ultimasSemanas(8)
+      : ultimosMeses(6).slice().reverse().map((k) => ({ key: k, label: monthLabel(k).split(' ')[0].slice(0, 3) }))
+  const keyDe = (x) => periodo === 'dia' ? dayKey(x.fecha) : periodo === 'semana' ? lunesKey(x.fecha) : x.mes
+  const activas = (todasVentas || []).filter((x) => !x.anulada)
+  const trendData = buckets.map((b) => ({
+    label: b.label,
+    value: activas.filter((x) => keyDe(x) === b.key).reduce((s, x) => s + x.total, 0),
+  }))
 
   // Ranking de productos que más ganancia dejan
   const porProducto = {}
@@ -175,6 +272,33 @@ export default function Reportes() {
           </div>
         </div>
 
+        <div className="grid-2">
+          <div className="card stat-card">
+            <div className="label">Utilidad bruta</div>
+            <div className="value">{money(utilidadBruta)}</div>
+            <div className="meta" style={{ fontSize: 12 }}>Antes de gastos</div>
+          </div>
+          <div className="card stat-card">
+            <div className="label">Ticket promedio</div>
+            <div className="value">{money(ticketPromedio)}</div>
+            <div className="meta" style={{ fontSize: 12 }}>{numFacturas} factura{numFacturas === 1 ? '' : 's'}</div>
+          </div>
+        </div>
+
+        {/* Tendencia de ventas (comparativo por día / semana / mes) */}
+        <div className="section-title">Tendencia de ventas</div>
+        <div className="pill-row">
+          <button className={`pill ${periodo === 'dia' ? 'active' : ''}`} onClick={() => setPeriodo('dia')}>Día</button>
+          <button className={`pill ${periodo === 'semana' ? 'active' : ''}`} onClick={() => setPeriodo('semana')}>Semana</button>
+          <button className={`pill ${periodo === 'mes' ? 'active' : ''}`} onClick={() => setPeriodo('mes')}>Mes</button>
+        </div>
+        <div className="card" style={{ padding: '14px 10px 6px' }}>
+          <BarChart data={trendData} />
+          <div className="meta" style={{ textAlign: 'center', fontSize: 12, marginTop: 4 }}>
+            Ventas por {periodo === 'dia' ? 'día (últimos 7)' : periodo === 'semana' ? 'semana (últimas 8)' : 'mes (últimos 6)'}
+          </div>
+        </div>
+
         {/* Estado actual (independiente del mes) */}
         <div className="section-title">Estado actual del negocio</div>
         <div className="grid-2">
@@ -206,17 +330,36 @@ export default function Reportes() {
           </>
         )}
 
-        {/* Comisiones por trabajador */}
-        {trabRanking.length > 0 && (
+        {/* Ventas por servicio */}
+        {servRanking.length > 0 && (
           <>
-            <div className="section-title">Comisiones por trabajar</div>
-            {trabRanking.map((t) => (
+            <div className="section-title">Ventas por servicio</div>
+            {servRanking.slice(0, 6).map((r, i) => (
+              <div className="row" key={r.nombre}>
+                <div className="main">
+                  <div className="title">{i + 1}. {r.nombre}</div>
+                  <div className="meta">{r.cantidad} lavada{r.cantidad === 1 ? '' : 's'}</div>
+                </div>
+                <div className="right" style={{ fontWeight: 700 }}>{money(r.ingreso)}</div>
+              </div>
+            ))}
+            <div className="helper" style={{ marginTop: 6 }}>
+              Más vendido: <b>{servMasVendidos[0]?.nombre}</b> ({servMasVendidos[0]?.cantidad} lavadas)
+            </div>
+          </>
+        )}
+
+        {/* Ventas por lavador */}
+        {lavadorRanking.length > 0 && (
+          <>
+            <div className="section-title">Ventas por lavador</div>
+            {lavadorRanking.map((t) => (
               <div className="row" key={t.nombre}>
                 <div className="main">
                   <div className="title">{t.nombre}</div>
-                  <div className="meta">{t.lavados} lavados</div>
+                  <div className="meta">{t.lavados} lavados · comisión {money(t.comision)}</div>
                 </div>
-                <div className="right" style={{ fontWeight: 700, color: 'var(--amber)' }}>{money(t.comision)}</div>
+                <div className="right" style={{ fontWeight: 700 }}>{money(t.ingreso)}</div>
               </div>
             ))}
           </>
