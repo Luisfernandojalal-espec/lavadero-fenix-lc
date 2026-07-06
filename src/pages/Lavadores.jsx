@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp } from '../db'
+import { db, uid, stamp, TIPOS_VEHICULO, precioServicio } from '../db'
 import { money, dayKey, monthKey, shortDate, fechaLarga } from '../format'
-import { esEfectivo } from '../ventas'
-import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
+import { esEfectivo, facturarItems, totalDe, totalLinea, asignarComision } from '../ventas'
+import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
+import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 import { useAuth } from '../auth'
 
 const iniciales = (nombre) => String(nombre || '')
@@ -19,6 +20,9 @@ export default function Lavadores({ embedded }) {
   const trabajadores = useLiveQuery(() => db.trabajadores.where('activo').equals(1).toArray(), [], [])
   const ventas = useLiveQuery(() => db.ventas.toArray(), [], [])
   const pagos = useLiveQuery(() => db.pagos_comision.toArray(), [], [])
+  const servicios = useLiveQuery(() => db.servicios.where('activo').equals(1).toArray(), [], [])
+  const productos = useLiveQuery(() => db.productos.where('activo').equals(1).toArray(), [], [])
+  const clientes = useLiveQuery(() => db.clientes.where('activo').equals(1).toArray(), [], [])
 
   const hoy = dayKey()
   const ventasHoy = (ventas || []).filter((v) => !v.anulada && dayKey(v.fecha) === hoy)
@@ -59,6 +63,72 @@ export default function Lavadores({ embedded }) {
   const [pagoA, setPagoA] = useState(null)
   const [montoPago, setMontoPago] = useState(0)
 
+  // --- Cobro rápido desde la tarjeta del lavador ---
+  const [cobroDe, setCobroDe] = useState(null)     // lavador al que se le factura
+  const [tipoVeh, setTipoVeh] = useState('automovil')
+  const [carrito, setCarrito] = useState({})
+  const [creditoOpen, setCreditoOpen] = useState(false)
+  const [clienteSel, setClienteSel] = useState('')
+  const [clienteNuevo, setClienteNuevo] = useState('')
+
+  function abrirCobro(t) { setCobroDe(t); setTipoVeh('automovil'); setCarrito({}) }
+  function cerrarCobro() { setCobroDe(null); setCarrito({}); setCreditoOpen(false); setClienteSel(''); setClienteNuevo('') }
+
+  function addCobro(it) {
+    setCarrito((c) => {
+      const prev = c[it.key]
+      if (prev) return { ...c, [it.key]: { ...prev, cantidad: prev.cantidad + 1 } }
+      let linea = lineaDesde(it)
+      // Los servicios quedan asignados automáticamente a este lavador (su comisión).
+      if (linea.tipo === 'servicio') linea = asignarComision(linea, cobroDe)
+      return { ...c, [it.key]: linea }
+    })
+  }
+  function subCobro(it) {
+    setCarrito((c) => {
+      const prev = c[it.key]
+      if (!prev) return c
+      const copy = { ...c }
+      if (prev.cantidad <= 1) delete copy[it.key]
+      else copy[it.key] = { ...prev, cantidad: prev.cantidad - 1 }
+      return copy
+    })
+  }
+  function cambiarTipoCobro(tv) {
+    setTipoVeh(tv)
+    setCarrito((c) => {
+      const next = {}
+      for (const [k, l] of Object.entries(c)) {
+        if (l.tipo !== 'servicio') { next[k] = l; continue }
+        const serv = (servicios || []).find((s) => s.id === l.refId)
+        const precio = serv ? precioServicio(serv, tv) : 0
+        if (precio > 0) next[k] = { ...l, precioVenta: precio, precioBase: precio, tipoVehiculo: tv, descuento: 0 }
+      }
+      return next
+    })
+  }
+
+  const lineasCobro = Object.values(carrito)
+  const totalCobro = totalDe(lineasCobro)
+
+  async function cobrar(metodo, cliente = null) {
+    if (lineasCobro.length === 0) return show('Agrega al menos un servicio o producto')
+    await facturarItems({ items: lineasCobro, metodo, cliente })
+    show(`Cobrado ${money(totalCobro)} · ${cobroDe.nombre}`)
+    cerrarCobro()
+  }
+  async function confirmarCredito() {
+    let cliente = null
+    if (clienteNuevo.trim()) {
+      cliente = { id: uid(), nombre: clienteNuevo.trim() }
+      await db.clientes.add(stamp({ id: cliente.id, activo: 1, nombre: cliente.nombre, telefono: '' }))
+    } else {
+      cliente = (clientes || []).find((c) => c.id === clienteSel)
+    }
+    if (!cliente) return show('Elige o crea un cliente')
+    await cobrar('credito', cliente)
+  }
+
   function abrirPago(t) { setPagoA(t); setMontoPago(statsDe(t.id).pendiente) }
   async function pagar() {
     if (montoPago <= 0) return show('Escribe el valor a pagar')
@@ -95,7 +165,7 @@ export default function Lavadores({ embedded }) {
         const st = statsDe(t.id)
         return (
           <div className="lav-card" key={t.id} role="button" tabIndex={0}
-            style={{ cursor: 'pointer' }} onClick={() => setDetalle(t)}>
+            style={{ cursor: 'pointer' }} onClick={() => abrirCobro(t)}>
             <div className="lav-avatar">{iniciales(t.nombre)}</div>
             <div className="lav-nombre">{t.nombre}</div>
             <div className="lav-serv">{st.servicios} servicio{st.servicios === 1 ? '' : 's'} hoy</div>
@@ -105,6 +175,7 @@ export default function Lavadores({ embedded }) {
               Pendiente <b style={{ color: st.pendiente > 0 ? 'var(--red)' : 'var(--green)' }}>{money(st.pendiente)}</b>
             </div>
             <div className="lav-actions">
+              <button className="chip-lavador" onClick={(e) => { e.stopPropagation(); abrirCobro(t) }}>Cobrar</button>
               <button className="chip-lavador" onClick={(e) => { e.stopPropagation(); setDetalle(t) }}>Ver detalle</button>
               {st.pendiente > 0 && <button className="chip-lavador" onClick={(e) => { e.stopPropagation(); abrirPago(t) }}>Pagar</button>}
             </div>
@@ -187,6 +258,69 @@ export default function Lavadores({ embedded }) {
             <button className="btn" onClick={pagar}>Registrar pago de {money(montoPago)}</button>
           </>
         )}
+      </Sheet>
+
+      {/* Cobro rápido desde la tarjeta del lavador */}
+      <Sheet open={!!cobroDe} onClose={cerrarCobro} title={cobroDe ? `Cobrar · ${cobroDe.nombre}` : ''}>
+        {cobroDe && (
+          <>
+            <div className="helper" style={{ marginBottom: 6 }}>Los servicios se le asignan a {cobroDe.nombre}. Los productos no dan comisión.</div>
+            <label>Tipo de vehículo</label>
+            <div className="pill-row">
+              {TIPOS_VEHICULO.map((t) => (
+                <button key={t.id} className={`pill ${tipoVeh === t.id ? 'active' : ''}`}
+                  onClick={() => cambiarTipoCobro(t.id)}>{t.label}</button>
+              ))}
+            </div>
+
+            <ItemsGrid servicios={servicios} productos={productos} carrito={carrito}
+              onAdd={addCobro} onSub={subCobro} tipoVehiculo={tipoVeh} />
+
+            {lineasCobro.length > 0 && (
+              <>
+                <div className="section-title">Cuenta</div>
+                <table className="tabla">
+                  <tbody>
+                    {lineasCobro.map((l) => (
+                      <tr key={l.key}>
+                        <td>
+                          {l.nombre} <span className="muted-cell">{money(l.precioVenta)} c/u</span>
+                          <div className="line-step">
+                            <button onClick={() => subCobro(l)} aria-label="Quitar uno">−</button>
+                            <b>{l.cantidad}</b>
+                            <button onClick={() => addCobro(l)} aria-label="Agregar uno">+</button>
+                          </div>
+                        </td>
+                        <td className="num" style={{ fontWeight: 700 }}>{money(totalLinea(l))}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="dato-fuerte">Total: <b>{money(totalCobro)}</b></div>
+                <div style={{ height: 10 }} />
+                <div className="btn-row">
+                  <button className="btn" onClick={() => cobrar('efectivo')}>Efectivo · {money(totalCobro)}</button>
+                  <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => cobrar('transferencia')}>Transferencia</button>
+                  <button className="btn ghost" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setCreditoOpen(true)}>Crédito</button>
+                </div>
+              </>
+            )}
+          </>
+        )}
+      </Sheet>
+
+      {/* Crédito (fiado) del cobro rápido */}
+      <Sheet open={creditoOpen} onClose={() => setCreditoOpen(false)} title="Cobrar a crédito (fiado)">
+        <label>Cliente</label>
+        <SearchSelect value={clienteSel} onChange={(v) => { setClienteSel(v); setClienteNuevo('') }}
+          options={(clientes || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre)).map((c) => ({ value: c.id, label: c.nombre }))}
+          placeholder="Buscar cliente…" />
+        <div className="helper" style={{ margin: '8px 0' }}>o crea uno nuevo:</div>
+        <label>Cliente nuevo</label>
+        <input value={clienteNuevo} placeholder="Nombre del cliente"
+          onChange={(e) => { setClienteNuevo(e.target.value); if (e.target.value) setClienteSel('') }} />
+        <div style={{ height: 14 }} />
+        <button className="btn" onClick={confirmarCredito}>Registrar fiado</button>
       </Sheet>
     </>
   )
