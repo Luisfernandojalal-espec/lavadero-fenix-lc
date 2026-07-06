@@ -123,6 +123,17 @@ export default function Gastos() {
           <span className="muted-cell" style={{ fontSize: 13 }}> · fijos {money(totalFijo)} · variables {money(totalVariable)}</span>
         </div>
 
+        {/* Gastos variables del día a día (arriba porque se registran a diario) */}
+        <div className="section-title" style={{ marginTop: 4 }}>Registrar gasto variable (día a día)</div>
+        <div className="helper" style={{ marginBottom: 6 }}>Insumos y gastos del día. Se descuentan de la utilidad de hoy y del mes.</div>
+        <div className="pill-row">
+          {CATEGORIAS_GASTO.filter((c) => c.id !== 'comisiones' && tipoPorCategoria(c.id) === 'variable').map((c) => (
+            <button key={c.id} className="pill" onClick={() => abrirNuevo(c.id)}>
+              {c.label}
+            </button>
+          ))}
+        </div>
+
         {/* Gastos fijos del mes: control registrado / pendiente */}
         <div className="section-title">
           Gastos fijos del mes{pendientes > 0 ? ` · ${pendientes} pendiente${pendientes > 1 ? 's' : ''}` : ''}
@@ -154,16 +165,6 @@ export default function Gastos() {
           )
         })}
         <button className="btn ghost" style={{ marginBottom: 4 }} onClick={nuevoFijo}>Agregar gasto fijo</button>
-
-        {/* Gastos variables rápidos */}
-        <div className="section-title">Registrar gasto variable</div>
-        <div className="pill-row">
-          {CATEGORIAS_GASTO.filter((c) => c.id !== 'comisiones').map((c) => (
-            <button key={c.id} className="pill" onClick={() => abrirNuevo(c.id)}>
-              {c.label}
-            </button>
-          ))}
-        </div>
 
         <div className="section-title">Movimientos del mes</div>
         {lista.length === 0 && <div className="empty">Sin gastos este mes.</div>}
