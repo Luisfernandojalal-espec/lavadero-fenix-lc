@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, MOTIVOS_SALIDA, CATEGORIAS_PRODUCTO, labelCategoria, STOCK_MIN_DEFAULT } from '../db'
-import { money, monthKey, shortDate } from '../format'
+import { db, uid, stamp, MOTIVOS_SALIDA, CATEGORIAS_PRODUCTO, UNIDADES, FORMAS_PAGO_COMPRA, labelFormaPagoCompra, labelCategoria, STOCK_MIN_DEFAULT } from '../db'
+import { money, monthKey, shortDate, dayKey } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 import Productos from './Productos'
 
 const TABS = [
   { id: 'productos', label: 'Productos' },
+  { id: 'compras', label: 'Factura de entrada' },
   { id: 'saldos', label: 'Saldos iniciales' },
   { id: 'entradas', label: 'Entradas' },
   { id: 'salidas', label: 'Salidas' },
@@ -30,6 +31,7 @@ export default function Inventario() {
       </div>
 
       {tab === 'productos' && <Productos embedded />}
+      {tab === 'compras' && <Compras />}
       {tab === 'saldos' && <SaldosIniciales />}
       {tab === 'entradas' && <Entradas />}
       {tab === 'salidas' && <Salidas />}
@@ -48,12 +50,34 @@ function opcionesProducto(productos) {
 // ------------------- SALDOS INICIALES -------------------
 const COLS = ['Producto', 'Categoria', 'Precio compra', 'Precio venta', 'Existencia', 'Stock minimo']
 
+const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+
 function catId(txt) {
-  const t = String(txt || '').trim().toLowerCase()
-  const c = CATEGORIAS_PRODUCTO.find((x) => x.id === t || x.label.toLowerCase() === t)
+  const t = norm(txt)
+  const c = CATEGORIAS_PRODUCTO.find((x) => x.id === t || norm(x.label) === t)
   return c ? c.id : 'otro'
 }
-function num(v) { const n = parseInt(String(v ?? '').replace(/[^\d]/g, ''), 10); return isNaN(n) ? 0 : n }
+
+// Número tolerante a formato colombiano: "2.500,00" → 2500, "12.000" → 12000.
+function num(v) {
+  if (typeof v === 'number') return Math.round(v)
+  let s = String(v ?? '').trim()
+  if (!s) return 0
+  if (s.includes(',')) s = s.slice(0, s.indexOf(',')) // corta la parte decimal (coma COP)
+  const n = parseInt(s.replace(/[^\d]/g, ''), 10)
+  return isNaN(n) ? 0 : n
+}
+
+// Busca una columna de la fila por cualquiera de sus nombres, sin tildes ni mayúsculas.
+function getCol(row, ...alts) {
+  const keys = Object.keys(row || {})
+  for (const alt of alts) {
+    const na = norm(alt)
+    const k = keys.find((kk) => norm(kk) === na)
+    if (k != null) return row[k]
+  }
+  return ''
+}
 
 function SaldosIniciales() {
   const { show, node } = useToast()
@@ -104,14 +128,14 @@ function SaldosIniciales() {
       const wb = XLSX.read(data)
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' })
       const existentes = await db.productos.where('activo').equals(1).toArray()
-      let creados = 0, actualizados = 0
+      let creados = 0, actualizados = 0, saltados = 0
       for (const r of rows) {
-        const nombre = String(r['Producto'] ?? '').trim()
-        if (!nombre || nombre.toLowerCase().startsWith('ejemplo')) continue
-        const existencia = num(r['Existencia'])
-        const pc = num(r['Precio compra'])
-        const pv = num(r['Precio venta'])
-        const sm = num(r['Stock minimo'])
+        const nombre = String(getCol(r, 'Producto', 'nombre', 'descripcion', 'articulo', 'item') ?? '').trim()
+        if (!nombre || nombre.toLowerCase().startsWith('ejemplo')) { saltados++; continue }
+        const existencia = num(getCol(r, 'Existencia', 'stock', 'cantidad', 'exist'))
+        const pc = num(getCol(r, 'Precio compra', 'precio de compra', 'compra', 'costo', 'p compra'))
+        const pv = num(getCol(r, 'Precio venta', 'precio de venta', 'venta', 'precio', 'p venta'))
+        const sm = num(getCol(r, 'Stock minimo', 'stock min', 'minimo', 'min'))
         const prev = existentes.find((p) => p.nombre.trim().toLowerCase() === nombre.toLowerCase())
         if (prev) {
           const cambios = { stock: existencia }
@@ -123,14 +147,18 @@ function SaldosIniciales() {
         } else {
           await db.productos.add(stamp({
             id: uid(), activo: 1, nombre,
-            categoria: catId(r['Categoria']),
+            categoria: catId(getCol(r, 'Categoria', 'categoría', 'linea')),
             precioCompra: pc, precioVenta: pv, stock: existencia,
             stockMin: sm || STOCK_MIN_DEFAULT,
           }))
           creados++
         }
       }
-      show(`Listo: ${actualizados} actualizados, ${creados} nuevos`)
+      if (creados === 0 && actualizados === 0) {
+        show(saltados > 0 ? 'No reconocí las columnas. Usa la plantilla o encabezado "Producto".' : 'El archivo no tenía productos')
+      } else {
+        show(`Listo: ${actualizados} actualizados, ${creados} nuevos`)
+      }
     } catch (err) {
       show('No pude leer el archivo')
     } finally {
@@ -391,6 +419,291 @@ function Kardex() {
           </table>
         </>
       )}
+    </div>
+  )
+}
+
+// ------------------- FACTURA DE ENTRADA (compras a proveedores) -------------------
+const emptyLinea = () => ({
+  key: uid(), modo: 'existente', productoId: '', nombre: '',
+  codigo: '', referencia: '', unidad: 'unidad', categoria: 'otro', precioVenta: 0, stockInicial: 0,
+  cantidad: 1, costoUnit: 0,
+})
+
+function Compras() {
+  const { show, node } = useToast()
+  const productos = useLiveQuery(() => db.productos.where('activo').equals(1).toArray(), [], [])
+  const proveedores = useLiveQuery(() => db.proveedores.where('activo').equals(1).toArray(), [], [])
+  const compras = useLiveQuery(() => db.compras.toArray(), [], [])
+
+  const [modo, setModo] = useState('lista') // 'lista' | 'nueva'
+  const [enc, setEnc] = useState({ proveedorId: '', proveedorNuevo: '', numero: '', fecha: dayKey(), formaPago: 'contado', observaciones: '' })
+  const [lineas, setLineas] = useState([])
+
+  // Editor de una línea (sheet)
+  const [lineaSheet, setLineaSheet] = useState(false)
+  const [linea, setLinea] = useState(emptyLinea())
+
+  const lista = (compras || []).slice().sort((a, b) => b.fecha - a.fecha).slice(0, 60)
+  const nombreProv = (id) => (proveedores || []).find((p) => p.id === id)?.nombre || '—'
+  const totalCompra = lineas.reduce((s, l) => s + l.costoUnit * l.cantidad, 0)
+
+  function nuevaFactura() {
+    setEnc({ proveedorId: '', proveedorNuevo: '', numero: '', fecha: dayKey(), formaPago: 'contado', observaciones: '' })
+    setLineas([]); setModo('nueva')
+  }
+  function abrirLinea() { setLinea(emptyLinea()); setLineaSheet(true) }
+  function elegirExistente(id) {
+    const p = (productos || []).find((x) => x.id === id)
+    setLinea((l) => ({ ...l, productoId: id, nombre: p?.nombre || '', costoUnit: p?.precioCompra || 0 }))
+  }
+  function agregarLinea() {
+    if (linea.modo === 'existente' && !linea.productoId) return show('Elige un producto')
+    if (linea.modo === 'nuevo' && !linea.nombre.trim()) return show('Ponle nombre al producto nuevo')
+    if (linea.cantidad <= 0) return show('Falta la cantidad')
+    // Validar código duplicado dentro de la misma factura (productos nuevos)
+    if (linea.modo === 'nuevo' && linea.codigo.trim() &&
+      lineas.some((l) => l.modo === 'nuevo' && l.codigo.trim() === linea.codigo.trim()))
+      return show('Ese código ya está en otra línea de esta factura')
+    setLineas((ls) => [...ls, linea])
+    setLineaSheet(false)
+  }
+  function quitarLinea(key) { setLineas((ls) => ls.filter((l) => l.key !== key)) }
+
+  async function guardarCompra() {
+    if (lineas.length === 0) return show('Agrega al menos un producto')
+    const nuevos = lineas.filter((l) => l.modo === 'nuevo')
+    const codigos = nuevos.map((l) => l.codigo.trim()).filter(Boolean)
+    if (new Set(codigos).size !== codigos.length) return show('Hay códigos de barras repetidos en la factura')
+
+    try {
+      await db.transaction('rw', db.productos, db.movimientos_inv, db.compras, db.proveedores, async () => {
+        const now = Date.now()
+        // Proveedor (crear si es nuevo)
+        let proveedorId = enc.proveedorId
+        let proveedorNombre = nombreProv(proveedorId)
+        if (enc.proveedorNuevo.trim()) {
+          proveedorId = uid(); proveedorNombre = enc.proveedorNuevo.trim()
+          await db.proveedores.add(stamp({ id: proveedorId, activo: 1, nombre: proveedorNombre }))
+        }
+
+        const existentes = await db.productos.where('activo').equals(1).toArray()
+        const compraId = uid()
+        const itemsCompra = []
+
+        for (const l of lineas) {
+          let prod
+          if (l.modo === 'nuevo') {
+            const nombreNorm = l.nombre.trim().toLowerCase()
+            const codigoNorm = l.codigo.trim()
+            const dupNombre = existentes.find((p) => p.nombre.trim().toLowerCase() === nombreNorm)
+            const dupCodigo = codigoNorm && existentes.find((p) => (p.codigo || '').trim() === codigoNorm)
+            if (dupNombre || dupCodigo) {
+              // Ya existe: se trata como reposición del producto encontrado.
+              prod = dupNombre || dupCodigo
+              await db.productos.update(prod.id, stamp({ stock: (prod.stock || 0) + l.stockInicial + l.cantidad }))
+            } else {
+              const id = uid()
+              prod = {
+                id, activo: 1, nombre: l.nombre.trim(), codigo: codigoNorm, referencia: l.referencia.trim(),
+                unidad: l.unidad, categoria: l.categoria, precioCompra: l.costoUnit, precioVenta: l.precioVenta,
+                stock: l.stockInicial + l.cantidad, stockMin: STOCK_MIN_DEFAULT,
+              }
+              await db.productos.add(stamp(prod))
+              existentes.push(prod)
+            }
+          } else {
+            prod = await db.productos.get(l.productoId)
+            await db.productos.update(prod.id, stamp({ stock: (prod.stock || 0) + l.cantidad, precioCompra: l.costoUnit }))
+          }
+          // Movimiento de inventario ligado a la factura
+          await db.movimientos_inv.add(stamp({
+            id: uid(), tipo: 'entrada', productoId: prod.id, productoNombre: prod.nombre,
+            cantidad: l.cantidad, costoUnit: l.costoUnit, compraId,
+            nota: `Factura ${enc.numero || 's/n'}${proveedorNombre !== '—' ? ' · ' + proveedorNombre : ''}`,
+            fecha: now, mes: monthKey(now),
+          }))
+          itemsCompra.push({ productoId: prod.id, nombre: prod.nombre, cantidad: l.cantidad, costoUnit: l.costoUnit })
+        }
+
+        await db.compras.add(stamp({
+          id: compraId, proveedorId: proveedorId || null, proveedorNombre,
+          numero: enc.numero.trim(), fecha: now, fechaFactura: enc.fecha,
+          formaPago: enc.formaPago, observaciones: enc.observaciones.trim(),
+          items: itemsCompra, total: itemsCompra.reduce((s, i) => s + i.costoUnit * i.cantidad, 0),
+          mes: monthKey(now),
+        }))
+      })
+      show('Factura de entrada guardada · inventario actualizado')
+      setModo('lista')
+    } catch (e) {
+      show('No se pudo guardar la factura')
+    }
+  }
+
+  // -------- VISTA NUEVA FACTURA --------
+  if (modo === 'nueva') {
+    return (
+      <div className="content">
+        <button className="btn ghost" style={{ marginBottom: 12 }} onClick={() => setModo('lista')}>‹ Cancelar</button>
+        <div className="section-title" style={{ marginTop: 0 }}>Datos de la factura</div>
+
+        <label>Proveedor</label>
+        <SearchSelect value={enc.proveedorId} onChange={(v) => setEnc({ ...enc, proveedorId: v, proveedorNuevo: '' })}
+          options={(proveedores || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => ({ value: p.id, label: p.nombre }))}
+          placeholder="Buscar proveedor…" />
+        <label>o proveedor nuevo</label>
+        <input value={enc.proveedorNuevo} placeholder="Nombre del proveedor"
+          onChange={(e) => setEnc({ ...enc, proveedorNuevo: e.target.value, proveedorId: e.target.value ? '' : enc.proveedorId })} />
+
+        <div className="grid-2">
+          <div>
+            <label>N° de factura</label>
+            <input value={enc.numero} placeholder="Ej: 4587"
+              onChange={(e) => setEnc({ ...enc, numero: e.target.value })} />
+          </div>
+          <div>
+            <label>Fecha</label>
+            <input type="date" value={enc.fecha} onChange={(e) => setEnc({ ...enc, fecha: e.target.value })} />
+          </div>
+        </div>
+
+        <label>Forma de pago</label>
+        <div className="pill-row">
+          {FORMAS_PAGO_COMPRA.map((f) => (
+            <button key={f.id} className={`pill ${enc.formaPago === f.id ? 'active' : ''}`}
+              onClick={() => setEnc({ ...enc, formaPago: f.id })}>{f.label}</button>
+          ))}
+        </div>
+
+        <label>Observaciones (opcional)</label>
+        <input value={enc.observaciones} placeholder="Notas de la compra"
+          onChange={(e) => setEnc({ ...enc, observaciones: e.target.value })} />
+
+        <div className="section-title">Productos de la factura</div>
+        {lineas.length === 0 && <div className="empty" style={{ paddingBottom: 8 }}>Sin productos. Toca “Agregar producto”.</div>}
+        {lineas.length > 0 && (
+          <table className="tabla">
+            <tbody>
+              {lineas.map((l) => (
+                <tr key={l.key}>
+                  <td>
+                    {l.nombre || '(nuevo)'} {l.modo === 'nuevo' && <span className="badge green">nuevo</span>}
+                    <div className="muted-cell">{l.cantidad} × {money(l.costoUnit)}</div>
+                  </td>
+                  <td className="num" style={{ fontWeight: 700 }}>{money(l.costoUnit * l.cantidad)}</td>
+                  <td className="num">
+                    <button className="btn ghost" style={{ width: 'auto', padding: '6px 10px', fontSize: 13 }}
+                      onClick={() => quitarLinea(l.key)}>Quitar</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <button className="btn secondary" onClick={abrirLinea}>Agregar producto</button>
+
+        <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14 }}>
+          <div className="meta">Total de la factura</div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>{money(totalCompra)}</div>
+        </div>
+        <button className="btn" onClick={guardarCompra}>Guardar factura y sumar al inventario</button>
+
+        {/* Agregar línea */}
+        <Sheet open={lineaSheet} onClose={() => setLineaSheet(false)} title="Producto de la factura">
+          <div className="pill-row">
+            <button className={`pill ${linea.modo === 'existente' ? 'active' : ''}`} onClick={() => setLinea({ ...linea, modo: 'existente' })}>Ya existe</button>
+            <button className={`pill ${linea.modo === 'nuevo' ? 'active' : ''}`} onClick={() => setLinea({ ...linea, modo: 'nuevo' })}>Crear nuevo</button>
+          </div>
+
+          {linea.modo === 'existente' ? (
+            <>
+              <label>Producto</label>
+              <SearchSelect value={linea.productoId} onChange={elegirExistente}
+                options={opcionesProducto(productos)} placeholder="Buscar producto…" />
+            </>
+          ) : (
+            <>
+              <label>Nombre</label>
+              <input value={linea.nombre} placeholder="Ej: Cerveza Águila"
+                onChange={(e) => setLinea({ ...linea, nombre: e.target.value })} />
+              <div className="grid-2">
+                <div>
+                  <label>Código de barras</label>
+                  <input inputMode="numeric" value={linea.codigo} placeholder="Opcional"
+                    onChange={(e) => setLinea({ ...linea, codigo: e.target.value })} />
+                </div>
+                <div>
+                  <label>Referencia</label>
+                  <input value={linea.referencia} placeholder="Opcional"
+                    onChange={(e) => setLinea({ ...linea, referencia: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid-2">
+                <div>
+                  <label>Unidad</label>
+                  <SearchSelect value={linea.unidad} onChange={(v) => setLinea({ ...linea, unidad: v })}
+                    options={UNIDADES.map((u) => ({ value: u.id, label: u.label }))} placeholder="Unidad…" />
+                </div>
+                <div>
+                  <label>Categoría</label>
+                  <SearchSelect value={linea.categoria} onChange={(v) => setLinea({ ...linea, categoria: v })}
+                    options={CATEGORIAS_PRODUCTO.map((c) => ({ value: c.id, label: c.label }))} placeholder="Categoría…" />
+                </div>
+              </div>
+              <div className="grid-2">
+                <div>
+                  <label>Precio de venta</label>
+                  <MoneyInput value={linea.precioVenta} onChange={(v) => setLinea({ ...linea, precioVenta: v })} />
+                </div>
+                <div>
+                  <label>Stock ya existente</label>
+                  <input inputMode="numeric" value={linea.stockInicial}
+                    onChange={(e) => setLinea({ ...linea, stockInicial: parseInt(e.target.value.replace(/[^\d]/g, '') || '0', 10) })} />
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="grid-2">
+            <div>
+              <label>Cantidad comprada</label>
+              <input inputMode="numeric" value={linea.cantidad}
+                onChange={(e) => setLinea({ ...linea, cantidad: parseInt(e.target.value.replace(/[^\d]/g, '') || '0', 10) })} />
+            </div>
+            <div>
+              <label>Costo por unidad</label>
+              <MoneyInput value={linea.costoUnit} onChange={(v) => setLinea({ ...linea, costoUnit: v })} />
+            </div>
+          </div>
+          <div className="helper" style={{ marginTop: 8 }}>Subtotal: <b>{money(linea.costoUnit * linea.cantidad)}</b></div>
+          <div style={{ height: 14 }} />
+          <button className="btn" onClick={agregarLinea}>Agregar a la factura</button>
+        </Sheet>
+        {node}
+      </div>
+    )
+  }
+
+  // -------- VISTA LISTA --------
+  return (
+    <div className="content">
+      <div className="helper" style={{ marginBottom: 10 }}>
+        Registra las facturas de compra a proveedores. Cada factura suma al inventario y puede crear productos nuevos.
+      </div>
+      {lista.length === 0 && <div className="empty">Sin facturas de entrada registradas.</div>}
+      {lista.map((c) => (
+        <div className="row" key={c.id}>
+          <div className="main">
+            <div className="title">{c.proveedorNombre || 'Proveedor s/n'}{c.numero ? ` · Factura ${c.numero}` : ''}</div>
+            <div className="meta">{shortDate(c.fecha)} · {(c.items || []).length} productos · {labelFormaPagoCompra(c.formaPago)}</div>
+          </div>
+          <div className="right" style={{ fontWeight: 700 }}>{money(c.total)}</div>
+        </div>
+      ))}
+
+      <button className="fab" onClick={nuevaFactura} aria-label="Nueva factura de entrada">+</button>
+      {node}
     </div>
   )
 }

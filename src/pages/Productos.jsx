@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, CATEGORIAS_PRODUCTO, labelCategoria, stockBajo, STOCK_MIN_DEFAULT } from '../db'
+import { db, uid, stamp, CATEGORIAS_PRODUCTO, UNIDADES, labelCategoria, stockBajo, STOCK_MIN_DEFAULT } from '../db'
 import { money } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 
-const emptyForm = { nombre: '', categoria: 'cerveza', precioCompra: 0, precioVenta: 0, stock: 0, stockMin: STOCK_MIN_DEFAULT }
+const emptyForm = { nombre: '', codigo: '', referencia: '', unidad: 'unidad', categoria: 'cerveza', precioCompra: 0, precioVenta: 0, stock: 0, stockMin: STOCK_MIN_DEFAULT }
 
 export default function Productos({ embedded }) {
   const navigate = useNavigate()
@@ -41,6 +41,9 @@ export default function Productos({ embedded }) {
     setEditId(p.id)
     setForm({
       nombre: p.nombre,
+      codigo: p.codigo || '',
+      referencia: p.referencia || '',
+      unidad: p.unidad || 'unidad',
       categoria: p.categoria,
       precioCompra: p.precioCompra,
       precioVenta: p.precioVenta,
@@ -54,11 +57,21 @@ export default function Productos({ embedded }) {
     if (!form.nombre.trim()) return show('Ponle un nombre')
     if (form.precioVenta <= 0) return show('Falta el precio de venta')
 
+    // Validar duplicados (nombre y código de barras) contra otros productos activos.
+    const todos = await db.productos.where('activo').equals(1).toArray()
+    const nombreNorm = form.nombre.trim().toLowerCase()
+    const codigoNorm = form.codigo.trim()
+    if (todos.some((p) => p.id !== editId && p.nombre.trim().toLowerCase() === nombreNorm))
+      return show('Ya existe un producto con ese nombre')
+    if (codigoNorm && todos.some((p) => p.id !== editId && (p.codigo || '').trim() === codigoNorm))
+      return show('Ya existe un producto con ese código de barras')
+
+    const datos = { ...form, nombre: form.nombre.trim(), codigo: codigoNorm, referencia: form.referencia.trim() }
     if (editId) {
-      await db.productos.update(editId, stamp({ ...form }))
+      await db.productos.update(editId, stamp(datos))
       show('Producto actualizado')
     } else {
-      await db.productos.add(stamp({ id: uid(), activo: 1, ...form }))
+      await db.productos.add(stamp({ id: uid(), activo: 1, ...datos }))
       show('Producto agregado')
     }
     setSheetOpen(false)
@@ -178,6 +191,23 @@ export default function Productos({ embedded }) {
         <label>Categoría</label>
         <SearchSelect value={form.categoria} onChange={(v) => setForm({ ...form, categoria: v })}
           options={CATEGORIAS_PRODUCTO.map((c) => ({ value: c.id, label: c.label }))} placeholder="Buscar categoría…" />
+
+        <div className="grid-2">
+          <div>
+            <label>Código de barras</label>
+            <input inputMode="numeric" value={form.codigo} placeholder="Opcional"
+              onChange={(e) => setForm({ ...form, codigo: e.target.value })} />
+          </div>
+          <div>
+            <label>Referencia</label>
+            <input value={form.referencia} placeholder="Opcional"
+              onChange={(e) => setForm({ ...form, referencia: e.target.value })} />
+          </div>
+        </div>
+
+        <label>Unidad de medida</label>
+        <SearchSelect value={form.unidad} onChange={(v) => setForm({ ...form, unidad: v })}
+          options={UNIDADES.map((u) => ({ value: u.id, label: u.label }))} placeholder="Unidad…" />
 
         <div className="grid-2">
           <div>

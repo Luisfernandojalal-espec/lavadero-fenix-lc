@@ -96,6 +96,27 @@ db.version(7).stores({
   gastos_fijos: '&id, activo, updatedAt',
 })
 
+// Unidades de medida de un producto.
+export const UNIDADES = [
+  { id: 'unidad', label: 'Unidad' },
+  { id: 'caja', label: 'Caja' },
+  { id: 'paca', label: 'Paca' },
+  { id: 'docena', label: 'Docena' },
+  { id: 'litro', label: 'Litro' },
+  { id: 'galon', label: 'Galón' },
+  { id: 'kg', label: 'Kilogramo' },
+  { id: 'libra', label: 'Libra' },
+]
+export const labelUnidad = (id) => UNIDADES.find((u) => u.id === id)?.label || 'Unidad'
+
+// Formas de pago de una compra a proveedor.
+export const FORMAS_PAGO_COMPRA = [
+  { id: 'contado', label: 'Contado' },
+  { id: 'credito', label: 'Crédito' },
+  { id: 'transferencia', label: 'Transferencia' },
+]
+export const labelFormaPagoCompra = (id) => FORMAS_PAGO_COMPRA.find((f) => f.id === id)?.label || 'Contado'
+
 // v8: órdenes de servicio (control operativo del lavadero, base de facturación)
 db.version(8).stores({
   productos: '&id, categoria, activo, updatedAt',
@@ -111,6 +132,25 @@ db.version(8).stores({
   pagos_comision: '&id, trabajadorId, mes, updatedAt',
   gastos_fijos: '&id, activo, updatedAt',
   ordenes: '&id, estado, numero, mes, fecha, updatedAt',
+})
+
+// v9: facturas de entrada (compras a proveedores) + código de barras
+db.version(9).stores({
+  productos: '&id, categoria, activo, codigo, updatedAt',
+  servicios: '&id, activo, updatedAt',
+  trabajadores: '&id, activo, updatedAt',
+  ventas: '&id, tipo, mes, fecha, trabajadorId, clienteId, updatedAt',
+  gastos: '&id, categoria, mes, fecha, updatedAt',
+  movimientos_inv: '&id, productoId, tipo, mes, fecha, compraId, updatedAt',
+  clientes: '&id, activo, updatedAt',
+  abonos: '&id, clienteId, mes, fecha, updatedAt',
+  mesas: '&id, estado, activo, updatedAt',
+  turnos: '&id, estado, mes, updatedAt',
+  pagos_comision: '&id, trabajadorId, mes, updatedAt',
+  gastos_fijos: '&id, activo, updatedAt',
+  ordenes: '&id, estado, numero, mes, fecha, updatedAt',
+  proveedores: '&id, activo, updatedAt',
+  compras: '&id, proveedorId, mes, fecha, updatedAt',
 })
 
 // Estados de una orden de servicio (flujo operativo).
@@ -250,7 +290,7 @@ export async function seedIfEmpty() {
 // Borra TODOS los datos (local y nube) para dejar el sistema en blanco.
 // Después de esto la app pide crear el usuario administrador de nuevo.
 export async function borrarTodo(supabase) {
-  const tablas = ['productos', 'ventas', 'gastos', 'movimientos_inv', 'clientes', 'abonos', 'servicios', 'trabajadores', 'mesas', 'turnos', 'pagos_comision', 'gastos_fijos', 'ordenes']
+  const tablas = ['productos', 'ventas', 'gastos', 'movimientos_inv', 'clientes', 'abonos', 'servicios', 'trabajadores', 'mesas', 'turnos', 'pagos_comision', 'gastos_fijos', 'ordenes', 'proveedores', 'compras']
   for (const t of tablas) await db[t].clear()
   if (supabase) {
     for (const t of tablas) await supabase.from('registros').delete().eq('tabla', t)
