@@ -196,6 +196,13 @@ export function precioServicio(servicio, tipoVehId) {
 export function servicioAplica(servicio, tipoVehId) {
   return precioServicio(servicio, tipoVehId) > 0
 }
+
+// ¿Es una lavada PRINCIPAL (servicio "madre") o una adición que se suma?
+// Usa el flag esBase; los servicios viejos sin flag se clasifican por nombre.
+export function esServicioBase(s) {
+  if (s?.esBase != null) return !!s.esBase
+  return /lavado general|con todo/i.test(String(s?.nombre || ''))
+}
 // Precio mínimo ofrecido (para ordenar/mostrar y como campo legacy `precio`).
 export function precioMinServicio(servicio) {
   if (servicio?.precios && typeof servicio.precios === 'object') {

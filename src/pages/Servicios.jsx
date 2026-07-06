@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, borrarTodo, TIPOS_VEHICULO, precioServicio, precioMinServicio } from '../db'
+import { db, uid, stamp, borrarTodo, TIPOS_VEHICULO, precioServicio, precioMinServicio, esServicioBase } from '../db'
 import { supabase } from '../supabase'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
@@ -13,8 +13,8 @@ const emptyServ = { nombre: '', precios: preciosVacios(), comisionPct: 40 }
 // Lista de precios OFICIAL de la cartelera del local (matriz dispersa:
 // los tipos de vehículo sin precio no ofrecen ese servicio).
 const LISTA_OFICIAL = [
-  { nombre: 'Lavado General', precios: { automovil: 25000, camioneta: 30000, moto100: 7000, moto150: 8000 } },
-  { nombre: 'Con Todo', precios: { moto100: 10000, moto150: 12000 } },
+  { nombre: 'Lavado General', esBase: true, precios: { automovil: 25000, camioneta: 30000, moto100: 7000, moto150: 8000 } },
+  { nombre: 'Con Todo', esBase: true, precios: { moto100: 10000, moto150: 12000 } },
   { nombre: 'Furgón', precios: { automovil: 30000, camioneta: 35000 } },
   { nombre: 'Pulida', precios: { automovil: 15000, camioneta: 20000 } },
   { nombre: 'Brillada', precios: { automovil: 7000, camioneta: 10000 } },
@@ -109,7 +109,7 @@ export default function Servicios() {
   const [servForm, setServForm] = useState(emptyServ)
 
   function nuevoServ() {
-    setServEdit(null); setServForm({ nombre: '', precios: preciosVacios(), comisionPct: 40 }); setServSheet(true)
+    setServEdit(null); setServForm({ nombre: '', precios: preciosVacios(), comisionPct: 40, esBase: false }); setServSheet(true)
   }
   function editarServ(s) {
     setServEdit(s.id)
@@ -117,7 +117,7 @@ export default function Servicios() {
     const precios = s.precios && typeof s.precios === 'object'
       ? { ...preciosVacios(), ...s.precios }
       : { ...preciosVacios(), automovil: s.precio || 0 }
-    setServForm({ nombre: s.nombre, precios, comisionPct: s.comisionPct })
+    setServForm({ nombre: s.nombre, precios, comisionPct: s.comisionPct, esBase: esServicioBase(s) })
     setServSheet(true)
   }
   function setPrecioTipo(tipoId, v) {
@@ -130,7 +130,7 @@ export default function Servicios() {
     )
     if (precioMinServicio({ precios }) <= 0) return show('Pon el precio en al menos un tipo de vehículo')
     // `precio` = mínimo ofrecido, se conserva para orden/compatibilidad.
-    const datos = { nombre: servForm.nombre.trim(), precios, precio: precioMinServicio({ precios }), comisionPct: servForm.comisionPct }
+    const datos = { nombre: servForm.nombre.trim(), precios, precio: precioMinServicio({ precios }), comisionPct: servForm.comisionPct, esBase: servForm.esBase ? 1 : 0 }
     if (servEdit) await db.servicios.update(servEdit, stamp(datos))
     else await db.servicios.add(stamp({ id: uid(), activo: 1, ...datos }))
     setServSheet(false); show('Servicio guardado')
@@ -150,6 +150,7 @@ export default function Servicios() {
       await db.servicios.add(stamp({
         id: uid(), activo: 1, nombre: s.nombre, precios,
         precio: precioMinServicio({ precios }), comisionPct: 40,
+        esBase: s.esBase ? 1 : 0,
       }))
       creados++
     }
@@ -229,7 +230,7 @@ export default function Servicios() {
                   <div className="main">
                     <div className="title">{s.nombre}</div>
                     <div className="meta">
-                      Comisión {s.comisionPct}% · {tipos.map((t) => `${t.label} ${money(precioServicio(s, t.id))}`).join(' · ')}
+                      {esServicioBase(s) ? 'Lavada principal' : 'Adición'} · Comisión {s.comisionPct}% · {tipos.map((t) => `${t.label} ${money(precioServicio(s, t.id))}`).join(' · ')}
                     </div>
                   </div>
                   <div className="right meta">Editar</div>
@@ -326,6 +327,17 @@ export default function Servicios() {
         <label>Nombre del servicio</label>
         <input value={servForm.nombre} placeholder="Ej: Lavado carro + brillado"
           onChange={(e) => setServForm({ ...servForm, nombre: e.target.value })} />
+
+        <label>Tipo de servicio</label>
+        <div className="pill-row">
+          <button className={`pill ${servForm.esBase ? 'active' : ''}`}
+            onClick={() => setServForm({ ...servForm, esBase: true })}>Lavada principal</button>
+          <button className={`pill ${!servForm.esBase ? 'active' : ''}`}
+            onClick={() => setServForm({ ...servForm, esBase: false })}>Adición</button>
+        </div>
+        <div className="helper" style={{ marginTop: -2 }}>
+          Las lavadas principales salen primero en el cobro; las adiciones aparecen debajo y se suman a la lavada.
+        </div>
 
         <label>Precio por tipo de vehículo</label>
         <div className="helper" style={{ marginTop: -2, marginBottom: 6 }}>
