@@ -41,12 +41,6 @@ export default function Lavadores({ embedded }) {
     return { servicios, total, comisionHoy, pendiente: Math.max(0, generado - pagado) }
   }
 
-  // Planilla de lavadas desde el último pago (para el detalle)
-  function planillaDe(tId) {
-    const ultimoPago = (pagos || []).filter((p) => p.trabajadorId === tId).reduce((m, p) => Math.max(m, p.fecha), 0)
-    return ventasServ.filter((v) => v.trabajadorId === tId && v.fecha > ultimoPago).sort((a, b) => b.fecha - a.fecha)
-  }
-
   // Productos vendidos en las MISMAS facturas donde el lavador hizo servicios
   // (solo informativo: los productos NO generan comisión).
   function productosDe(filasServicio) {
@@ -123,15 +117,16 @@ export default function Lavadores({ embedded }) {
   const hojas = (
     <>
       {/* Detalle de lavadas (planilla) */}
-      <Sheet open={!!detalle} onClose={() => setDetalle(null)} title={detalle ? `Lavadas de ${detalle.nombre}` : ''}>
+      <Sheet open={!!detalle} onClose={() => setDetalle(null)} title={detalle ? `Servicios de ${detalle.nombre} · hoy` : ''}>
         {detalle && (() => {
-          const filas = planillaDe(detalle.id)
-          const total = filas.reduce((s, v) => s + (v.comision || 0), 0)
+          const filas = ventasServHoy.filter((v) => v.trabajadorId === detalle.id).sort((a, b) => b.fecha - a.fecha)
+          const comHoy = filas.reduce((s, v) => s + (v.comision || 0), 0)
           const prods = productosDe(filas)
+          const pendiente = statsDe(detalle.id).pendiente
           return (
             <>
-              <div className="helper" style={{ marginBottom: 8 }}>Servicios desde el último pago. Cada lavada con su comisión.</div>
-              {filas.length === 0 && <div className="empty">Sin lavadas pendientes de pago.</div>}
+              <div className="helper" style={{ marginBottom: 8 }}>Servicios que hizo hoy. Cada lavada con su comisión.</div>
+              {filas.length === 0 && <div className="empty">Hoy no ha hecho servicios.</div>}
               {filas.length > 0 && (
                 <table className="tabla compacta">
                   <thead><tr><th>Fecha</th><th>Servicio</th><th className="num">%</th><th className="num">Comisión</th></tr></thead>
@@ -166,9 +161,11 @@ export default function Lavadores({ embedded }) {
                   <div className="helper">Los productos no generan comisión: no suman al total a pagar.</div>
                 </>
               )}
-              <div className="dato-fuerte" style={{ marginTop: 10 }}>Total a pagar: <b style={{ color: 'var(--red)' }}>{money(total)}</b></div>
-              {total > 0 && (
+              <div className="dato-fuerte" style={{ marginTop: 10 }}>Comisión de hoy: <b>{money(comHoy)}</b></div>
+              {pendiente > 0 && (
                 <>
+                  <div className="dato-fuerte">Pendiente por pagar: <b style={{ color: 'var(--red)' }}>{money(pendiente)}</b></div>
+                  <div className="helper">Incluye lo acumulado sin pagar (puede ser de días anteriores).</div>
                   <div style={{ height: 10 }} />
                   <button className="btn" onClick={() => { const t = detalle; setDetalle(null); abrirPago(t) }}>Pagar comisión</button>
                 </>
