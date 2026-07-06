@@ -8,10 +8,8 @@ import { ModIcon } from '../components/icons'
 import Lavadores from './Lavadores'
 
 const MODULOS = [
-  { to: '/mesas', icon: 'mesas', label: 'Mesas' },
   { to: '/factura', icon: 'factura', label: 'Facturar' },
   { to: '/turno', icon: 'turno', label: 'Cierre de turno' },
-  { to: '/lavadores', icon: 'lavadores', label: 'Lavadores', soloDueno: true },
   { to: '/inventario', icon: 'inventario', label: 'Inventario', soloDueno: true },
   { to: '/historial', icon: 'historial', label: 'Historial', soloDueno: true },
   { to: '/credito', icon: 'credito', label: 'Créditos', soloDueno: true },

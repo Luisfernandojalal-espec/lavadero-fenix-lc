@@ -26,7 +26,6 @@ const NAV = [
   { to: '/mesas', label: 'Mesas' },
   { to: '/factura', label: 'Facturar' },
   { to: '/turno', label: 'Turno' },
-  { to: '/lavadores', label: 'Lavadores', soloDueno: true },
   { to: '/inventario', label: 'Inventario', soloDueno: true },
   { to: '/historial', label: 'Historial', soloDueno: true },
   { to: '/credito', label: 'Créditos', soloDueno: true },
