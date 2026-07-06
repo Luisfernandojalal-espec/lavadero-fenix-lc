@@ -4,7 +4,7 @@ import { db, uid, stamp, gastoDeCaja } from '../db'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
 import { descargarCierrePDF } from '../pdf'
-import { esEfectivo } from '../ventas'
+import { montoEfectivo, montoTransferencia } from '../ventas'
 import { useAuth } from '../auth'
 
 export default function Turno() {
@@ -25,9 +25,10 @@ export default function Turno() {
   // Resumen en vivo del turno abierto
   const desde = abierto?.abiertoEn || 0
   const vTurno = (ventas || []).filter((v) => !v.anulada && v.fecha >= desde)
-  const efectivoV = vTurno.filter(esEfectivo)
-  const efectivo = efectivoV.reduce((s, v) => s + v.total, 0)
-  const transferencias = vTurno.filter((v) => v.metodoPago === 'transferencia').reduce((s, v) => s + v.total, 0)
+  // Efectivo y transferencia consideran la parte de cada uno en los pagos mixtos.
+  const efectivoV = vTurno.filter((v) => montoEfectivo(v) > 0)
+  const efectivo = vTurno.reduce((s, v) => s + montoEfectivo(v), 0)
+  const transferencias = vTurno.reduce((s, v) => s + montoTransferencia(v), 0)
   const credito = vTurno.filter((v) => v.metodoPago === 'credito').reduce((s, v) => s + v.total, 0)
   const abonosT = (abonos || []).filter((a) => a.fecha >= desde).reduce((s, a) => s + a.monto, 0)
   // Solo los gastos pagados DE CAJA descuadran el efectivo; los de transferencia/banco no.

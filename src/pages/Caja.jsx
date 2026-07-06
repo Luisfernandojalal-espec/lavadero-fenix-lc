@@ -63,6 +63,10 @@ export default function Caja() {
   const [creditoOpen, setCreditoOpen] = useState(false)
   const [clienteSel, setClienteSel] = useState('')
   const [clienteNuevo, setClienteNuevo] = useState('')
+  const [clienteTel, setClienteTel] = useState('')
+  // Pago mixto (efectivo + transferencia)
+  const [mixtoOpen, setMixtoOpen] = useState(false)
+  const [mixtoEfectivo, setMixtoEfectivo] = useState(0)
   // Recibo de la última venta (para compartir)
   const [recibo, setRecibo] = useState(null)
 
@@ -100,11 +104,11 @@ export default function Caja() {
   const total = totalDe(lineas)
   const ganancia = gananciaDe(lineas)
 
-  async function cobrar(metodo, cliente = null) {
+  async function cobrar(metodo, cliente = null, pago = null) {
     if (lineas.length === 0) return
-    const { factura } = await facturarItems({ items: lineas, metodo, cliente })
-    setRecibo({ factura, fecha: Date.now(), items: lineas, total, metodo, cliente: cliente?.nombre })
-    setCarrito({})
+    const { factura } = await facturarItems({ items: lineas, metodo, cliente, pago })
+    setRecibo({ factura, fecha: Date.now(), items: lineas, total, metodo, cliente: cliente?.nombre, pago })
+    setCarrito({}); setMixtoOpen(false); setMixtoEfectivo(0)
   }
 
   async function compartir() {
@@ -116,12 +120,12 @@ export default function Caja() {
     let cliente = null
     if (clienteNuevo.trim()) {
       cliente = { id: uid(), nombre: clienteNuevo.trim() }
-      await db.clientes.add(stamp({ id: cliente.id, activo: 1, nombre: cliente.nombre, telefono: '' }))
+      await db.clientes.add(stamp({ id: cliente.id, activo: 1, nombre: cliente.nombre, telefono: clienteTel.trim() }))
     } else {
       cliente = (clientes || []).find((c) => c.id === clienteSel)
     }
     if (!cliente) return show('Elige o crea un cliente')
-    setCreditoOpen(false); setClienteSel(''); setClienteNuevo('')
+    setCreditoOpen(false); setClienteSel(''); setClienteNuevo(''); setClienteTel('')
     await cobrar('credito', cliente)
   }
 
@@ -138,11 +142,9 @@ export default function Caja() {
           ))}
         </div>
 
-        <ItemsGrid servicios={servicios} productos={productos} carrito={carrito} onAdd={add} onSub={sub} tipoVehiculo={tipoVehiculo} />
-
         {lineas.length > 0 && (
           <>
-            <div className="section-title">Cuenta</div>
+            <div className="section-title" style={{ marginTop: 0 }}>Cuenta</div>
             <table className="tabla">
               <tbody>
                 {lineas.map((l) => (
@@ -196,10 +198,14 @@ export default function Caja() {
             <div className="btn-row">
               <button className="btn" onClick={() => cobrar('efectivo')}>Efectivo · {money(total)}</button>
               <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => cobrar('transferencia')}>Transferencia</button>
+              <button className="btn ghost" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => { setMixtoEfectivo(0); setMixtoOpen(true) }}>Mixto</button>
               <button className="btn ghost" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setCreditoOpen(true)}>Crédito</button>
             </div>
           </>
         )}
+
+        <div className="section-title">Agregar a la cuenta</div>
+        <ItemsGrid servicios={servicios} productos={productos} carrito={carrito} onAdd={add} onSub={sub} tipoVehiculo={tipoVehiculo} />
       </div>
 
       <Sheet open={creditoOpen} onClose={() => setCreditoOpen(false)} title="Cobrar a crédito (fiado)">
@@ -207,12 +213,30 @@ export default function Caja() {
         <SearchSelect value={clienteSel} onChange={(v) => { setClienteSel(v); setClienteNuevo('') }}
           options={(clientes || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre)).map((c) => ({ value: c.id, label: c.nombre }))}
           placeholder="Buscar cliente…" />
-        <div className="helper" style={{ margin: '8px 0' }}>o crea uno nuevo:</div>
+        <div className="helper" style={{ margin: '8px 0' }}>o registra uno nuevo:</div>
         <label>Cliente nuevo</label>
         <input value={clienteNuevo} placeholder="Nombre del cliente"
           onChange={(e) => { setClienteNuevo(e.target.value); if (e.target.value) setClienteSel('') }} />
+        <label>Teléfono (opcional)</label>
+        <input inputMode="tel" value={clienteTel} placeholder="Ej: 300 123 4567"
+          onChange={(e) => setClienteTel(e.target.value)} />
         <div style={{ height: 14 }} />
         <button className="btn" onClick={confirmarCredito}>Registrar fiado</button>
+      </Sheet>
+
+      {/* Pago mixto: parte en efectivo y parte en transferencia */}
+      <Sheet open={mixtoOpen} onClose={() => setMixtoOpen(false)} title="Pago mixto">
+        <div className="dato-fuerte">Total a cobrar: <b>{money(total)}</b></div>
+        <label>¿Cuánto pagan en efectivo?</label>
+        <MoneyInput value={mixtoEfectivo} onChange={setMixtoEfectivo} />
+        <div className="helper" style={{ marginTop: 6 }}>
+          Va a transferencia: <b>{money(Math.max(0, total - Math.min(mixtoEfectivo, total)))}</b>
+        </div>
+        <div style={{ height: 14 }} />
+        <button className="btn" onClick={() => {
+          const ef = Math.max(0, Math.min(mixtoEfectivo, total))
+          cobrar('mixto', null, { efectivo: ef, transferencia: total - ef })
+        }}>Cobrar mixto · {money(total)}</button>
       </Sheet>
 
       {/* Asignar lavador a una línea de servicio */}
@@ -255,7 +279,9 @@ export default function Caja() {
               {folio(recibo.factura)} · <b>{money(recibo.total)}</b>
             </div>
             <div className="helper" style={{ marginBottom: 10 }}>
-              Pago: {labelMedio(recibo.metodo)}{recibo.cliente ? ` · Cliente: ${recibo.cliente}` : ''}
+              Pago: {labelMedio(recibo.metodo)}
+              {recibo.metodo === 'mixto' && recibo.pago ? ` (efectivo ${money(recibo.pago.efectivo)} · transferencia ${money(recibo.pago.transferencia)})` : ''}
+              {recibo.cliente ? ` · Cliente: ${recibo.cliente}` : ''}
             </div>
             <table className="tabla">
               <tbody>
