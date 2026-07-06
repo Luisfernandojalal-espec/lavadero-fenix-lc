@@ -4,25 +4,12 @@ import { db, tipoGasto } from '../db'
 import { LOGO_URL, money, dayKey, shortDate, currentMonthKey, monthLabel } from '../format'
 import { labelMedio } from '../ventas'
 import { useAuth } from '../auth'
-import { ModIcon } from '../components/icons'
 import Lavadores from './Lavadores'
-
-const MODULOS = [
-  { to: '/factura', icon: 'factura', label: 'Facturar' },
-  { to: '/turno', icon: 'turno', label: 'Cierre de turno' },
-  { to: '/inventario', icon: 'inventario', label: 'Inventario', soloDueno: true },
-  { to: '/historial', icon: 'historial', label: 'Historial', soloDueno: true },
-  { to: '/credito', icon: 'credito', label: 'Créditos', soloDueno: true },
-  { to: '/gastos', icon: 'gastos', label: 'Gastos', soloDueno: true },
-  { to: '/balance', icon: 'balance', label: 'Balance', soloDueno: true },
-  { to: '/config', icon: 'config', label: 'Admin', soloDueno: true },
-]
 
 export default function Inicio() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const esDueno = user?.rol === 'dueño'
-  const modulos = MODULOS.filter((m) => esDueno || !m.soloDueno)
 
   const ventas = useLiveQuery(() => db.ventas.toArray(), [], [])
   const abonos = useLiveQuery(() => db.abonos.toArray(), [], [])
@@ -114,15 +101,6 @@ export default function Inicio() {
           </div>
         </div>
       )}
-
-      <div className="modgrid">
-        {modulos.map((m) => (
-          <button key={m.to} className="modcard" onClick={() => navigate(m.to)}>
-            <ModIcon name={m.icon} />
-            <span>{m.label}</span>
-          </button>
-        ))}
-      </div>
 
       {esDueno && (
         <button className="btn ghost" style={{ marginTop: 4 }} onClick={exportarCSV}>Exportar resumen del mes (.csv)</button>
