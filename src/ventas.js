@@ -78,15 +78,19 @@ export async function facturarItems({ items, trabajador = null, metodo = 'efecti
   }
 
   for (const s of servs) {
-    const comisionUnit = Math.round(s.precioVenta * ((s.comisionPct || 0) / 100))
-    const totalServ = s.precioVenta * s.cantidad
-    const comision = comisionUnit * s.cantidad
+    const bruto = s.precioVenta * s.cantidad
+    const descuento = Math.max(0, s.descuento || 0)
+    const totalServ = Math.max(0, bruto - descuento)
+    // La comisión se calcula sobre lo realmente cobrado (neto de descuento).
+    const comision = Math.round(totalServ * ((s.comisionPct || 0) / 100))
     // Cada línea de servicio lleva SU lavador (si no trae, usa el general)
     const t = s.trabajadorId ? { id: s.trabajadorId, nombre: s.trabajadorNombre } : trabajador
     await db.ventas.add(stamp({
       id: uid(), tipo: 'servicio', ...base,
       servicioId: s.refId, servicioNombre: s.nombre, cantidad: s.cantidad,
-      precio: s.precioVenta, comisionPct: s.comisionPct || 0, comision,
+      precio: s.precioVenta, precioBase: s.precioBase ?? s.precioVenta,
+      tipoVehiculo: s.tipoVehiculo || null, descuento, observacion: s.observacion || '',
+      comisionPct: s.comisionPct || 0, comision,
       trabajadorId: t ? t.id : null,
       trabajadorNombre: t ? t.nombre : null,
       total: totalServ, costo: comision, ganancia: totalServ - comision,
@@ -102,7 +106,10 @@ export function textoRecibo({ factura, fecha, items, total, metodo, cliente, ori
   const f = new Date(fecha || Date.now())
   const p = (n) => String(n).padStart(2, '0')
   const cop = (n) => '$' + Math.round(n).toLocaleString('es-CO')
-  const lineas = items.map((i) => `${i.cantidad} x ${i.nombre}  ${cop(i.precioVenta * i.cantidad)}`)
+  const lineas = items.map((i) => {
+    const desc = i.tipo === 'servicio' && i.descuento ? ` (−${cop(i.descuento)})` : ''
+    return `${i.cantidad} x ${i.nombre}${desc}  ${cop(totalLinea(i))}`
+  })
   return [
     'LAVADERO FÉNIX LC — Villa Caribe',
     `Recibo ${folio(factura)} · ${p(f.getDate())}/${p(f.getMonth() + 1)}/${f.getFullYear()} ${p(f.getHours())}:${p(f.getMinutes())}`,
@@ -130,13 +137,18 @@ export async function compartirRecibo(datos) {
   }
 }
 
+// Total neto de una línea (aplica descuento en servicios).
+export const totalLinea = (i) =>
+  Math.max(0, i.precioVenta * i.cantidad - (i.tipo === 'servicio' ? (i.descuento || 0) : 0))
+
 // Ganancia estimada de un carrito (para mostrarla antes de cobrar).
 export function gananciaDe(items) {
   return items.reduce((s, i) => {
     if (i.tipo === 'producto') return s + (i.precioVenta - (i.precioCompra || 0)) * i.cantidad
-    const comision = Math.round(i.precioVenta * ((i.comisionPct || 0) / 100))
-    return s + (i.precioVenta - comision) * i.cantidad
+    const neto = totalLinea(i)
+    const comision = Math.round(neto * ((i.comisionPct || 0) / 100))
+    return s + (neto - comision)
   }, 0)
 }
 
-export const totalDe = (items) => items.reduce((s, i) => s + i.precioVenta * i.cantidad, 0)
+export const totalDe = (items) => items.reduce((s, i) => s + totalLinea(i), 0)

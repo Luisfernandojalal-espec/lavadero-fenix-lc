@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { money } from '../format'
-import { stockBajo } from '../db'
+import { stockBajo, precioServicio, servicioAplica } from '../db'
 import { useAuth } from '../auth'
 
 const sinTildes = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -42,11 +42,15 @@ function CatalogoVacio({ sinServicios, sinProductos }) {
 }
 
 // Convierte un ítem de la cuadrícula en una línea de carrito/cuenta.
+// Para servicios usa el precio ya resuelto por tipo de vehículo (it.precio).
 export function lineaDesde(it) {
   if (it.tipo === 'servicio') {
     return {
       key: it.key, tipo: 'servicio', refId: it.ref.id, nombre: it.ref.nombre,
-      precioVenta: it.ref.precio, cantidad: 1,
+      precioVenta: it.precio, precioBase: it.precio, // precioBase = catálogo (referencia si editan)
+      tipoVehiculo: it.tipoVehiculo || null,
+      descuento: 0, observacion: '',
+      cantidad: 1,
       comisionPct: it.ref.comisionPct || 0,
       comisionPctServicio: it.ref.comisionPct || 0, // respaldo si la línea queda sin lavador
     }
@@ -61,18 +65,26 @@ export function lineaDesde(it) {
 // La cantidad seleccionada se ve en la propia tarjeta (badge + stepper),
 // sin abrir otra ventana.
 // carrito: { [key]: { cantidad, ... } }
-export function ItemsGrid({ servicios, productos, carrito, onAdd, onSub }) {
+export function ItemsGrid({ servicios, productos, carrito, onAdd, onSub, tipoVehiculo = 'automovil' }) {
   const [q, setQ] = useState('')
 
   let items = [
-    ...(servicios || []).slice().sort((a, b) => a.precio - b.precio)
-      .map((s) => ({ key: 'servicio:' + s.id, tipo: 'servicio', ref: s, nombre: s.nombre, precio: s.precio })),
+    ...(servicios || [])
+      // Precio según el tipo de vehículo; se ocultan los servicios que no aplican.
+      .map((s) => ({ s, precio: precioServicio(s, tipoVehiculo), aplica: servicioAplica(s, tipoVehiculo) }))
+      .filter((x) => x.aplica)
+      .sort((a, b) => a.precio - b.precio)
+      .map((x) => ({ key: 'servicio:' + x.s.id, tipo: 'servicio', ref: x.s, nombre: x.s.nombre, precio: x.precio, tipoVehiculo })),
     ...(productos || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre))
       .map((p) => ({ key: 'producto:' + p.id, tipo: 'producto', ref: p, nombre: p.nombre, precio: p.precioVenta })),
   ]
 
-  if (items.length === 0) {
+  const catalogoVacio = !(servicios || []).length && !(productos || []).length
+  if (catalogoVacio) {
     return <CatalogoVacio sinServicios={!(servicios || []).length} sinProductos={!(productos || []).length} />
+  }
+  if (items.length === 0) {
+    return <div className="empty">Ningún servicio aplica a este tipo de vehículo. Cambia el tipo arriba o agrega productos.</div>
   }
 
   if (q.trim()) items = items.filter((it) => sinTildes(it.nombre).includes(sinTildes(q)))

@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp } from '../db'
+import { db, uid, stamp, precioServicio, TIPOS_VEHICULO, labelTipoVeh } from '../db'
 import { money } from '../format'
-import { Header, Sheet, useToast, SearchSelect } from '../components/ui'
+import { Header, Sheet, useToast, SearchSelect, MoneyInput } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
-import { facturarItems, gananciaDe, totalDe, compartirRecibo, folio, labelMedio, asignarComision } from '../ventas'
+import { facturarItems, gananciaDe, totalDe, totalLinea, compartirRecibo, folio, labelMedio, asignarComision } from '../ventas'
 import { useAuth } from '../auth'
 
 export default function Caja() {
@@ -16,10 +16,48 @@ export default function Caja() {
   const trabajadores = useLiveQuery(() => db.trabajadores.where('activo').equals(1).toArray(), [], [])
   const clientes = useLiveQuery(() => db.clientes.where('activo').equals(1).toArray(), [], [])
 
+  const esDueno = user?.rol === 'dueño'
+
+  // Tipo de vehículo del ticket: define el precio de los servicios.
+  const [tipoVehiculo, setTipoVehiculo] = useState('automovil')
   // Carrito mixto: { [key]: linea } — la cantidad se refleja en cada tarjeta.
   const [carrito, setCarrito] = useState({})
   // Línea de servicio a la que se le está asignando lavador
   const [asignando, setAsignando] = useState(null)
+  // Línea de servicio que se está ajustando (precio/descuento/observación)
+  const [editKey, setEditKey] = useState(null)
+  const [editForm, setEditForm] = useState({ precioVenta: 0, descuento: 0, observacion: '' })
+
+  // Cambiar el tipo de vehículo re-precia los servicios del carrito y quita
+  // los que no aplican al nuevo tipo.
+  function cambiarTipo(tv) {
+    setTipoVehiculo(tv)
+    setCarrito((c) => {
+      const next = {}
+      for (const [k, l] of Object.entries(c)) {
+        if (l.tipo !== 'servicio') { next[k] = l; continue }
+        const serv = (servicios || []).find((s) => s.id === l.refId)
+        const precio = serv ? precioServicio(serv, tv) : 0
+        if (precio > 0) next[k] = { ...l, precioVenta: precio, precioBase: precio, tipoVehiculo: tv, descuento: 0 }
+      }
+      return next
+    })
+  }
+
+  function abrirEditarLinea(l) {
+    setEditKey(l.key)
+    setEditForm({ precioVenta: l.precioVenta, descuento: l.descuento || 0, observacion: l.observacion || '' })
+  }
+  function guardarLinea() {
+    setCarrito((c) => {
+      const l = c[editKey]
+      if (!l) return c
+      const precioVenta = esDueno ? Math.max(0, editForm.precioVenta || 0) : l.precioVenta
+      const descuento = esDueno ? Math.max(0, Math.min(editForm.descuento || 0, precioVenta * l.cantidad)) : (l.descuento || 0)
+      return { ...c, [editKey]: { ...l, precioVenta, descuento, observacion: editForm.observacion } }
+    })
+    setEditKey(null)
+  }
 
   // Cobro a crédito
   const [creditoOpen, setCreditoOpen] = useState(false)
@@ -92,7 +130,15 @@ export default function Caja() {
       <Header title="Factura rápida" sub="Servicios y productos en un solo paso" />
 
       <div className="content">
-        <ItemsGrid servicios={servicios} productos={productos} carrito={carrito} onAdd={add} onSub={sub} />
+        <div className="section-title" style={{ marginTop: 0 }}>Tipo de vehículo</div>
+        <div className="pill-row">
+          {TIPOS_VEHICULO.map((t) => (
+            <button key={t.id} className={`pill ${tipoVehiculo === t.id ? 'active' : ''}`}
+              onClick={() => cambiarTipo(t.id)}>{t.label}</button>
+          ))}
+        </div>
+
+        <ItemsGrid servicios={servicios} productos={productos} carrito={carrito} onAdd={add} onSub={sub} tipoVehiculo={tipoVehiculo} />
 
         {lineas.length > 0 && (
           <>
@@ -104,11 +150,19 @@ export default function Caja() {
                     <td>
                       {l.nombre} <span className="muted-cell">{money(l.precioVenta)} c/u</span>
                       {l.tipo === 'servicio' && (
-                        <div>
-                          <button className="chip-lavador" onClick={() => setAsignando(l.key)}>
-                            {l.trabajadorNombre ? `Lavador: ${l.trabajadorNombre}` : 'Asignar lavador'}
-                          </button>
-                        </div>
+                        <>
+                          <div className="muted-cell">
+                            {labelTipoVeh(l.tipoVehiculo)}
+                            {l.descuento ? ` · desc. ${money(l.descuento)}` : ''}
+                          </div>
+                          {l.observacion ? <div className="muted-cell">Obs: {l.observacion}</div> : null}
+                          <div>
+                            <button className="chip-lavador" onClick={() => setAsignando(l.key)}>
+                              {l.trabajadorNombre ? `Lavador: ${l.trabajadorNombre}` : 'Asignar lavador'}
+                            </button>
+                            <button className="chip-lavador" onClick={() => abrirEditarLinea(l)}>Editar</button>
+                          </div>
+                        </>
                       )}
                       <div className="line-step">
                         <button onClick={() => sub(l)} aria-label="Quitar uno">−</button>
@@ -116,7 +170,7 @@ export default function Caja() {
                         <button onClick={() => add(l)} aria-label="Agregar uno">+</button>
                       </div>
                     </td>
-                    <td className="num" style={{ fontWeight: 700 }}>{money(l.precioVenta * l.cantidad)}</td>
+                    <td className="num" style={{ fontWeight: 700 }}>{money(totalLinea(l))}</td>
                   </tr>
                 ))}
               </tbody>
@@ -166,6 +220,27 @@ export default function Caja() {
         <div className="helper">La comisión de esta lavada se le acumula al lavador elegido.</div>
       </Sheet>
 
+      {/* Ajustar línea de servicio: precio (autorizados), descuento y observación */}
+      <Sheet open={!!editKey} onClose={() => setEditKey(null)} title="Ajustar servicio">
+        {esDueno ? (
+          <>
+            <label>Precio unitario</label>
+            <MoneyInput value={editForm.precioVenta} onChange={(v) => setEditForm({ ...editForm, precioVenta: v })} />
+            <label>Descuento (total de la línea)</label>
+            <MoneyInput value={editForm.descuento} onChange={(v) => setEditForm({ ...editForm, descuento: v })} />
+          </>
+        ) : (
+          <div className="helper" style={{ marginBottom: 8 }}>
+            Solo un administrador puede cambiar el precio o aplicar descuentos.
+          </div>
+        )}
+        <label>Observación del servicio (opcional)</label>
+        <input value={editForm.observacion} placeholder="Ej: rayón en la puerta, entregar 5pm"
+          onChange={(e) => setEditForm({ ...editForm, observacion: e.target.value })} />
+        <div style={{ height: 14 }} />
+        <button className="btn" onClick={guardarLinea}>Guardar</button>
+      </Sheet>
+
       {/* Recibo de la venta registrada */}
       <Sheet open={!!recibo} onClose={() => setRecibo(null)} title="Venta registrada">
         {recibo && (
@@ -182,7 +257,7 @@ export default function Caja() {
                   <tr key={l.key}>
                     <td>{l.nombre}</td>
                     <td className="num muted-cell">{l.cantidad} × {money(l.precioVenta)}</td>
-                    <td className="num">{money(l.precioVenta * l.cantidad)}</td>
+                    <td className="num">{money(totalLinea(l))}</td>
                   </tr>
                 ))}
               </tbody>

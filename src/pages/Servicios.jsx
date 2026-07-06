@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, borrarTodo } from '../db'
+import { db, uid, stamp, borrarTodo, TIPOS_VEHICULO, precioServicio, precioMinServicio } from '../db'
 import { supabase } from '../supabase'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 import { useAuth } from '../auth'
 
-const emptyServ = { nombre: '', precio: 0, comisionPct: 40 }
+const preciosVacios = () => Object.fromEntries(TIPOS_VEHICULO.map((t) => [t.id, 0]))
+const emptyServ = { nombre: '', precios: preciosVacios(), comisionPct: 40 }
 
 export default function Servicios() {
   const navigate = useNavigate()
@@ -90,18 +91,30 @@ export default function Servicios() {
   const [servForm, setServForm] = useState(emptyServ)
 
   function nuevoServ() {
-    setServEdit(null); setServForm(emptyServ); setServSheet(true)
+    setServEdit(null); setServForm({ nombre: '', precios: preciosVacios(), comisionPct: 40 }); setServSheet(true)
   }
   function editarServ(s) {
     setServEdit(s.id)
-    setServForm({ nombre: s.nombre, precio: s.precio, comisionPct: s.comisionPct })
+    // Migra el modelo viejo (precio escalar) → precios por tipo, cargándolo en Automóvil.
+    const precios = s.precios && typeof s.precios === 'object'
+      ? { ...preciosVacios(), ...s.precios }
+      : { ...preciosVacios(), automovil: s.precio || 0 }
+    setServForm({ nombre: s.nombre, precios, comisionPct: s.comisionPct })
     setServSheet(true)
+  }
+  function setPrecioTipo(tipoId, v) {
+    setServForm((f) => ({ ...f, precios: { ...f.precios, [tipoId]: v } }))
   }
   async function guardarServ() {
     if (!servForm.nombre.trim()) return show('Ponle un nombre')
-    if (servForm.precio <= 0) return show('Falta el precio')
-    if (servEdit) await db.servicios.update(servEdit, stamp({ ...servForm }))
-    else await db.servicios.add(stamp({ id: uid(), activo: 1, ...servForm }))
+    const precios = Object.fromEntries(
+      TIPOS_VEHICULO.map((t) => [t.id, Math.max(0, servForm.precios[t.id] || 0)])
+    )
+    if (precioMinServicio({ precios }) <= 0) return show('Pon el precio en al menos un tipo de vehículo')
+    // `precio` = mínimo ofrecido, se conserva para orden/compatibilidad.
+    const datos = { nombre: servForm.nombre.trim(), precios, precio: precioMinServicio({ precios }), comisionPct: servForm.comisionPct }
+    if (servEdit) await db.servicios.update(servEdit, stamp(datos))
+    else await db.servicios.add(stamp({ id: uid(), activo: 1, ...datos }))
     setServSheet(false); show('Servicio guardado')
   }
   async function borrarServ() {
@@ -143,7 +156,8 @@ export default function Servicios() {
     setTrabSheet(false); show('Trabajador eliminado')
   }
 
-  const comisionPreview = Math.round(servForm.precio * (servForm.comisionPct / 100))
+  const precioRefServ = precioMinServicio(servForm)
+  const comisionPreview = Math.round(precioRefServ * (servForm.comisionPct / 100))
 
   async function empezarDeCero() {
     const ok = window.confirm('Esto BORRA TODO para dejar el sistema en blanco: productos, ventas, gastos, inventario, clientes, servicios y usuarios (en este dispositivo y en la nube). Tendrás que crear el usuario administrador otra vez. ¿Continuar?')
@@ -172,15 +186,20 @@ export default function Servicios() {
 
         {tab === 'servicios' && (
           <>
-            {(servicios || []).sort((a, b) => a.precio - b.precio).map((s) => (
-              <div className="row" key={s.id} onClick={() => editarServ(s)}>
-                <div className="main">
-                  <div className="title">{s.nombre}</div>
-                  <div className="meta">Comisión {s.comisionPct}% · {money(Math.round(s.precio * s.comisionPct / 100))}</div>
+            {(servicios || []).slice().sort((a, b) => precioMinServicio(a) - precioMinServicio(b)).map((s) => {
+              const tipos = TIPOS_VEHICULO.filter((t) => precioServicio(s, t.id) > 0)
+              return (
+                <div className="row" key={s.id} onClick={() => editarServ(s)}>
+                  <div className="main">
+                    <div className="title">{s.nombre}</div>
+                    <div className="meta">
+                      Comisión {s.comisionPct}% · {tipos.map((t) => `${t.label} ${money(precioServicio(s, t.id))}`).join(' · ')}
+                    </div>
+                  </div>
+                  <div className="right meta">Editar</div>
                 </div>
-                <div className="right" style={{ fontWeight: 700 }}>{money(s.precio)}</div>
-              </div>
-            ))}
+              )
+            })}
             {(servicios || []).length === 0 && <div className="empty">Sin servicios. Toca + para crear uno.</div>}
             <button className="fab" onClick={nuevoServ} aria-label="Nuevo servicio">+</button>
           </>
@@ -256,14 +275,22 @@ export default function Servicios() {
         <input value={servForm.nombre} placeholder="Ej: Lavado carro + brillado"
           onChange={(e) => setServForm({ ...servForm, nombre: e.target.value })} />
 
-        <label>Precio que cobra al cliente</label>
-        <MoneyInput value={servForm.precio} onChange={(v) => setServForm({ ...servForm, precio: v })} />
+        <label>Precio por tipo de vehículo</label>
+        <div className="helper" style={{ marginTop: -2, marginBottom: 6 }}>
+          Deja en $0 los tipos de vehículo a los que NO se les hace este servicio (no aparecerán en el cobro).
+        </div>
+        {TIPOS_VEHICULO.map((t) => (
+          <div key={t.id} style={{ marginBottom: 8 }}>
+            <label style={{ margin: 0 }}>{t.label}</label>
+            <MoneyInput value={servForm.precios[t.id] || 0} onChange={(v) => setPrecioTipo(t.id, v)} />
+          </div>
+        ))}
 
         <label>Comisión del trabajador: {servForm.comisionPct}%</label>
         <input type="range" min="0" max="100" step="5" value={servForm.comisionPct}
           onChange={(e) => setServForm({ ...servForm, comisionPct: parseInt(e.target.value, 10) })} />
         <div className="helper">
-          De cada {money(servForm.precio)}, el trabajador recibe <b>{money(comisionPreview)}</b> y al negocio le quedan <b>{money(servForm.precio - comisionPreview)}</b>.
+          Sobre {money(precioRefServ)} (precio más bajo), el trabajador recibe <b>{money(comisionPreview)}</b> y al negocio le quedan <b>{money(precioRefServ - comisionPreview)}</b>.
         </div>
 
         <div style={{ height: 16 }} />

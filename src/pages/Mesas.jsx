@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp } from '../db'
+import { db, uid, stamp, precioServicio, TIPOS_VEHICULO } from '../db'
 import { money, shortDate } from '../format'
 import { Header, Sheet, useToast, SearchSelect } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
-import { facturarItems, totalDe, labelMedio, asignarComision } from '../ventas'
+import { facturarItems, totalDe, totalLinea, labelMedio, asignarComision } from '../ventas'
 import { useAuth } from '../auth'
 
 const ESTADOS = {
@@ -95,6 +95,18 @@ export default function Mesas() {
       items.push(linea)
     }
     await db.mesas.update(mesa.id, stamp({ items, eventos: conEvento(mesa, `+1 ${it.nombre}`, user?.nombre) }))
+  }
+
+  // Cambiar el tipo de vehículo de la mesa re-precia los servicios y quita
+  // los que no aplican al nuevo tipo.
+  async function cambiarTipoMesa(tv) {
+    const items = (mesa.items || []).map((l) => {
+      if (l.tipo !== 'servicio') return l
+      const serv = (servicios || []).find((s) => s.id === l.refId)
+      const precio = serv ? precioServicio(serv, tv) : 0
+      return precio > 0 ? { ...l, precioVenta: precio, precioBase: precio, tipoVehiculo: tv, descuento: 0 } : null
+    }).filter(Boolean)
+    await db.mesas.update(mesa.id, stamp({ tipoVehiculo: tv, items, eventos: conEvento(mesa, `Tipo de vehículo: ${TIPOS_VEHICULO.find((t) => t.id === tv)?.label || tv}`, user?.nombre) }))
   }
 
   // Asignar lavador a una línea de servicio de la mesa
@@ -205,7 +217,15 @@ export default function Mesas() {
         <div className="content">
           <button className="btn ghost" style={{ marginBottom: 12 }} onClick={() => setDetId(null)}>‹ Volver a mesas</button>
 
-          <ItemsGrid servicios={servicios} productos={productos} carrito={carritoMesa} onAdd={addItem} onSub={subItem} />
+          <div className="section-title" style={{ marginTop: 0 }}>Tipo de vehículo</div>
+          <div className="pill-row">
+            {TIPOS_VEHICULO.map((t) => (
+              <button key={t.id} className={`pill ${(mesa.tipoVehiculo || 'automovil') === t.id ? 'active' : ''}`}
+                onClick={() => cambiarTipoMesa(t.id)}>{t.label}</button>
+            ))}
+          </div>
+
+          <ItemsGrid servicios={servicios} productos={productos} carrito={carritoMesa} onAdd={addItem} onSub={subItem} tipoVehiculo={mesa.tipoVehiculo || 'automovil'} />
 
           <div className="section-title">Cuenta de la mesa</div>
           {items.length === 0 && (
@@ -234,7 +254,7 @@ export default function Mesas() {
                         <button onClick={() => addItem(l)} aria-label="Agregar uno">+</button>
                       </div>
                     </td>
-                    <td className="num" style={{ fontWeight: 700 }}>{money(l.precioVenta * l.cantidad)}</td>
+                    <td className="num" style={{ fontWeight: 700 }}>{money(totalLinea(l))}</td>
                     <td className="num">
                       <button className="btn ghost" style={{ width: 'auto', padding: '6px 10px', fontSize: 13 }}
                         onClick={() => { setTransfer({ key: l.key }); setDestinoId('') }}>Transferir</button>

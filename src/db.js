@@ -106,6 +106,39 @@ export function stamp(obj) {
   return { ...obj, updatedAt: Date.now(), synced: 0 }
 }
 
+// Tipos de vehículo del lavadero. El precio de cada servicio depende del tipo.
+export const TIPOS_VEHICULO = [
+  { id: 'automovil', label: 'Automóvil' },
+  { id: 'camioneta', label: 'Camioneta' },
+  { id: 'moto100', label: 'Moto 100/125' },
+  { id: 'moto150', label: 'Moto 150/300' },
+]
+export const labelTipoVeh = (id) => TIPOS_VEHICULO.find((t) => t.id === id)?.label || ''
+
+// Precio de un servicio para un tipo de vehículo. Soporta el modelo nuevo
+// (servicio.precios = { [tipoVeh]: valor }) y el viejo (servicio.precio escalar,
+// que aplica a cualquier vehículo). Devuelve 0 si el servicio no se ofrece.
+export function precioServicio(servicio, tipoVehId) {
+  if (!servicio) return 0
+  if (servicio.precios && typeof servicio.precios === 'object') {
+    const p = servicio.precios[tipoVehId]
+    return p != null && p !== '' ? Number(p) || 0 : 0
+  }
+  return Number(servicio.precio) || 0
+}
+// ¿El servicio se ofrece para este tipo de vehículo? (tiene precio > 0)
+export function servicioAplica(servicio, tipoVehId) {
+  return precioServicio(servicio, tipoVehId) > 0
+}
+// Precio mínimo ofrecido (para ordenar/mostrar y como campo legacy `precio`).
+export function precioMinServicio(servicio) {
+  if (servicio?.precios && typeof servicio.precios === 'object') {
+    const vals = Object.values(servicio.precios).map(Number).filter((n) => n > 0)
+    return vals.length ? Math.min(...vals) : 0
+  }
+  return Number(servicio?.precio) || 0
+}
+
 export const CATEGORIAS_PRODUCTO = [
   { id: 'cerveza', label: 'Cerveza' },
   { id: 'gaseosa', label: 'Gaseosa' },
