@@ -172,18 +172,20 @@ export default function Turno() {
               </div>
             )}
 
-            <button className="btn secondary" style={{ marginTop: 12 }} onClick={nuevaSalida}>
-              Registrar salida / pago (Nequi o caja)
-            </button>
+            {esDueno && (
+              <button className="btn secondary" style={{ marginTop: 12 }} onClick={nuevaSalida}>
+                Registrar salida / pago (Nequi o caja)
+              </button>
+            )}
 
             {salidasT.length > 0 && (
               <>
                 <div className="section-title">Salidas del turno</div>
-                <div className="helper" style={{ marginTop: -4, marginBottom: 6 }}>Solo lo que registras aquí en el turno (botón de arriba) y las comisiones pagadas. Los gastos de la pestaña Gastos NO cuentan en el cuadre. Toca una salida para corregirla.</div>
+                <div className="helper" style={{ marginTop: -4, marginBottom: 6 }}>Solo lo que se registra aquí en el turno y las comisiones pagadas. Los gastos de la pestaña Gastos NO cuentan en el cuadre.{esDueno ? ' Toca una salida para corregirla.' : ''}</div>
                 <table className="tabla">
                   <tbody>
                     {salidasT.slice(0, 20).map((g) => {
-                      const editable = g.categoria !== 'comisiones'
+                      const editable = esDueno && g.categoria !== 'comisiones'
                       return (
                         <tr key={g.id} onClick={editable ? () => editarSalida(g) : undefined} style={editable ? { cursor: 'pointer' } : undefined}>
                           <td>{g.concepto || 'Salida'}<div className="muted-cell">{labelMedioGasto(g.medioPago)}{g.responsable ? ' · ' + g.responsable : ''}{editable ? ' · toca para editar' : ''}</div></td>
