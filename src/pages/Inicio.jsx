@@ -10,6 +10,8 @@ export default function Inicio() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const esDueno = user?.rol === 'dueño'
+  // El cajero también registra cobros en las tarjetas de lavadores.
+  const veLavadores = esDueno || user?.rol === 'cajero'
 
   const ventas = useLiveQuery(() => db.ventas.toArray(), [], [])
   const abonos = useLiveQuery(() => db.abonos.toArray(), [], [])
@@ -106,7 +108,7 @@ export default function Inicio() {
         <button className="btn ghost" style={{ marginTop: 4 }} onClick={exportarCSV}>Exportar resumen del mes (.csv)</button>
       )}
 
-      {esDueno && <Lavadores embedded />}
+      {veLavadores && <Lavadores embedded />}
 
       {abiertas.length > 0 && (
         <>
