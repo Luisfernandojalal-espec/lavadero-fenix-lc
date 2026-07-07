@@ -28,14 +28,24 @@ export default function Inicio() {
   const abonado = (abonos || []).reduce((s, a) => s + a.monto, 0)
   const porCobrar = Math.max(0, debe - abonado)
 
-  // Utilidad estimada de HOY: ganancia operativa del día, menos los gastos
-  // variables de hoy, menos la tajada diaria de los gastos fijos (plantilla ÷ 30).
-  // Los fijos registrados no se restan aquí (los cubre el prorrateo) y las
-  // comisiones tampoco (ya vienen descontadas en la ganancia de servicios).
+  // Ganancia REAL del día: ganancia operativa de las ventas del día, menos la
+  // tajada diaria de los costos del mes. Los costos se reparten ÷ 30 para que un
+  // gasto grande de un solo día (compra de inventario, mantenimiento) no hunda el
+  // día — es el mismo criterio para fijos y variables.
+  //   - fijoDiario     = plantilla de fijos del mes ÷ 30
+  //   - variableDiario = TODOS los variables del mes (excl. comisiones) ÷ 30
+  // Las comisiones no se restan (ya vienen descontadas en la ganancia de servicios).
+  const mesHoy = hoy.slice(0, 7)
+  const esVariableMes = (g) =>
+    !g.anulada && g.categoria !== 'comisiones' && dayKey(g.fecha).slice(0, 7) === mesHoy && tipoGasto(g) === 'variable'
+  // Lo realmente gastado en variables HOY (solo para mostrarlo en la nota).
   const gastosVarHoy = (gastosAll || [])
-    .filter((g) => !g.anulada && g.categoria !== 'comisiones' && dayKey(g.fecha) === hoy && tipoGasto(g) === 'variable')
+    .filter((g) => esVariableMes(g) && dayKey(g.fecha) === hoy)
     .reduce((s, g) => s + g.monto, 0)
+  const variablesMes = (gastosAll || []).filter(esVariableMes).reduce((s, g) => s + g.monto, 0)
+  const variableDiario = Math.round(variablesMes / 30)
   const fijoDiario = Math.round((fijosPlantilla || []).reduce((s, f) => s + (f.montoEstimado || 0), 0) / 30)
+  const gananciaReal = gananciaHoy - fijoDiario - variableDiario
 
   const recientes = ventasHoy.slice().sort((a, b) => b.fecha - a.fecha).slice(0, 6)
 
@@ -95,19 +105,19 @@ export default function Inicio() {
 
       {esDueno && (
         <div className="card stat-card">
-          <div className="label">Ganancia y gastos de hoy</div>
-          <div className="grid-2" style={{ marginTop: 4 }}>
-            <div>
-              <div className="meta" style={{ fontSize: 12 }}>Ganancia (ventas)</div>
-              <div className="value green" style={{ fontSize: 24 }}>{money(gananciaHoy)}</div>
-            </div>
-            <div>
-              <div className="meta" style={{ fontSize: 12 }}>Gastos de hoy</div>
-              <div className="value red" style={{ fontSize: 24 }}>−{money(gastosVarHoy)}</div>
-            </div>
+          <div className="label">Ganancia real de hoy</div>
+          <div className="value" style={{ fontSize: 30, fontWeight: 800, marginTop: 2, color: gananciaReal >= 0 ? 'var(--green)' : 'var(--red)' }}>
+            {gananciaReal < 0 ? '−' : ''}{money(Math.abs(gananciaReal))}
           </div>
+          <table className="tabla" style={{ marginTop: 8 }}>
+            <tbody>
+              <tr><td>Ganancia (ventas)</td><td className="num" style={{ color: 'var(--green)', fontWeight: 700 }}>+{money(gananciaHoy)}</td></tr>
+              <tr><td>Gastos fijos (mes ÷ 30)</td><td className="num" style={{ color: 'var(--red)' }}>−{money(fijoDiario)}</td></tr>
+              <tr><td>Gastos variables (mes ÷ 30)</td><td className="num" style={{ color: 'var(--red)' }}>−{money(variableDiario)}</td></tr>
+            </tbody>
+          </table>
           <div className="meta" style={{ fontSize: 12, marginTop: 8 }}>
-            Más la parte diaria de los fijos (arriendo, luz…): {money(fijoDiario)}. Un gasto grande de un solo día (ej. un mantenimiento) no es una pérdida real; en el Balance del mes se ve repartido.
+            Los fijos y los variables del mes se reparten entre 30 días, así un gasto grande de un solo día (compra de inventario, mantenimiento) no hunde el día. Hoy gastaste {money(gastosVarHoy)} en variables (se reparte en el mes).
           </div>
         </div>
       )}
