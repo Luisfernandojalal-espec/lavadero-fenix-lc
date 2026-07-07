@@ -532,6 +532,24 @@ input:focus, select:focus { outline: 2px solid var(--primary); border-color: tra
 }
 .pill.active { background: var(--primary); color: white; border-color: var(--primary); }
 
+/* Picker "¿Quién hace este servicio?": opciones grandes y notorias */
+.lav-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin: 4px 0 10px; }
+.lav-pick button {
+  padding: 18px 12px;
+  min-height: 62px;
+  border-radius: 14px;
+  background: #e0f2fe;
+  border: 2px solid var(--primary);
+  color: var(--primary-dark);
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform .05s ease, background .1s ease;
+}
+.lav-pick button:active { transform: scale(.97); background: var(--primary); color: #fff; }
+.lav-pick button.sin { background: var(--surface); border-color: var(--border); color: var(--muted); font-weight: 600; }
+.lav-pick button.sin:active { background: var(--surface-2); color: var(--text); }
+
 /* Bottom nav */
 /* En móvil no hay barra: la navegación es por el menú de Inicio.
    La barra lateral aparece solo en escritorio (media query de abajo). */

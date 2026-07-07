@@ -266,11 +266,11 @@ export default function Caja() {
 
       {/* Asignar lavador a una línea de servicio */}
       <Sheet open={!!asignando} onClose={() => setAsignando(null)} title="¿Quién hace este servicio?">
-        <div className="pill-row">
+        <div className="lav-pick">
           {(trabajadores || []).filter(esLavador).map((t) => (
-            <button key={t.id} className="pill" onClick={() => asignarLavador(asignando, t)}>{t.nombre}</button>
+            <button key={t.id} onClick={() => asignarLavador(asignando, t)}>{t.nombre}</button>
           ))}
-          <button className="pill" onClick={() => asignarLavador(asignando, null)}>Sin asignar</button>
+          <button className="sin" onClick={() => asignarLavador(asignando, null)}>Sin asignar</button>
         </div>
         <div className="helper">La comisión de esta lavada se le acumula al lavador elegido.</div>
       </Sheet>
