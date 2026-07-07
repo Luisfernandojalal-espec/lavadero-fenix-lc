@@ -415,12 +415,17 @@ function Compras() {
   }
 
   async function guardarCompra() {
-    const validas = lineas.filter((l) => (l.modo === 'existente' ? l.productoId : l.nombre.trim()) && l.cantidad > 0)
-    if (validas.length === 0) return show('Agrega al menos un producto con cantidad')
-    const codigos = validas.filter((l) => l.modo === 'nuevo').map((l) => l.codigo.trim()).filter(Boolean)
+    // Una línea es válida si identifica un producto: existente por id, o nuevo
+    // por nombre. La cantidad es OPCIONAL: un producto nuevo sin cantidad se
+    // crea igual en el catálogo (solo registro); si trae cantidad, además suma
+    // stock y registra la compra.
+    const conDatos = lineas.filter((l) => (l.modo === 'existente' ? l.productoId : l.nombre.trim()))
+    if (conDatos.length === 0) return show('Agrega al menos un producto (nombre o elige uno existente)')
+    const codigos = conDatos.filter((l) => l.modo === 'nuevo').map((l) => l.codigo.trim()).filter(Boolean)
     if (new Set(codigos).size !== codigos.length) return show('Hay códigos de barras repetidos en la factura')
 
     let creadosNuevos = 0
+    let huboCompra = false
     try {
       await db.transaction('rw', db.productos, db.movimientos_inv, db.compras, db.proveedores, async () => {
         const now = Date.now()
@@ -435,7 +440,7 @@ function Compras() {
         const compraId = uid()
         const itemsCompra = []
 
-        for (const l of validas) {
+        for (const l of conDatos) {
           let prod
           if (l.modo === 'nuevo') {
             const nombreNorm = l.nombre.trim().toLowerCase()
@@ -446,8 +451,10 @@ function Compras() {
               // Ya existe: su stock real ya está registrado, solo sumamos lo comprado
               // (NO el "stock ya existente", que es solo para productos nuevos de verdad).
               prod = dupNombre || dupCodigo
-              await db.productos.update(prod.id, stamp({ stock: (prod.stock || 0) + l.cantidad }))
+              if (l.cantidad > 0) await db.productos.update(prod.id, stamp({ stock: (prod.stock || 0) + l.cantidad }))
             } else {
+              // Producto nuevo: se crea SIEMPRE (aunque no haya cantidad), con su
+              // stock ya existente + lo comprado.
               const id = uid()
               prod = {
                 id, activo: 1, nombre: l.nombre.trim(), codigo: codigoNorm, referencia: l.referencia.trim(),
@@ -461,30 +468,41 @@ function Compras() {
           } else {
             prod = await db.productos.get(l.productoId)
             if (!prod) continue // el producto ya no existe: saltamos la línea en vez de romper la factura
-            await db.productos.update(prod.id, stamp({ stock: (prod.stock || 0) + l.cantidad, precioCompra: l.costoUnit }))
+            if (l.cantidad > 0) await db.productos.update(prod.id, stamp({ stock: (prod.stock || 0) + l.cantidad, precioCompra: l.costoUnit }))
           }
-          await db.movimientos_inv.add(stamp({
-            id: uid(), tipo: 'entrada', productoId: prod.id, productoNombre: prod.nombre,
-            cantidad: l.cantidad, costoUnit: l.costoUnit, compraId,
-            nota: `Factura ${enc.numero || 's/n'}${proveedorNombre !== '—' ? ' · ' + proveedorNombre : ''}`,
-            fecha: now, mes: monthKey(now),
-          }))
-          itemsCompra.push({ productoId: prod.id, nombre: prod.nombre, cantidad: l.cantidad, costoUnit: l.costoUnit, iva: l.iva || 0, descPct: l.descPct || 0 })
+          // Movimiento de entrada y renglón de la compra SOLO si se compró cantidad.
+          if (l.cantidad > 0 && prod) {
+            await db.movimientos_inv.add(stamp({
+              id: uid(), tipo: 'entrada', productoId: prod.id, productoNombre: prod.nombre,
+              cantidad: l.cantidad, costoUnit: l.costoUnit, compraId,
+              nota: `Factura ${enc.numero || 's/n'}${proveedorNombre !== '—' ? ' · ' + proveedorNombre : ''}`,
+              fecha: now, mes: monthKey(now),
+            }))
+            itemsCompra.push({ productoId: prod.id, nombre: prod.nombre, cantidad: l.cantidad, costoUnit: l.costoUnit, iva: l.iva || 0, descPct: l.descPct || 0 })
+          }
         }
 
-        const bruto = Math.round(validas.reduce((s, l) => s + lineaBase(l), 0))
-        const iva = Math.round(validas.reduce((s, l) => s + lineaIva(l), 0) * (1 - (enc.descuentoGlobal || 0) / 100))
-        const totalFinal = Math.round(validas.reduce((s, l) => s + lineaNeto(l), 0) * (1 - (enc.descuentoGlobal || 0) / 100)) + iva
-        await db.compras.add(stamp({
-          id: compraId, proveedorId: proveedorId || null, proveedorNombre, nit: enc.nit.trim(),
-          numero: enc.numero.trim(), fecha: now, fechaFactura: enc.fecha,
-          formaPago: enc.formaPago, observaciones: enc.observaciones.trim(), descuentoGlobal: enc.descuentoGlobal || 0,
-          items: itemsCompra, subtotal: bruto, iva, total: totalFinal, mes: monthKey(now),
-        }))
+        // Solo registramos la factura de compra si de verdad se compraron unidades.
+        if (itemsCompra.length > 0) {
+          huboCompra = true
+          const comprados = conDatos.filter((l) => l.cantidad > 0)
+          const bruto = Math.round(comprados.reduce((s, l) => s + lineaBase(l), 0))
+          const iva = Math.round(comprados.reduce((s, l) => s + lineaIva(l), 0) * (1 - (enc.descuentoGlobal || 0) / 100))
+          const totalFinal = Math.round(comprados.reduce((s, l) => s + lineaNeto(l), 0) * (1 - (enc.descuentoGlobal || 0) / 100)) + iva
+          await db.compras.add(stamp({
+            id: compraId, proveedorId: proveedorId || null, proveedorNombre, nit: enc.nit.trim(),
+            numero: enc.numero.trim(), fecha: now, fechaFactura: enc.fecha,
+            formaPago: enc.formaPago, observaciones: enc.observaciones.trim(), descuentoGlobal: enc.descuentoGlobal || 0,
+            items: itemsCompra, subtotal: bruto, iva, total: totalFinal, mes: monthKey(now),
+          }))
+        }
       })
-      show(creadosNuevos
-        ? `Factura guardada · ${creadosNuevos} producto${creadosNuevos > 1 ? 's' : ''} nuevo${creadosNuevos > 1 ? 's' : ''} en el catálogo`
-        : 'Factura guardada · inventario actualizado')
+      const nNuevos = `${creadosNuevos} producto${creadosNuevos > 1 ? 's' : ''}`
+      show(
+        creadosNuevos && !huboCompra ? `${nNuevos} creado${creadosNuevos > 1 ? 's' : ''} en el catálogo`
+          : creadosNuevos ? `Factura guardada · ${nNuevos} nuevo${creadosNuevos > 1 ? 's' : ''} en el catálogo`
+            : huboCompra ? 'Factura guardada · inventario actualizado'
+              : 'Sin cambios')
       setModo('lista')
     } catch (e) {
       show('No se pudo guardar la factura')
