@@ -4,6 +4,7 @@ import { db, uid, stamp, precioServicio, TIPOS_VEHICULO } from '../db'
 import { money, shortDate } from '../format'
 import { Header, Sheet, useToast, SearchSelect } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
+import { AgregarAdicional, lineaAdicional } from '../components/Adicional'
 import { facturarItems, totalDe, totalLinea, labelMedio, asignarComision } from '../ventas'
 import { useAuth } from '../auth'
 
@@ -97,11 +98,23 @@ export default function Mesas() {
     await db.mesas.update(mesa.id, stamp({ items, eventos: conEvento(mesa, `+1 ${it.nombre}`, user?.nombre) }))
   }
 
+  // Adicional libre en la mesa: cobro extra con descripción. Si lo agrega un
+  // lavador (rol trabajador) se le asigna a él; si no, queda asignable a mano.
+  async function addAdicionalMesa({ nombre, monto }) {
+    let linea = lineaAdicional({ nombre, monto })
+    if (user && user.rol === 'trabajador') {
+      const yo = (trabajadores || []).find((x) => x.id === user.id)
+      linea = asignarComision(linea, yo || { id: user.id, nombre: user.nombre })
+    }
+    const items = [...(mesa.items || []), linea]
+    await db.mesas.update(mesa.id, stamp({ items, eventos: conEvento(mesa, `+ Adicional: ${nombre} (${money(monto)})`, user?.nombre) }))
+  }
+
   // Cambiar el tipo de vehículo de la mesa re-precia los servicios y quita
-  // los que no aplican al nuevo tipo.
+  // los que no aplican al nuevo tipo. Los adicionales libres se conservan.
   async function cambiarTipoMesa(tv) {
     const items = (mesa.items || []).map((l) => {
-      if (l.tipo !== 'servicio') return l
+      if (l.tipo !== 'servicio' || l.esAdicional) return l
       const serv = (servicios || []).find((s) => s.id === l.refId)
       const precio = serv ? precioServicio(serv, tv) : 0
       return precio > 0 ? { ...l, precioVenta: precio, precioBase: precio, tipoVehiculo: tv, descuento: 0 } : null
@@ -226,6 +239,7 @@ export default function Mesas() {
           </div>
 
           <ItemsGrid servicios={servicios} productos={productos} carrito={carritoMesa} onAdd={addItem} onSub={subItem} tipoVehiculo={mesa.tipoVehiculo || 'automovil'} />
+          <AgregarAdicional onAgregar={addAdicionalMesa} />
 
           <div className="section-title">Cuenta de la mesa</div>
           {items.length === 0 && (
