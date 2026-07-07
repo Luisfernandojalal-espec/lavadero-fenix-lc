@@ -71,9 +71,11 @@ export default function Lavadores({ embedded }) {
   const [creditoOpen, setCreditoOpen] = useState(false)
   const [clienteSel, setClienteSel] = useState('')
   const [clienteNuevo, setClienteNuevo] = useState('')
+  const [mixtoOpen, setMixtoOpen] = useState(false)
+  const [mixtoEfectivo, setMixtoEfectivo] = useState(0)
 
   function abrirCobro(t) { setCobroDe(t); setTipoVeh('automovil'); setCarrito({}) }
-  function cerrarCobro() { setCobroDe(null); setCarrito({}); setCreditoOpen(false); setClienteSel(''); setClienteNuevo('') }
+  function cerrarCobro() { setCobroDe(null); setCarrito({}); setCreditoOpen(false); setClienteSel(''); setClienteNuevo(''); setMixtoOpen(false); setMixtoEfectivo(0) }
 
   function addCobro(it) {
     setCarrito((c) => {
@@ -117,9 +119,9 @@ export default function Lavadores({ embedded }) {
   const lineasCobro = Object.values(carrito)
   const totalCobro = totalDe(lineasCobro)
 
-  async function cobrar(metodo, cliente = null) {
+  async function cobrar(metodo, cliente = null, pago = null) {
     if (lineasCobro.length === 0) return show('Agrega al menos un servicio o producto')
-    await facturarItems({ items: lineasCobro, metodo, cliente })
+    await facturarItems({ items: lineasCobro, metodo, cliente, pago })
     show(`Cobrado ${money(totalCobro)} · ${cobroDe.nombre}`)
     cerrarCobro()
   }
@@ -279,10 +281,6 @@ export default function Lavadores({ embedded }) {
               ))}
             </div>
 
-            <ItemsGrid servicios={servicios} productos={productos} carrito={carrito}
-              onAdd={addCobro} onSub={subCobro} tipoVehiculo={tipoVeh} />
-            <AgregarAdicional onAgregar={addAdicionalCobro} />
-
             {lineasCobro.length > 0 && (
               <>
                 <div className="section-title">Cuenta</div>
@@ -308,10 +306,16 @@ export default function Lavadores({ embedded }) {
                 <div className="btn-row">
                   <button className="btn" onClick={() => cobrar('efectivo')}>Efectivo · {money(totalCobro)}</button>
                   <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => cobrar('transferencia')}>Transferencia</button>
+                  <button className="btn ghost" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => { setMixtoEfectivo(0); setMixtoOpen(true) }}>Mixto</button>
                   <button className="btn ghost" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setCreditoOpen(true)}>Crédito</button>
                 </div>
               </>
             )}
+
+            <div className="section-title">Agregar a la cuenta</div>
+            <ItemsGrid servicios={servicios} productos={productos} carrito={carrito}
+              onAdd={addCobro} onSub={subCobro} tipoVehiculo={tipoVeh} />
+            <AgregarAdicional onAgregar={addAdicionalCobro} />
           </>
         )}
       </Sheet>
@@ -328,6 +332,21 @@ export default function Lavadores({ embedded }) {
           onChange={(e) => { setClienteNuevo(e.target.value); if (e.target.value) setClienteSel('') }} />
         <div style={{ height: 14 }} />
         <button className="btn" onClick={confirmarCredito}>Registrar fiado</button>
+      </Sheet>
+
+      {/* Pago mixto (efectivo + transferencia) del cobro rápido */}
+      <Sheet open={mixtoOpen} onClose={() => setMixtoOpen(false)} title="Pago mixto">
+        <div className="dato-fuerte">Total a cobrar: <b>{money(totalCobro)}</b></div>
+        <label>¿Cuánto pagan en efectivo?</label>
+        <MoneyInput value={mixtoEfectivo} onChange={setMixtoEfectivo} />
+        <div className="helper" style={{ marginTop: 6 }}>
+          Va a transferencia: <b>{money(Math.max(0, totalCobro - Math.min(mixtoEfectivo, totalCobro)))}</b>
+        </div>
+        <div style={{ height: 14 }} />
+        <button className="btn" onClick={() => {
+          const ef = Math.max(0, Math.min(mixtoEfectivo, totalCobro))
+          cobrar('mixto', null, { efectivo: ef, transferencia: totalCobro - ef })
+        }}>Cobrar mixto · {money(totalCobro)}</button>
       </Sheet>
     </>
   )
