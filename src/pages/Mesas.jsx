@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, precioServicio, TIPOS_VEHICULO } from '../db'
+import { db, uid, stamp, precioServicio, TIPOS_VEHICULO, esLavador } from '../db'
 import { money, shortDate } from '../format'
 import { Header, Sheet, useToast, SearchSelect } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
@@ -336,7 +336,7 @@ export default function Mesas() {
         {/* Asignar lavador a un servicio de la mesa */}
         <Sheet open={!!asignando} onClose={() => setAsignando(null)} title="¿Quién hace este servicio?">
           <div className="pill-row">
-            {(trabajadores || []).filter((t) => t.rol !== 'cajero').map((t) => (
+            {(trabajadores || []).filter(esLavador).map((t) => (
               <button key={t.id} className="pill" onClick={() => asignarLavador(asignando, t)}>{t.nombre}</button>
             ))}
             <button className="pill" onClick={() => asignarLavador(asignando, null)}>Sin asignar</button>
