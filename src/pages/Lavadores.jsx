@@ -192,7 +192,7 @@ export default function Lavadores({ embedded }) {
               Pendiente <b style={{ color: st.pendiente > 0 ? 'var(--red)' : 'var(--green)' }}>{money(st.pendiente)}</b>
             </div>
             <div className="lav-actions">
-              <button className="chip-lavador" onClick={(e) => { e.stopPropagation(); abrirCobro(t) }}>Cobrar</button>
+              <button className="chip-lavador" onClick={(e) => { e.stopPropagation(); abrirCobro(t) }}>Nueva lavada</button>
               <button className="chip-lavador" onClick={(e) => { e.stopPropagation(); setDetalle(t) }}>Ver detalle</button>
               {st.pendiente > 0 && <button className="chip-lavador" onClick={(e) => { e.stopPropagation(); abrirPago(t) }}>Pagar</button>}
             </div>
@@ -278,7 +278,7 @@ export default function Lavadores({ embedded }) {
       </Sheet>
 
       {/* Cobro rápido desde la tarjeta del lavador */}
-      <Sheet open={!!cobroDe} onClose={cerrarCobro} title={cobroDe ? `Cobrar · ${cobroDe.nombre}` : ''}>
+      <Sheet open={!!cobroDe} onClose={cerrarCobro} title={cobroDe ? `Nueva lavada · ${cobroDe.nombre}` : ''}>
         {cobroDe && (
           <>
             <div className="helper" style={{ marginBottom: 6 }}>Los servicios se le asignan a {cobroDe.nombre}. Los productos no dan comisión.</div>
