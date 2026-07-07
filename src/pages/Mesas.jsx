@@ -84,6 +84,7 @@ export default function Mesas() {
   async function addItem(it) {
     const items = [...(mesa.items || [])]
     const i = items.findIndex((x) => x.key === it.key)
+    let preguntarLavador = null
     if (i >= 0) items[i] = { ...items[i], cantidad: items[i].cantidad + 1 }
     else {
       let linea = lineaDesde(it)
@@ -94,8 +95,11 @@ export default function Mesas() {
         linea = asignarComision(linea, yo || { id: user.id, nombre: user.nombre })
       }
       items.push(linea)
+      // Al anexar un servicio nuevo sin lavador, preguntamos quién lo hizo.
+      if (linea.tipo === 'servicio' && !linea.trabajadorId) preguntarLavador = linea.key
     }
     await db.mesas.update(mesa.id, stamp({ items, eventos: conEvento(mesa, `+1 ${it.nombre}`, user?.nombre) }))
+    if (preguntarLavador) setAsignando(preguntarLavador)
   }
 
   // Adicional libre en la mesa: cobro extra con descripción. Si lo agrega un
@@ -108,6 +112,8 @@ export default function Mesas() {
     }
     const items = [...(mesa.items || []), linea]
     await db.mesas.update(mesa.id, stamp({ items, eventos: conEvento(mesa, `+ Adicional: ${nombre} (${money(monto)})`, user?.nombre) }))
+    // Un adicional también da comisión: preguntamos quién lo hizo si falta.
+    if (!linea.trabajadorId) setAsignando(linea.key)
   }
 
   // Cambiar el tipo de vehículo de la mesa re-precia los servicios y quita
@@ -265,7 +271,9 @@ export default function Mesas() {
                       {l.nombre} <span className="muted-cell">{money(l.precioVenta)} c/u</span>
                       {l.tipo === 'servicio' && (
                         <div>
-                          <button className="chip-lavador" onClick={() => setAsignando(l.key)}>
+                          <button className="chip-lavador"
+                            style={!l.trabajadorNombre ? { color: 'var(--amber)', fontWeight: 700 } : undefined}
+                            onClick={() => setAsignando(l.key)}>
                             {l.trabajadorNombre ? `Lavador: ${l.trabajadorNombre}` : 'Asignar lavador'}
                           </button>
                         </div>
