@@ -86,9 +86,9 @@ export default function Mesas() {
     if (i >= 0) items[i] = { ...items[i], cantidad: items[i].cantidad + 1 }
     else {
       let linea = lineaDesde(it)
-      // Si registra un trabajador, sus servicios quedan asignados a él
-      // (con su % propio de comisión, si lo tiene definido)
-      if (linea.tipo === 'servicio' && user && user.rol !== 'dueño') {
+      // Si registra un lavador (rol trabajador), sus servicios quedan asignados
+      // a él. El cajero y el dueño no son lavadores: asignan a mano.
+      if (linea.tipo === 'servicio' && user && user.rol === 'trabajador') {
         const yo = (trabajadores || []).find((x) => x.id === user.id)
         linea = asignarComision(linea, yo || { id: user.id, nombre: user.nombre })
       }
@@ -306,7 +306,7 @@ export default function Mesas() {
         {/* Asignar lavador a un servicio de la mesa */}
         <Sheet open={!!asignando} onClose={() => setAsignando(null)} title="¿Quién hace este servicio?">
           <div className="pill-row">
-            {(trabajadores || []).map((t) => (
+            {(trabajadores || []).filter((t) => t.rol !== 'cajero').map((t) => (
               <button key={t.id} className="pill" onClick={() => asignarLavador(asignando, t)}>{t.nombre}</button>
             ))}
             <button className="pill" onClick={() => asignarLavador(asignando, null)}>Sin asignar</button>

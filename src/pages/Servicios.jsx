@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, borrarTodo, TIPOS_VEHICULO, precioServicio, precioMinServicio, esServicioBase } from '../db'
+import { db, uid, stamp, borrarTodo, TIPOS_VEHICULO, precioServicio, precioMinServicio, esServicioBase, ROLES, labelRol } from '../db'
 import { supabase } from '../supabase'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
@@ -262,7 +262,7 @@ export default function Servicios() {
           <>
             {(trabajadores || []).map((t) => (
               <div className="row" key={t.id} onClick={() => editarTrab(t)}>
-                <div className="main"><div className="title">{t.nombre}</div><div className="meta">{t.rol === 'dueño' ? 'Administrador' : 'Trabajador'}{t.comisionPct != null ? ` · Comisión propia ${t.comisionPct}%` : ''}</div></div>
+                <div className="main"><div className="title">{t.nombre}</div><div className="meta">{labelRol(t.rol)}{t.comisionPct != null ? ` · Comisión propia ${t.comisionPct}%` : ''}</div></div>
                 <div className="right meta">Editar</div>
               </div>
             ))}
@@ -375,8 +375,9 @@ export default function Servicios() {
 
         <label>Rol</label>
         <SearchSelect value={trabForm.rol} onChange={(v) => setTrabForm({ ...trabForm, rol: v })}
-          options={[{ value: 'trabajador', label: 'Trabajador (solo Factura rápida)' }, { value: 'dueño', label: 'Administrador (ve todo)' }]}
+          options={ROLES}
           placeholder="Elegir rol…" />
+        <div className="helper">El <b>cajero</b> factura, ve historial, créditos e inventario (solo ver), pero no cambia precios, ni edita o elimina facturas, ni ve el balance. Necesita un PIN para entrar.</div>
 
         <label>Comisión propia (%) — opcional</label>
         <input inputMode="numeric" value={trabForm.comisionPct} placeholder="Ej: 45"

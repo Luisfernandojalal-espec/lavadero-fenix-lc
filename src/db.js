@@ -279,6 +279,27 @@ export function labelCategoria(catId) {
   return c ? c.label : 'Otro'
 }
 
+// --- Roles de usuario ---
+// dueño = ve y controla todo. cajero = maneja la caja (factura, historial,
+// créditos, inventario en SOLO ver) pero no cambia precios, ni edita/elimina
+// facturas, ni ve el balance, ni administra. trabajador = lavador con acceso
+// mínimo (solo factura rápida); sus servicios se le asignan como comisión.
+export const ROLES = [
+  { value: 'trabajador', label: 'Trabajador (solo factura rápida)' },
+  { value: 'cajero', label: 'Cajero (caja, historial, créditos e inventario a solo ver)' },
+  { value: 'dueño', label: 'Administrador (ve y controla todo)' },
+]
+export function labelRol(rol) {
+  if (rol === 'dueño') return 'Administrador'
+  if (rol === 'cajero') return 'Cajero'
+  return 'Trabajador'
+}
+// Un lavador es el trabajador que hace las lavadas (se le acumula comisión).
+// El dueño y el cajero NO son lavadores.
+export function esLavador(t) {
+  return t && t.rol !== 'dueño' && t.rol !== 'cajero'
+}
+
 // Mínimo de stock por defecto si el producto no tiene uno configurado.
 export const STOCK_MIN_DEFAULT = 5
 

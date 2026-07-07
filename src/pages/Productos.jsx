@@ -7,7 +7,7 @@ import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components
 
 const emptyForm = { nombre: '', codigo: '', referencia: '', unidad: 'unidad', categoria: 'cerveza', precioCompra: 0, precioVenta: 0, stock: 0, stockMin: STOCK_MIN_DEFAULT }
 
-export default function Productos({ embedded }) {
+export default function Productos({ embedded, readOnly }) {
   const navigate = useNavigate()
   const { show, node } = useToast()
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -99,10 +99,12 @@ export default function Productos({ embedded }) {
             <div className="label">Productos</div>
             <div className="value">{(productos || []).length}</div>
           </div>
-          <div className="mini-kpi">
-            <div className="label">Valor a costo</div>
-            <div className="value">{money(valorInventario)}</div>
-          </div>
+          {!readOnly && (
+            <div className="mini-kpi">
+              <div className="label">Valor a costo</div>
+              <div className="value">{money(valorInventario)}</div>
+            </div>
+          )}
           <div className="mini-kpi">
             <div className="label">Stock bajo</div>
             <div className={`value ${bajos > 0 ? 'alerta' : ''}`}>{bajos}</div>
@@ -125,7 +127,9 @@ export default function Productos({ embedded }) {
 
         {visibles.length === 0 && (
           <div className="empty">
-            {q ? <>Sin resultados para “{q}”.</> : (
+            {q ? <>Sin resultados para “{q}”.</> : readOnly ? (
+              <>No hay productos todavía.</>
+            ) : (
               <>
                 No hay productos todavía.
                 <div style={{ height: 14 }} />
@@ -143,9 +147,9 @@ export default function Productos({ embedded }) {
             <thead>
               <tr>
                 <th>Producto</th>
-                <th className="num">Compra</th>
+                {!readOnly && <th className="num">Compra</th>}
                 <th className="num">Venta</th>
-                <th className="num">Margen</th>
+                {!readOnly && <th className="num">Margen</th>}
                 <th className="num">Exist.</th>
               </tr>
             </thead>
@@ -155,17 +159,19 @@ export default function Productos({ embedded }) {
                 const pct = p.precioVenta > 0 ? Math.round((m / p.precioVenta) * 100) : 0
                 const bajo = stockBajo(p)
                 return (
-                  <tr key={p.id} onClick={() => abrirEditar(p)} style={{ cursor: 'pointer' }}>
+                  <tr key={p.id} onClick={readOnly ? undefined : () => abrirEditar(p)} style={readOnly ? undefined : { cursor: 'pointer' }}>
                     <td>
                       {p.nombre}
                       <div className="muted-cell">{labelCategoria(p.categoria)}</div>
                     </td>
-                    <td className="num muted-cell">{money(p.precioCompra)}</td>
+                    {!readOnly && <td className="num muted-cell">{money(p.precioCompra)}</td>}
                     <td className="num" style={{ fontWeight: 600 }}>{money(p.precioVenta)}</td>
-                    <td className="num" style={{ color: 'var(--green)' }}>
-                      +{money(m)}
-                      <div className="muted-cell">{pct}%</div>
-                    </td>
+                    {!readOnly && (
+                      <td className="num" style={{ color: 'var(--green)' }}>
+                        +{money(m)}
+                        <div className="muted-cell">{pct}%</div>
+                      </td>
+                    )}
                     <td className="num" style={bajo ? { color: 'var(--amber)', fontWeight: 700 } : { fontWeight: 600 }}>
                       {p.stock ?? 0}
                       {bajo && <div className="muted-cell" style={{ color: 'var(--amber)' }}>bajo</div>}
@@ -178,7 +184,7 @@ export default function Productos({ embedded }) {
         )}
       </div>
 
-      <button className="fab" onClick={abrirNuevo} aria-label="Agregar producto">+</button>
+      {!readOnly && <button className="fab" onClick={abrirNuevo} aria-label="Agregar producto">+</button>}
 
       <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)} title={editId ? 'Editar producto' : 'Nuevo producto'}>
         <label>Nombre</label>

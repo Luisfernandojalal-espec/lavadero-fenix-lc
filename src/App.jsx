@@ -19,17 +19,18 @@ import Servicios from './pages/Servicios'
 import Gastos from './pages/Gastos'
 import Credito from './pages/Credito'
 
+// `roles` = quién ve la pestaña. Sin `roles` = todos (Inicio/Mesas/Facturar/Turno).
 const NAV = [
   { to: '/', label: 'Inicio', end: true },
   { to: '/mesas', label: 'Mesas' },
   { to: '/factura', label: 'Facturar' },
   { to: '/turno', label: 'Turno' },
-  { to: '/inventario', label: 'Inventario', soloDueno: true },
-  { to: '/historial', label: 'Historial', soloDueno: true },
-  { to: '/credito', label: 'Créditos', soloDueno: true },
-  { to: '/gastos', label: 'Gastos', soloDueno: true },
-  { to: '/balance', label: 'Balance', soloDueno: true },
-  { to: '/config', label: 'Admin', soloDueno: true },
+  { to: '/inventario', label: 'Inventario', roles: ['dueño', 'cajero'] },
+  { to: '/historial', label: 'Historial', roles: ['dueño', 'cajero'] },
+  { to: '/credito', label: 'Créditos', roles: ['dueño', 'cajero'] },
+  { to: '/gastos', label: 'Gastos', roles: ['dueño'] },
+  { to: '/balance', label: 'Balance', roles: ['dueño'] },
+  { to: '/config', label: 'Admin', roles: ['dueño'] },
 ]
 
 let inicializado = false
@@ -58,7 +59,8 @@ export default function App() {
   if (!user) return <Login />
 
   const esDueno = user.rol === 'dueño'
-  const navItems = NAV.filter((t) => esDueno || !t.soloDueno)
+  const esCajero = user.rol === 'cajero'
+  const navItems = NAV.filter((t) => !t.roles || t.roles.includes(user.rol))
 
   return (
     <div className="app">
@@ -93,12 +95,16 @@ export default function App() {
           <Route path="/mesas" element={<Mesas />} />
           <Route path="/factura" element={<Caja />} />
           <Route path="/turno" element={<Turno />} />
-          {esDueno ? (
+          {(esDueno || esCajero) ? (
             <>
-              <Route path="/lavadores" element={<Lavadores />} />
               <Route path="/historial" element={<Movimientos />} />
               <Route path="/inventario" element={<Inventario />} />
               <Route path="/credito" element={<Credito />} />
+            </>
+          ) : null}
+          {esDueno ? (
+            <>
+              <Route path="/lavadores" element={<Lavadores />} />
               <Route path="/gastos" element={<Gastos />} />
               <Route path="/balance" element={<Reportes />} />
               <Route path="/config" element={<Servicios />} />

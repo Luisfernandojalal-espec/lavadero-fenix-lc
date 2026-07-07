@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp } from '../db'
+import { db, uid, stamp, labelRol } from '../db'
 import { LOGO_URL } from '../format'
 import { useAuth } from '../auth'
 
@@ -176,7 +176,7 @@ export default function Login() {
             <span className="login-user-ini">{u.nombre.charAt(0).toUpperCase()}</span>
             <span className="login-user-main">
               <span className="login-user-nombre">{u.nombre}</span>
-              <span className="login-user-rol">{u.rol === 'dueño' ? 'Administrador' : 'Trabajador'}</span>
+              <span className="login-user-rol">{labelRol(u.rol)}</span>
             </span>
           </button>
         ))}

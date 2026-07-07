@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, MOTIVOS_SALIDA, CATEGORIAS_PRODUCTO, UNIDADES, FORMAS_PAGO_COMPRA, labelFormaPagoCompra, labelCategoria, STOCK_MIN_DEFAULT } from '../db'
 import { money, monthKey, shortDate, dayKey } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
+import { useAuth } from '../auth'
 import Productos from './Productos'
 
 const TABS = [
@@ -16,23 +17,28 @@ const TABS = [
 
 export default function Inventario() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  // Solo el dueño puede modificar inventario. El cajero lo ve pero no toca
+  // (nada de facturas de entrada, saldos, salidas ni edición de productos).
+  const soloVer = user?.rol !== 'dueño'
+  const tabs = soloVer ? TABS.filter((t) => t.id === 'productos' || t.id === 'kardex') : TABS
   const [tab, setTab] = useState('productos')
 
   return (
     <>
-      <Header title="Inventario" sub="Productos, saldos, entradas, salidas y kardex" onBack={() => navigate('/')} />
+      <Header title="Inventario" sub={soloVer ? 'Productos y kardex (solo ver)' : 'Productos, saldos, entradas, salidas y kardex'} onBack={() => navigate('/')} />
       <div className="content">
         <div className="subtabs">
-          {TABS.map((t) => (
+          {tabs.map((t) => (
             <button key={t.id} className={`subtab ${tab === t.id ? 'active' : ''}`} onClick={() => setTab(t.id)}>{t.label}</button>
           ))}
         </div>
       </div>
 
-      {tab === 'productos' && <Productos embedded />}
-      {tab === 'compras' && <Compras />}
-      {tab === 'saldos' && <SaldosIniciales />}
-      {tab === 'salidas' && <Salidas />}
+      {tab === 'productos' && <Productos embedded readOnly={soloVer} />}
+      {tab === 'compras' && !soloVer && <Compras />}
+      {tab === 'saldos' && !soloVer && <SaldosIniciales />}
+      {tab === 'salidas' && !soloVer && <Salidas />}
       {tab === 'kardex' && <Kardex />}
     </>
   )

@@ -75,9 +75,10 @@ export default function Caja() {
       const prev = c[it.key]
       if (prev) return { ...c, [it.key]: { ...prev, cantidad: prev.cantidad + 1 } }
       let linea = lineaDesde(it)
-      // Si vende un trabajador, sus servicios quedan asignados a él por defecto
-      // (con su % propio de comisión, si lo tiene definido)
-      if (linea.tipo === 'servicio' && user && user.rol !== 'dueño') {
+      // Si vende un lavador (rol trabajador), sus servicios quedan asignados a él
+      // por defecto (con su % propio de comisión, si lo tiene). El cajero y el
+      // dueño no son lavadores: eligen a quién asignar a mano.
+      if (linea.tipo === 'servicio' && user && user.rol === 'trabajador') {
         const yo = (trabajadores || []).find((x) => x.id === user.id)
         linea = asignarComision(linea, yo || { id: user.id, nombre: user.nombre })
       }
@@ -242,7 +243,7 @@ export default function Caja() {
       {/* Asignar lavador a una línea de servicio */}
       <Sheet open={!!asignando} onClose={() => setAsignando(null)} title="¿Quién hace este servicio?">
         <div className="pill-row">
-          {(trabajadores || []).map((t) => (
+          {(trabajadores || []).filter((t) => t.rol !== 'cajero').map((t) => (
             <button key={t.id} className="pill" onClick={() => asignarLavador(asignando, t)}>{t.nombre}</button>
           ))}
           <button className="pill" onClick={() => asignarLavador(asignando, null)}>Sin asignar</button>

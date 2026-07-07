@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, TIPOS_VEHICULO, precioServicio } from '../db'
+import { db, uid, stamp, TIPOS_VEHICULO, precioServicio, esLavador } from '../db'
 import { money, dayKey, monthKey, shortDate, fechaLarga } from '../format'
 import { esEfectivo, facturarItems, totalDe, totalLinea, asignarComision } from '../ventas'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
@@ -144,7 +144,7 @@ export default function Lavadores({ embedded }) {
     setPagoA(null); setMontoPago(0); show('Pago de comisiones registrado')
   }
 
-  const lista = (trabajadores || []).filter((t) => t.rol !== 'dueño')
+  const lista = (trabajadores || []).filter(esLavador)
     .slice().sort((a, b) => a.nombre.localeCompare(b.nombre))
 
   const vacio = lista.length === 0 && (
