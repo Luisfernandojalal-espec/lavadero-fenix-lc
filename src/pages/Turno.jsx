@@ -56,6 +56,19 @@ export default function Turno() {
     show('Turno abierto')
   }
 
+  // --- Editar la apertura de un turno YA abierto (ajustar bases sin cerrarlo) ---
+  const [editApOpen, setEditApOpen] = useState(false)
+  function abrirEditarApertura() {
+    setBase(abierto.base || 0)
+    setBaseTransfer(abierto.baseTransferencia || 0)
+    setEditApOpen(true)
+  }
+  async function guardarApertura() {
+    await db.turnos.update(abierto.id, stamp({ base, baseTransferencia: baseTransfer }))
+    setEditApOpen(false)
+    show('Apertura del turno actualizada')
+  }
+
   // --- Cerrar turno ---
   const [cerrarOpen, setCerrarOpen] = useState(false)
   const [contadoReal, setContadoReal] = useState(0)
@@ -118,7 +131,11 @@ export default function Turno() {
               </div>
             )}
 
-            <button className="btn" style={{ marginTop: 12 }} onClick={() => { setContadoReal(0); setCerrarOpen(true) }}>
+            <button className="btn secondary" style={{ marginTop: 12 }} onClick={abrirEditarApertura}>
+              Editar apertura (efectivo / transferencia)
+            </button>
+
+            <button className="btn" style={{ marginTop: 10 }} onClick={() => { setContadoReal(0); setCerrarOpen(true) }}>
               Cerrar turno
             </button>
           </>
@@ -156,6 +173,17 @@ export default function Turno() {
         <div className="helper">Saldo inicial en transferencia / banco. Opcional.</div>
         <div style={{ height: 14 }} />
         <button className="btn" onClick={abrirTurno}>Abrir turno</button>
+      </Sheet>
+
+      {/* Editar apertura del turno ya abierto (ajusta bases sin cerrarlo) */}
+      <Sheet open={editApOpen} onClose={() => setEditApOpen(false)} title="Editar apertura del turno">
+        <label>Efectivo con el que abriste</label>
+        <MoneyInput value={base} onChange={setBase} />
+        <label>Transferencia con la que abriste (banco)</label>
+        <MoneyInput value={baseTransfer} onChange={setBaseTransfer} />
+        <div className="helper">Ajusta las bases del turno abierto. No cambia las ventas ya registradas; solo recalcula el efectivo esperado y el total en transferencia.</div>
+        <div style={{ height: 14 }} />
+        <button className="btn" onClick={guardarApertura}>Guardar</button>
       </Sheet>
 
       {/* Cerrar turno */}
