@@ -10,6 +10,9 @@ export default defineConfig(({ command }) => ({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Registramos el SW a mano en main.jsx (con chequeo periódico de updates),
+      // así que desactivamos la auto-inyección para no registrarlo dos veces.
+      injectRegister: null,
       includeAssets: ['favicon.svg'],
       manifest: {
         name: 'Lavadero Fénix',
