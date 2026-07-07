@@ -353,7 +353,7 @@ const IVA_OPCIONES = [0, 5, 19]
 const emptyLinea = (modo = 'existente') => ({
   key: uid(), modo, productoId: '', nombre: '',
   codigo: '', referencia: '', unidad: 'unidad', categoria: 'otro', precioVenta: 0, stockInicial: 0,
-  cantidad: 0, costoUnit: 0, iva: 19, descPct: 0,
+  cantidad: 0, costoUnit: 0, iva: 0, descPct: 0,
 })
 // Cálculos de una línea
 const lineaBase = (l) => (l.costoUnit || 0) * (l.cantidad || 0)               // bruto (cant × costo)
@@ -371,6 +371,7 @@ function Compras() {
   const [modo, setModo] = useState('lista') // 'lista' | 'nueva'
   const [enc, setEnc] = useState(emptyEnc())
   const [lineas, setLineas] = useState([])
+  const [avanzado, setAvanzado] = useState(false) // opciones avanzadas ocultas por defecto
 
   const lista = (compras || []).slice().sort((a, b) => b.fecha - a.fecha).slice(0, 60)
   const nombreProv = (id) => (proveedores || []).find((p) => p.id === id)?.nombre || '—'
@@ -384,7 +385,7 @@ function Compras() {
   const totalCompra = Math.round(baseNeta - descGlobalMonto) + ivaTotal
   const descuentoTotal = Math.round(descLineas) + descGlobalMonto
 
-  function nuevaFactura() { setEnc(emptyEnc()); setLineas([emptyLinea('existente')]); setModo('nueva') }
+  function nuevaFactura() { setEnc(emptyEnc()); setLineas([emptyLinea('existente')]); setAvanzado(false); setModo('nueva') }
   function agregarLineaNueva(modo) { setLineas((ls) => [...ls, emptyLinea(modo)]) }
   function updateLinea(key, patch) { setLineas((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l))) }
   function quitarLinea(key) { setLineas((ls) => ls.filter((l) => l.key !== key)) }
@@ -406,7 +407,7 @@ function Compras() {
         if (!nombre || !cantidad) continue
         const costo = num(getCol(r, 'Costo', 'costo unitario', 'precio compra', 'compra', 'costo unit'))
         const p = (productos || []).find((x) => x.nombre.trim().toLowerCase() === nombre.toLowerCase())
-        nuevas.push({ ...emptyLinea(p ? 'existente' : 'nuevo'), productoId: p?.id || '', nombre, categoria: p?.categoria || 'otro', costoUnit: costo, cantidad, iva: 19 })
+        nuevas.push({ ...emptyLinea(p ? 'existente' : 'nuevo'), productoId: p?.id || '', nombre, categoria: p?.categoria || 'otro', costoUnit: costo, cantidad, iva: 0 })
       }
       if (nuevas.length) setLineas((ls) => [...ls.filter((l) => l.nombre || l.productoId), ...nuevas])
       show(nuevas.length ? `${nuevas.length} producto${nuevas.length > 1 ? 's' : ''} importado${nuevas.length > 1 ? 's' : ''}` : 'No reconocí productos (usa columnas Producto, Cantidad, Costo)')
@@ -514,36 +515,40 @@ function Compras() {
     return (
       <div className="content">
         <button className="btn ghost" style={{ marginBottom: 12 }} onClick={() => setModo('lista')}>‹ Cancelar</button>
-        <div className="section-title" style={{ marginTop: 0 }}>Entrada de factura</div>
+        <div className="section-title" style={{ marginTop: 0 }}>Entrada de productos</div>
+        <div className="helper" style={{ marginBottom: 8 }}>Elige el producto (o crea uno nuevo), pon la cantidad y el costo. Nada más.</div>
 
-        <label>NIT del proveedor</label>
-        <input value={enc.nit} placeholder="Ej: 900123456-7"
-          onChange={(e) => setEnc({ ...enc, nit: e.target.value })} />
-
-        <label>Proveedor</label>
-        <SearchSelect value={enc.proveedorId} onChange={(v) => setEnc({ ...enc, proveedorId: v, proveedorNuevo: '' })}
-          options={(proveedores || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => ({ value: p.id, label: p.nombre }))}
-          placeholder="Buscar proveedor…" />
-        <input value={enc.proveedorNuevo} placeholder="…o nombre de un proveedor nuevo"
-          onChange={(e) => setEnc({ ...enc, proveedorNuevo: e.target.value, proveedorId: e.target.value ? '' : enc.proveedorId })} />
-
-        <div className="grid-2">
-          <div>
-            <label>N° factura</label>
-            <input value={enc.numero} placeholder="Ej: FV-001234"
-              onChange={(e) => setEnc({ ...enc, numero: e.target.value })} />
-          </div>
-          <div>
-            <label>Fecha</label>
-            <input type="date" value={enc.fecha} onChange={(e) => setEnc({ ...enc, fecha: e.target.value })} />
-          </div>
-        </div>
+        {/* Datos de factura (proveedor, NIT, N° factura) — solo en avanzado */}
+        {avanzado && (
+          <>
+            <label>NIT del proveedor</label>
+            <input value={enc.nit} placeholder="Ej: 900123456-7"
+              onChange={(e) => setEnc({ ...enc, nit: e.target.value })} />
+            <label>Proveedor</label>
+            <SearchSelect value={enc.proveedorId} onChange={(v) => setEnc({ ...enc, proveedorId: v, proveedorNuevo: '' })}
+              options={(proveedores || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => ({ value: p.id, label: p.nombre }))}
+              placeholder="Buscar proveedor…" />
+            <input value={enc.proveedorNuevo} placeholder="…o nombre de un proveedor nuevo"
+              onChange={(e) => setEnc({ ...enc, proveedorNuevo: e.target.value, proveedorId: e.target.value ? '' : enc.proveedorId })} />
+            <div className="grid-2">
+              <div>
+                <label>N° factura</label>
+                <input value={enc.numero} placeholder="Ej: FV-001234"
+                  onChange={(e) => setEnc({ ...enc, numero: e.target.value })} />
+              </div>
+              <div>
+                <label>Fecha</label>
+                <input type="date" value={enc.fecha} onChange={(e) => setEnc({ ...enc, fecha: e.target.value })} />
+              </div>
+            </div>
+          </>
+        )}
 
         <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span>Productos</span>
           <span className="btn-row" style={{ margin: 0 }}>
-            <input ref={excelRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={importarExcel} />
-            <button className="chip-lavador" onClick={() => excelRef.current?.click()}>Importar Excel</button>
+            {avanzado && <input ref={excelRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={importarExcel} />}
+            {avanzado && <button className="chip-lavador" onClick={() => excelRef.current?.click()}>Importar Excel</button>}
             <button className="chip-lavador" onClick={() => agregarLineaNueva('nuevo')}>+ Producto nuevo</button>
           </span>
         </div>
@@ -563,84 +568,102 @@ function Compras() {
               <>
                 <input value={l.nombre} placeholder="Nombre del producto nuevo"
                   onChange={(e) => updateLinea(l.key, { nombre: e.target.value })} />
-                <div className="grid-2">
-                  <input inputMode="numeric" value={l.codigo} placeholder="Código de barras (opcional)"
-                    onChange={(e) => updateLinea(l.key, { codigo: e.target.value })} />
-                  <input value={l.referencia} placeholder="Referencia (opcional)"
-                    onChange={(e) => updateLinea(l.key, { referencia: e.target.value })} />
-                </div>
-                <div className="grid-2">
-                  <SearchSelect value={l.unidad} onChange={(v) => updateLinea(l.key, { unidad: v })}
-                    options={UNIDADES.map((u) => ({ value: u.id, label: u.label }))} placeholder="Unidad…" />
-                  <SearchSelect value={l.categoria} onChange={(v) => updateLinea(l.key, { categoria: v })}
-                    options={CATEGORIAS_PRODUCTO.map((c) => ({ value: c.id, label: c.label }))} placeholder="Categoría…" />
-                </div>
-                <div className="grid-2">
+                {/* Precio de venta: esencial para poder venderlo */}
+                <div className={avanzado ? 'grid-2' : ''}>
                   <div><label style={{ margin: 0 }}>Precio de venta</label>
                     <MoneyInput value={l.precioVenta} onChange={(v) => updateLinea(l.key, { precioVenta: v })} /></div>
-                  <div><label style={{ margin: 0 }}>Stock ya existente</label>
+                  {avanzado && <div><label style={{ margin: 0 }}>Stock ya existente</label>
                     <input inputMode="numeric" value={l.stockInicial}
-                      onChange={(e) => updateLinea(l.key, { stockInicial: parseInt(e.target.value.replace(/[^\d]/g, '') || '0', 10) })} /></div>
+                      onChange={(e) => updateLinea(l.key, { stockInicial: parseInt(e.target.value.replace(/[^\d]/g, '') || '0', 10) })} /></div>}
                 </div>
+                {avanzado && (
+                  <>
+                    <div className="grid-2">
+                      <input inputMode="numeric" value={l.codigo} placeholder="Código de barras (opcional)"
+                        onChange={(e) => updateLinea(l.key, { codigo: e.target.value })} />
+                      <input value={l.referencia} placeholder="Referencia (opcional)"
+                        onChange={(e) => updateLinea(l.key, { referencia: e.target.value })} />
+                    </div>
+                    <div className="grid-2">
+                      <SearchSelect value={l.unidad} onChange={(v) => updateLinea(l.key, { unidad: v })}
+                        options={UNIDADES.map((u) => ({ value: u.id, label: u.label }))} placeholder="Unidad…" />
+                      <SearchSelect value={l.categoria} onChange={(v) => updateLinea(l.key, { categoria: v })}
+                        options={CATEGORIAS_PRODUCTO.map((c) => ({ value: c.id, label: c.label }))} placeholder="Categoría…" />
+                    </div>
+                  </>
+                )}
               </>
             )}
 
-            {l.modo === 'existente' && (
+            {l.modo === 'existente' && avanzado && (
               <SearchSelect value={l.categoria} onChange={(v) => updateLinea(l.key, { categoria: v })}
                 options={CATEGORIAS_PRODUCTO.map((c) => ({ value: c.id, label: c.label }))} placeholder="Categoría…" />
             )}
 
-            <div className="grid-4">
+            <div className={avanzado ? 'grid-4' : 'grid-2'}>
               <div><label style={{ margin: 0 }}>Cantidad</label>
                 <input inputMode="numeric" value={l.cantidad}
                   onChange={(e) => updateLinea(l.key, { cantidad: parseInt(e.target.value.replace(/[^\d]/g, '') || '0', 10) })} /></div>
               <div><label style={{ margin: 0 }}>Costo unitario</label>
                 <MoneyInput value={l.costoUnit} onChange={(v) => updateLinea(l.key, { costoUnit: v })} /></div>
-              <div><label style={{ margin: 0 }}>IVA</label>
+              {avanzado && <div><label style={{ margin: 0 }}>IVA</label>
                 <select value={l.iva} onChange={(e) => updateLinea(l.key, { iva: parseInt(e.target.value, 10) })}>
                   {IVA_OPCIONES.map((v) => <option key={v} value={v}>{v}%</option>)}
-                </select></div>
-              <div><label style={{ margin: 0 }}>% Desc.</label>
+                </select></div>}
+              {avanzado && <div><label style={{ margin: 0 }}>% Desc.</label>
                 <input inputMode="numeric" value={l.descPct}
-                  onChange={(e) => updateLinea(l.key, { descPct: Math.min(100, parseInt(e.target.value.replace(/[^\d]/g, '') || '0', 10)) })} /></div>
+                  onChange={(e) => updateLinea(l.key, { descPct: Math.min(100, parseInt(e.target.value.replace(/[^\d]/g, '') || '0', 10)) })} /></div>}
             </div>
-            <div className="helper" style={{ marginTop: 6 }}>Subtotal línea: <b>{money(lineaNeto(l))}</b>{l.iva ? ` + IVA ${money(lineaIva(l))}` : ''}</div>
+            <div className="helper" style={{ marginTop: 6 }}>Subtotal línea: <b>{money(lineaNeto(l))}</b>{avanzado && l.iva ? ` + IVA ${money(lineaIva(l))}` : ''}</div>
           </div>
         ))}
 
         <button className="btn secondary" onClick={() => agregarLineaNueva('existente')}>+ Agregar producto</button>
 
-        <div className="grid-2" style={{ marginTop: 12, alignItems: 'end' }}>
-          <label style={{ margin: 0 }}>Descuento global sobre total (%)</label>
-          <input inputMode="numeric" value={enc.descuentoGlobal}
-            onChange={(e) => setEnc({ ...enc, descuentoGlobal: Math.min(100, parseInt(e.target.value.replace(/[^\d]/g, '') || '0', 10)) })} />
-        </div>
+        {avanzado && (
+          <div className="grid-2" style={{ marginTop: 12, alignItems: 'end' }}>
+            <label style={{ margin: 0 }}>Descuento global sobre total (%)</label>
+            <input inputMode="numeric" value={enc.descuentoGlobal}
+              onChange={(e) => setEnc({ ...enc, descuentoGlobal: Math.min(100, parseInt(e.target.value.replace(/[^\d]/g, '') || '0', 10)) })} />
+          </div>
+        )}
 
         <div className="card" style={{ marginTop: 12 }}>
           <table className="tabla compacta">
             <tbody>
-              <tr><td>Subtotal bruto</td><td className="num">{money(subtotalBruto)}</td></tr>
-              {descuentoTotal > 0 && <tr><td>Descuento</td><td className="num" style={{ color: 'var(--red)' }}>−{money(descuentoTotal)}</td></tr>}
-              <tr><td>IVA</td><td className="num">{money(ivaTotal)}</td></tr>
+              {avanzado ? (
+                <>
+                  <tr><td>Subtotal bruto</td><td className="num">{money(subtotalBruto)}</td></tr>
+                  {descuentoTotal > 0 && <tr><td>Descuento</td><td className="num" style={{ color: 'var(--red)' }}>−{money(descuentoTotal)}</td></tr>}
+                  <tr><td>IVA</td><td className="num">{money(ivaTotal)}</td></tr>
+                </>
+              ) : null}
               <tr><td style={{ fontWeight: 700 }}>Total</td><td className="num" style={{ fontWeight: 800, fontSize: 18 }}>{money(totalCompra)}</td></tr>
             </tbody>
           </table>
         </div>
 
-        <label>Forma de pago</label>
-        <div className="pill-row">
-          {FORMAS_PAGO_COMPRA.map((f) => (
-            <button key={f.id} className={`pill ${enc.formaPago === f.id ? 'active' : ''}`}
-              onClick={() => setEnc({ ...enc, formaPago: f.id })}>{f.label}</button>
-          ))}
-        </div>
+        {avanzado && (
+          <>
+            <label>Forma de pago</label>
+            <div className="pill-row">
+              {FORMAS_PAGO_COMPRA.map((f) => (
+                <button key={f.id} className={`pill ${enc.formaPago === f.id ? 'active' : ''}`}
+                  onClick={() => setEnc({ ...enc, formaPago: f.id })}>{f.label}</button>
+              ))}
+            </div>
+            <label>Observaciones (opcional)</label>
+            <input value={enc.observaciones} placeholder="Notas de la compra"
+              onChange={(e) => setEnc({ ...enc, observaciones: e.target.value })} />
+          </>
+        )}
 
-        <label>Observaciones (opcional)</label>
-        <input value={enc.observaciones} placeholder="Notas de la compra"
-          onChange={(e) => setEnc({ ...enc, observaciones: e.target.value })} />
+        <button className="btn ghost" style={{ marginTop: 12 }} onClick={() => setAvanzado((a) => !a)}>
+          {avanzado ? 'Ocultar opciones avanzadas' : 'Opciones avanzadas (proveedor, IVA, N° factura…)'}
+        </button>
 
         <div style={{ height: 12 }} />
-        <button className="btn" onClick={guardarCompra}>Guardar factura y sumar al inventario</button>
+        <button className="btn" onClick={guardarCompra}>Guardar y sumar al inventario</button>
         {node}
       </div>
     )
