@@ -386,6 +386,60 @@ function Compras() {
   const descuentoTotal = Math.round(descLineas) + descGlobalMonto
 
   function nuevaFactura() { setEnc(emptyEnc()); setLineas([emptyLinea('existente')]); setAvanzado(false); setModo('nueva') }
+
+  // --- Editar una factura de entrada YA guardada (proveedor, cantidades, costo,
+  // N° factura y forma de pago). Ajusta el stock por la diferencia de cantidades. ---
+  const [editCompra, setEditCompra] = useState(null)
+  const [editEnc, setEditEnc] = useState({ proveedorId: '', proveedorNuevo: '', nit: '', numero: '', formaPago: 'contado' })
+  const [editItems, setEditItems] = useState([])
+  function editarCompra(c) {
+    setEditCompra(c)
+    setEditEnc({ proveedorId: c.proveedorId || '', proveedorNuevo: '', nit: c.nit || '', numero: c.numero || '', formaPago: c.formaPago || 'contado' })
+    setEditItems((c.items || []).map((it) => ({ ...it })))
+    setEditItemsBase((c.items || []).map((it) => ({ ...it })))
+  }
+  const [editItemsBase, setEditItemsBase] = useState([]) // cantidades originales (para el delta)
+  function updateEditItem(idx, patch) { setEditItems((its) => its.map((it, i) => (i === idx ? { ...it, ...patch } : it))) }
+
+  async function guardarEdicionCompra() {
+    try {
+      await db.transaction('rw', db.productos, db.movimientos_inv, db.compras, db.proveedores, async () => {
+        // Proveedor (existente o nuevo)
+        let proveedorId = editEnc.proveedorId
+        let proveedorNombre = nombreProv(proveedorId)
+        if (editEnc.proveedorNuevo.trim()) {
+          proveedorId = uid(); proveedorNombre = editEnc.proveedorNuevo.trim()
+          await db.proveedores.add(stamp({ id: proveedorId, activo: 1, nombre: proveedorNombre, nit: editEnc.nit.trim() }))
+        }
+        // Ajustar stock por la diferencia de cantidad y actualizar el movimiento.
+        const movs = await db.movimientos_inv.where('compraId').equals(editCompra.id).toArray()
+        for (let k = 0; k < editItems.length; k++) {
+          const it = editItems[k]
+          const delta = (it.cantidad || 0) - (editItemsBase[k]?.cantidad || 0)
+          if (delta !== 0) {
+            const prod = await db.productos.get(it.productoId)
+            if (prod) await db.productos.update(prod.id, stamp({ stock: Math.max(0, (prod.stock || 0) + delta) }))
+          }
+          const mov = movs.find((m) => m.productoId === it.productoId)
+          if (mov) await db.movimientos_inv.update(mov.id, stamp({ cantidad: it.cantidad, costoUnit: it.costoUnit }))
+        }
+        // Recomputar totales (misma lógica que al crear).
+        const descGlobal = editCompra.descuentoGlobal || 0
+        const bruto = Math.round(editItems.reduce((s, l) => s + lineaBase(l), 0))
+        const iva = Math.round(editItems.reduce((s, l) => s + lineaIva(l), 0) * (1 - descGlobal / 100))
+        const totalFinal = Math.round(editItems.reduce((s, l) => s + lineaNeto(l), 0) * (1 - descGlobal / 100)) + iva
+        await db.compras.update(editCompra.id, stamp({
+          proveedorId: proveedorId || null, proveedorNombre, nit: editEnc.nit.trim(),
+          numero: editEnc.numero.trim(), formaPago: editEnc.formaPago,
+          items: editItems, subtotal: bruto, iva, total: totalFinal,
+        }))
+      })
+      setEditCompra(null)
+      show('Factura actualizada')
+    } catch (e) {
+      show('No se pudo actualizar la factura')
+    }
+  }
   function agregarLineaNueva(modo) { setLineas((ls) => [...ls, emptyLinea(modo)]) }
   function updateLinea(key, patch) { setLineas((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l))) }
   function quitarLinea(key) { setLineas((ls) => ls.filter((l) => l.key !== key)) }
@@ -677,16 +731,66 @@ function Compras() {
       </div>
       {lista.length === 0 && <div className="empty">Sin facturas de entrada registradas.</div>}
       {lista.map((c) => (
-        <div className="row" key={c.id}>
+        <div className="row" key={c.id} onClick={() => editarCompra(c)} style={{ cursor: 'pointer' }}>
           <div className="main">
             <div className="title">{c.proveedorNombre || 'Proveedor s/n'}{c.numero ? ` · Factura ${c.numero}` : ''}</div>
             <div className="meta">{shortDate(c.fecha)} · {(c.items || []).length} productos · {labelFormaPagoCompra(c.formaPago)}</div>
           </div>
-          <div className="right" style={{ fontWeight: 700 }}>{money(c.total)}</div>
+          <div className="right">
+            <div style={{ fontWeight: 700 }}>{money(c.total)}</div>
+            <div className="meta">Editar</div>
+          </div>
         </div>
       ))}
 
       <button className="fab" onClick={nuevaFactura} aria-label="Nueva factura de entrada">+</button>
+
+      {/* Editar una factura de entrada guardada */}
+      <Sheet open={!!editCompra} onClose={() => setEditCompra(null)} title="Editar factura de entrada">
+        {editCompra && (
+          <>
+            <label>NIT del proveedor</label>
+            <input value={editEnc.nit} placeholder="Ej: 900123456-7"
+              onChange={(e) => setEditEnc({ ...editEnc, nit: e.target.value })} />
+            <label>Proveedor</label>
+            <SearchSelect value={editEnc.proveedorId} onChange={(v) => setEditEnc({ ...editEnc, proveedorId: v, proveedorNuevo: '' })}
+              options={(proveedores || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => ({ value: p.id, label: p.nombre }))}
+              placeholder="Buscar proveedor…" />
+            <input value={editEnc.proveedorNuevo} placeholder="…o nombre de un proveedor nuevo"
+              onChange={(e) => setEditEnc({ ...editEnc, proveedorNuevo: e.target.value, proveedorId: e.target.value ? '' : editEnc.proveedorId })} />
+
+            <label>N° factura</label>
+            <input value={editEnc.numero} placeholder="Ej: FV-001234"
+              onChange={(e) => setEditEnc({ ...editEnc, numero: e.target.value })} />
+
+            <label>Forma de pago</label>
+            <div className="pill-row">
+              {FORMAS_PAGO_COMPRA.map((f) => (
+                <button key={f.id} className={`pill ${editEnc.formaPago === f.id ? 'active' : ''}`}
+                  onClick={() => setEditEnc({ ...editEnc, formaPago: f.id })}>{f.label}</button>
+              ))}
+            </div>
+
+            <div className="section-title">Productos (cantidad y costo)</div>
+            <div className="helper" style={{ marginTop: -4, marginBottom: 8 }}>Si cambias la cantidad, el inventario se ajusta por la diferencia.</div>
+            {editItems.map((it, idx) => (
+              <div className="card" key={idx} style={{ marginBottom: 8 }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>{it.nombre}</div>
+                <div className="grid-2">
+                  <div><label style={{ margin: 0 }}>Cantidad</label>
+                    <input inputMode="numeric" value={it.cantidad}
+                      onChange={(e) => updateEditItem(idx, { cantidad: parseInt(e.target.value.replace(/[^\d]/g, '') || '0', 10) })} /></div>
+                  <div><label style={{ margin: 0 }}>Costo unitario</label>
+                    <MoneyInput value={it.costoUnit} onChange={(v) => updateEditItem(idx, { costoUnit: v })} /></div>
+                </div>
+              </div>
+            ))}
+
+            <div style={{ height: 12 }} />
+            <button className="btn" onClick={guardarEdicionCompra}>Guardar cambios</button>
+          </>
+        )}
+      </Sheet>
       {node}
     </div>
   )
