@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, precioServicio, TIPOS_VEHICULO, esLavador, esGenerico, ensureLavadorGenerico } from '../db'
 import { money, shortDate } from '../format'
-import { Header, Sheet, useToast, SearchSelect } from '../components/ui'
+import { Header, Sheet, useToast, SearchSelect, ConfirmSheet } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
 import { AgregarAdicional, lineaAdicional } from '../components/Adicional'
 import { facturarItems, totalDe, totalLinea, labelMedio, asignarComision } from '../ventas'
@@ -207,6 +207,7 @@ export default function Mesas() {
   const [cobroOpen, setCobroOpen] = useState(false)
   const [clienteSel, setClienteSel] = useState('')
   const [clienteNuevo, setClienteNuevo] = useState('')
+  const [confirmarMetodo, setConfirmarMetodo] = useState(null)
   // Candado anti-doble-cobro (ignora el segundo toque si ya hay uno en curso).
   const cobrandoRef = useRef(false)
 
@@ -357,8 +358,8 @@ export default function Mesas() {
             </div>
           )}
           <div className="btn-row" style={{ marginTop: 10 }}>
-            <button className="btn" onClick={() => cobrarMesa('efectivo')}>Efectivo · {money(total)}</button>
-            <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => cobrarMesa('transferencia')}>Transferencia</button>
+            <button className="btn" onClick={() => setConfirmarMetodo('efectivo')}>Efectivo · {money(total)}</button>
+            <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setConfirmarMetodo('transferencia')}>Transferencia</button>
           </div>
           <div className="divider" />
           <div className="section-title" style={{ margin: '0 0 8px' }}>O fiar a un cliente</div>
@@ -371,6 +372,14 @@ export default function Mesas() {
           <div style={{ height: 12 }} />
           <button className="btn secondary" onClick={() => cobrarMesa('credito')}>Registrar fiado</button>
         </Sheet>
+
+        {/* Confirmación antes de cobrar la mesa */}
+        <ConfirmSheet open={!!confirmarMetodo} title="¿Confirmar cobro?"
+          message={`¿Cobrar ${money(total)}?`}
+          detail={`${labelMedio(confirmarMetodo)} · ${mesa.nombre}`}
+          confirmLabel={`Sí, cobrar ${money(total)}`}
+          onConfirm={() => { const m = confirmarMetodo; setConfirmarMetodo(null); cobrarMesa(m) }}
+          onClose={() => setConfirmarMetodo(null)} />
 
         {node}
       </>

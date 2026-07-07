@@ -141,6 +141,21 @@ export function Sheet({ open, onClose, title, children }) {
   )
 }
 
+// Hoja de confirmación reutilizable ("¿Estás seguro?"). Se usa antes de
+// acciones que no se pueden deshacer fácil, como cobrar.
+export function ConfirmSheet({ open, title = 'Confirmar', message, detail, confirmLabel = 'Sí', onConfirm, onClose }) {
+  return (
+    <Sheet open={open} onClose={onClose} title={title}>
+      <div className="dato-fuerte" style={{ fontSize: 20 }}>{message}</div>
+      {detail && <div className="helper" style={{ marginTop: 4, marginBottom: 4 }}>{detail}</div>}
+      <div style={{ height: 14 }} />
+      <button className="btn" onClick={onConfirm}>{confirmLabel}</button>
+      <div style={{ height: 10 }} />
+      <button className="btn ghost" onClick={onClose}>Cancelar</button>
+    </Sheet>
+  )
+}
+
 // Hook simple para mostrar un mensaje flotante de confirmación
 export function useToast() {
   const [msg, setMsg] = useState(null)

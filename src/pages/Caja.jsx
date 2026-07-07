@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, precioServicio, TIPOS_VEHICULO, labelTipoVeh, esLavador, esGenerico, ensureLavadorGenerico } from '../db'
 import { money } from '../format'
-import { Header, Sheet, useToast, SearchSelect, MoneyInput } from '../components/ui'
+import { Header, Sheet, useToast, SearchSelect, MoneyInput, ConfirmSheet } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
 import { AgregarAdicional, lineaAdicional } from '../components/Adicional'
 import { facturarItems, gananciaDe, totalDe, totalLinea, compartirRecibo, folio, labelMedio, asignarComision } from '../ventas'
@@ -81,6 +81,8 @@ export default function Caja() {
   // Pago mixto (efectivo + transferencia)
   const [mixtoOpen, setMixtoOpen] = useState(false)
   const [mixtoEfectivo, setMixtoEfectivo] = useState(0)
+  // Confirmación antes de cobrar (efectivo/transferencia de un toque)
+  const [confirmarMetodo, setConfirmarMetodo] = useState(null)
   // Recibo de la última venta (para compartir)
   const [recibo, setRecibo] = useState(null)
 
@@ -225,8 +227,8 @@ export default function Caja() {
             )}
 
             <div className="btn-row">
-              <button className="btn" onClick={() => cobrar('efectivo')}>Efectivo · {money(total)}</button>
-              <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => cobrar('transferencia')}>Transferencia</button>
+              <button className="btn" onClick={() => setConfirmarMetodo('efectivo')}>Efectivo · {money(total)}</button>
+              <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setConfirmarMetodo('transferencia')}>Transferencia</button>
               <button className="btn ghost" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => { setMixtoEfectivo(0); setMixtoOpen(true) }}>Mixto</button>
               <button className="btn ghost" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setCreditoOpen(true)}>Crédito</button>
             </div>
@@ -237,6 +239,14 @@ export default function Caja() {
         <ItemsGrid servicios={servicios} productos={productos} carrito={carrito} onAdd={add} onSub={sub} tipoVehiculo={tipoVehiculo} />
         <AgregarAdicional onAgregar={addAdicional} />
       </div>
+
+      {/* Confirmación antes de cobrar */}
+      <ConfirmSheet open={!!confirmarMetodo} title="¿Confirmar cobro?"
+        message={`¿Cobrar ${money(total)}?`}
+        detail={`${labelMedio(confirmarMetodo)} · ${lineas.length} ${lineas.length === 1 ? 'artículo' : 'artículos'}`}
+        confirmLabel={`Sí, cobrar ${money(total)}`}
+        onConfirm={() => { const m = confirmarMetodo; setConfirmarMetodo(null); cobrar(m) }}
+        onClose={() => setConfirmarMetodo(null)} />
 
       <Sheet open={creditoOpen} onClose={() => setCreditoOpen(false)} title="Cobrar a crédito (fiado)">
         <label>Cliente</label>

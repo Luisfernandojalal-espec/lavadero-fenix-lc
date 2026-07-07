@@ -3,10 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, TIPOS_VEHICULO, precioServicio, esLavador } from '../db'
 import { money, dayKey, monthKey, shortDate, fechaLarga } from '../format'
-import { esEfectivo, facturarItems, totalDe, totalLinea, asignarComision } from '../ventas'
+import { esEfectivo, facturarItems, totalDe, totalLinea, asignarComision, labelMedio } from '../ventas'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
 import { AgregarAdicional, lineaAdicional } from '../components/Adicional'
-import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
+import { Header, Sheet, useToast, MoneyInput, SearchSelect, ConfirmSheet } from '../components/ui'
 import { useAuth } from '../auth'
 
 const iniciales = (nombre) => String(nombre || '')
@@ -73,9 +73,10 @@ export default function Lavadores({ embedded }) {
   const [clienteNuevo, setClienteNuevo] = useState('')
   const [mixtoOpen, setMixtoOpen] = useState(false)
   const [mixtoEfectivo, setMixtoEfectivo] = useState(0)
+  const [confirmarMetodo, setConfirmarMetodo] = useState(null)
 
   function abrirCobro(t) { setCobroDe(t); setTipoVeh('automovil'); setCarrito({}) }
-  function cerrarCobro() { setCobroDe(null); setCarrito({}); setCreditoOpen(false); setClienteSel(''); setClienteNuevo(''); setMixtoOpen(false); setMixtoEfectivo(0) }
+  function cerrarCobro() { setCobroDe(null); setCarrito({}); setCreditoOpen(false); setClienteSel(''); setClienteNuevo(''); setMixtoOpen(false); setMixtoEfectivo(0); setConfirmarMetodo(null) }
 
   function addCobro(it) {
     setCarrito((c) => {
@@ -312,8 +313,8 @@ export default function Lavadores({ embedded }) {
                 <div className="dato-fuerte">Total: <b>{money(totalCobro)}</b></div>
                 <div style={{ height: 10 }} />
                 <div className="btn-row">
-                  <button className="btn" onClick={() => cobrar('efectivo')}>Efectivo · {money(totalCobro)}</button>
-                  <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => cobrar('transferencia')}>Transferencia</button>
+                  <button className="btn" onClick={() => setConfirmarMetodo('efectivo')}>Efectivo · {money(totalCobro)}</button>
+                  <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setConfirmarMetodo('transferencia')}>Transferencia</button>
                   <button className="btn ghost" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => { setMixtoEfectivo(0); setMixtoOpen(true) }}>Mixto</button>
                   <button className="btn ghost" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setCreditoOpen(true)}>Crédito</button>
                 </div>
@@ -356,6 +357,14 @@ export default function Lavadores({ embedded }) {
           cobrar('mixto', null, { efectivo: ef, transferencia: totalCobro - ef })
         }}>Cobrar mixto · {money(totalCobro)}</button>
       </Sheet>
+
+      {/* Confirmación antes de cobrar */}
+      <ConfirmSheet open={!!confirmarMetodo} title="¿Confirmar cobro?"
+        message={`¿Cobrar ${money(totalCobro)}?`}
+        detail={`${labelMedio(confirmarMetodo)}${cobroDe ? ' · ' + cobroDe.nombre : ''}`}
+        confirmLabel={`Sí, cobrar ${money(totalCobro)}`}
+        onConfirm={() => { const m = confirmarMetodo; setConfirmarMetodo(null); cobrar(m) }}
+        onClose={() => setConfirmarMetodo(null)} />
     </>
   )
 
