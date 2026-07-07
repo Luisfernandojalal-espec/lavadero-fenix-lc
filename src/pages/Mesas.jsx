@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, precioServicio, TIPOS_VEHICULO, esLavador } from '../db'
+import { db, uid, stamp, precioServicio, TIPOS_VEHICULO, esLavador, esGenerico, ensureLavadorGenerico } from '../db'
 import { money, shortDate } from '../format'
 import { Header, Sheet, useToast, SearchSelect } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
@@ -139,6 +139,11 @@ export default function Mesas() {
       eventos: conEvento(mesa, `${linea.nombre} asignado a ${t ? t.nombre : 'sin asignar'}`, user?.nombre),
     }))
     setAsignando(null)
+  }
+  // Asignar al perfil "Lavador" genérico (comodín cuando el lavador real no está).
+  async function asignarGenerico(key) {
+    const g = await ensureLavadorGenerico()
+    asignarLavador(key, g)
   }
   async function subItem(it) {
     const items = [...(mesa.items || [])]
@@ -336,10 +341,10 @@ export default function Mesas() {
         {/* Asignar lavador a un servicio de la mesa */}
         <Sheet open={!!asignando} onClose={() => setAsignando(null)} title="¿Quién hace este servicio?">
           <div className="lav-pick">
-            {(trabajadores || []).filter(esLavador).map((t) => (
+            {(trabajadores || []).filter((t) => esLavador(t) && !esGenerico(t)).map((t) => (
               <button key={t.id} onClick={() => asignarLavador(asignando, t)}>{t.nombre}</button>
             ))}
-            <button className="sin" onClick={() => asignarLavador(asignando, null)}>Sin asignar</button>
+            <button className="gen" onClick={() => asignarGenerico(asignando)}>Lavador<span>genérico</span></button>
           </div>
           <div className="helper">La comisión de esta lavada se le acumula al lavador elegido.</div>
         </Sheet>

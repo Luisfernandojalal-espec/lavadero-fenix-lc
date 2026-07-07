@@ -300,6 +300,19 @@ export function esLavador(t) {
   return t && t.rol !== 'dueño' && t.rol !== 'cajero'
 }
 
+// Perfil "Lavador" genérico (comodín): se usa cuando el lavador real no está
+// en la lista / faltó. Reemplaza a "Sin asignar" en el picker. Id fijo para
+// que todos los dispositivos converjan en el mismo registro.
+export const LAVADOR_GENERICO_ID = 'lavador-generico'
+export const esGenerico = (t) => !!t && (t.generico === 1 || t.id === LAVADOR_GENERICO_ID)
+export async function ensureLavadorGenerico() {
+  const existing = await db.trabajadores.get(LAVADOR_GENERICO_ID)
+  if (existing && existing.activo) return existing
+  const g = stamp({ id: LAVADOR_GENERICO_ID, activo: 1, nombre: 'Lavador', rol: 'trabajador', generico: 1 })
+  await db.trabajadores.put(g)
+  return g
+}
+
 // Mínimo de stock por defecto si el producto no tiene uno configurado.
 export const STOCK_MIN_DEFAULT = 5
 

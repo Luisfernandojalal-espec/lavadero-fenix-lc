@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, precioServicio, TIPOS_VEHICULO, labelTipoVeh, ESTADOS_ORDEN, labelEstadoOrden, esLavador } from '../db'
+import { db, uid, stamp, precioServicio, TIPOS_VEHICULO, labelTipoVeh, ESTADOS_ORDEN, labelEstadoOrden, esLavador, esGenerico, ensureLavadorGenerico } from '../db'
 import { money, shortDate, monthKey } from '../format'
 import { Header, Sheet, useToast, SearchSelect, MoneyInput } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
@@ -91,6 +91,10 @@ export default function Ordenes() {
     const items = (orden.items || []).map((l) => (l.key === key ? asignarComision(l, t) : l))
     await db.ordenes.update(orden.id, stamp({ items }))
     setAsignando(null)
+  }
+  async function asignarGenerico(key) {
+    const g = await ensureLavadorGenerico()
+    asignarLavador(key, g)
   }
 
   // Ajustar línea (precio/descuento: dueño; observación: todos)
@@ -265,10 +269,10 @@ export default function Ordenes() {
         {/* Asignar lavador */}
         <Sheet open={!!asignando} onClose={() => setAsignando(null)} title="¿Quién hace este servicio?">
           <div className="lav-pick">
-            {(trabajadores || []).filter(esLavador).map((t) => (
+            {(trabajadores || []).filter((t) => esLavador(t) && !esGenerico(t)).map((t) => (
               <button key={t.id} onClick={() => asignarLavador(asignando, t)}>{t.nombre}</button>
             ))}
-            <button className="sin" onClick={() => asignarLavador(asignando, null)}>Sin asignar</button>
+            <button className="gen" onClick={() => asignarGenerico(asignando)}>Lavador<span>genérico</span></button>
           </div>
           <div className="helper">La comisión de esta lavada se le acumula al lavador elegido.</div>
         </Sheet>

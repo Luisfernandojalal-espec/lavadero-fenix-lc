@@ -549,6 +549,9 @@ input:focus, select:focus { outline: 2px solid var(--primary); border-color: tra
 .lav-pick button:active { transform: scale(.97); background: var(--primary); color: #fff; }
 .lav-pick button.sin { background: var(--surface); border-color: var(--border); color: var(--muted); font-weight: 600; }
 .lav-pick button.sin:active { background: var(--surface-2); color: var(--text); }
+/* Perfil "Lavador" genérico (comodín): borde punteado + subtítulo */
+.lav-pick button.gen { border-style: dashed; line-height: 1.15; }
+.lav-pick button.gen span { display: block; font-size: 11px; font-weight: 600; color: var(--primary-dark); opacity: .7; margin-top: 2px; }
 
 /* Bottom nav */
 /* En móvil no hay barra: la navegación es por el menú de Inicio.
