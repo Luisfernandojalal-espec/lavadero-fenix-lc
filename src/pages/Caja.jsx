@@ -4,6 +4,7 @@ import { db, uid, stamp, precioServicio, TIPOS_VEHICULO, labelTipoVeh } from '..
 import { money } from '../format'
 import { Header, Sheet, useToast, SearchSelect, MoneyInput } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
+import { AgregarAdicional, lineaAdicional } from '../components/Adicional'
 import { facturarItems, gananciaDe, totalDe, totalLinea, compartirRecibo, folio, labelMedio, asignarComision } from '../ventas'
 import { useAuth } from '../auth'
 
@@ -36,12 +37,25 @@ export default function Caja() {
       const next = {}
       for (const [k, l] of Object.entries(c)) {
         if (l.tipo !== 'servicio') { next[k] = l; continue }
+        // Los adicionales libres no dependen del tipo de vehículo: se conservan.
+        if (l.esAdicional) { next[k] = l; continue }
         const serv = (servicios || []).find((s) => s.id === l.refId)
         const precio = serv ? precioServicio(serv, tv) : 0
         if (precio > 0) next[k] = { ...l, precioVenta: precio, precioBase: precio, tipoVehiculo: tv, descuento: 0 }
       }
       return next
     })
+  }
+
+  // Adicional libre: cobro extra con descripción. Si vende un lavador, se le
+  // asigna a él (su comisión); si no, queda sin lavador (asignable a mano).
+  function addAdicional({ nombre, monto }) {
+    let linea = lineaAdicional({ nombre, monto })
+    if (user && user.rol === 'trabajador') {
+      const yo = (trabajadores || []).find((x) => x.id === user.id)
+      linea = asignarComision(linea, yo || { id: user.id, nombre: user.nombre })
+    }
+    setCarrito((c) => ({ ...c, [linea.key]: linea }))
   }
 
   function abrirEditarLinea(l) {
@@ -155,7 +169,7 @@ export default function Caja() {
                       {l.tipo === 'servicio' && (
                         <>
                           <div className="muted-cell">
-                            {labelTipoVeh(l.tipoVehiculo)}
+                            {l.esAdicional ? 'Adicional' : labelTipoVeh(l.tipoVehiculo)}
                             {l.descuento ? ` · desc. ${money(l.descuento)}` : ''}
                           </div>
                           {l.observacion ? <div className="muted-cell">Obs: {l.observacion}</div> : null}
@@ -207,6 +221,7 @@ export default function Caja() {
 
         <div className="section-title">Agregar a la cuenta</div>
         <ItemsGrid servicios={servicios} productos={productos} carrito={carrito} onAdd={add} onSub={sub} tipoVehiculo={tipoVehiculo} />
+        <AgregarAdicional onAgregar={addAdicional} />
       </div>
 
       <Sheet open={creditoOpen} onClose={() => setCreditoOpen(false)} title="Cobrar a crédito (fiado)">

@@ -5,6 +5,7 @@ import { db, uid, stamp, TIPOS_VEHICULO, precioServicio, esLavador } from '../db
 import { money, dayKey, monthKey, shortDate, fechaLarga } from '../format'
 import { esEfectivo, facturarItems, totalDe, totalLinea, asignarComision } from '../ventas'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
+import { AgregarAdicional, lineaAdicional } from '../components/Adicional'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 import { useAuth } from '../auth'
 
@@ -84,6 +85,11 @@ export default function Lavadores({ embedded }) {
       return { ...c, [it.key]: linea }
     })
   }
+  // Adicional libre en el cobro del lavador: se le asigna a él (su comisión).
+  function addAdicionalCobro({ nombre, monto }) {
+    const linea = asignarComision(lineaAdicional({ nombre, monto }), cobroDe)
+    setCarrito((c) => ({ ...c, [linea.key]: linea }))
+  }
   function subCobro(it) {
     setCarrito((c) => {
       const prev = c[it.key]
@@ -99,7 +105,7 @@ export default function Lavadores({ embedded }) {
     setCarrito((c) => {
       const next = {}
       for (const [k, l] of Object.entries(c)) {
-        if (l.tipo !== 'servicio') { next[k] = l; continue }
+        if (l.tipo !== 'servicio' || l.esAdicional) { next[k] = l; continue }
         const serv = (servicios || []).find((s) => s.id === l.refId)
         const precio = serv ? precioServicio(serv, tv) : 0
         if (precio > 0) next[k] = { ...l, precioVenta: precio, precioBase: precio, tipoVehiculo: tv, descuento: 0 }
@@ -275,6 +281,7 @@ export default function Lavadores({ embedded }) {
 
             <ItemsGrid servicios={servicios} productos={productos} carrito={carrito}
               onAdd={addCobro} onSub={subCobro} tipoVehiculo={tipoVeh} />
+            <AgregarAdicional onAgregar={addAdicionalCobro} />
 
             {lineasCobro.length > 0 && (
               <>
