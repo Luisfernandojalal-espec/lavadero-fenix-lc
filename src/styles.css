@@ -226,6 +226,8 @@ body {
 .value.red { color: var(--red); }
 
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.grid-4 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (min-width: 560px) { .grid-4 { grid-template-columns: repeat(4, 1fr); } }
 
 /* Mosaicos de Caja/productos: 2 columnas en móvil, más en pantallas anchas */
 .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
