@@ -75,23 +75,37 @@ export default function Turno() {
     show('Apertura del turno actualizada')
   }
 
-  // --- Registrar una salida / pago del turno (ej. pagos por Nequi) ---
+  // --- Registrar / editar una salida / pago del turno (ej. pagos por Nequi) ---
   const [salidaOpen, setSalidaOpen] = useState(false)
+  const [salEditId, setSalEditId] = useState(null) // null = nueva; id = editando
   const [salConcepto, setSalConcepto] = useState('')
   const [salMonto, setSalMonto] = useState(0)
   const [salMedio, setSalMedio] = useState('transferencia') // Nequi por defecto (el caso del cliente)
+  function nuevaSalida() { setSalEditId(null); setSalConcepto(''); setSalMonto(0); setSalMedio('transferencia'); setSalidaOpen(true) }
+  function editarSalida(g) { setSalEditId(g.id); setSalConcepto(g.concepto || ''); setSalMonto(g.monto || 0); setSalMedio(g.medioPago || 'transferencia'); setSalidaOpen(true) }
   async function guardarSalida() {
     if (!salConcepto.trim()) return show('Escribe qué se pagó')
     if (salMonto <= 0) return show('Escribe el valor')
-    const now = Date.now()
-    await db.gastos.add(stamp({
-      id: uid(), concepto: salConcepto.trim(), categoria: 'otro', monto: salMonto,
-      tipo: 'variable', medioPago: salMedio, responsable: user?.nombre || '',
-      salidaTurno: 1, // salió de la caja/transferencia de ESTE turno
-      fecha: now, mes: monthKey(now),
-    }))
-    setSalidaOpen(false); setSalConcepto(''); setSalMonto(0); setSalMedio('transferencia')
-    show('Salida registrada')
+    if (salEditId) {
+      await db.gastos.update(salEditId, stamp({ concepto: salConcepto.trim(), monto: salMonto, medioPago: salMedio }))
+      show('Salida actualizada')
+    } else {
+      const now = Date.now()
+      await db.gastos.add(stamp({
+        id: uid(), concepto: salConcepto.trim(), categoria: 'otro', monto: salMonto,
+        tipo: 'variable', medioPago: salMedio, responsable: user?.nombre || '',
+        salidaTurno: 1, // salió de la caja/transferencia de ESTE turno
+        fecha: now, mes: monthKey(now),
+      }))
+      show('Salida registrada')
+    }
+    setSalidaOpen(false)
+  }
+  async function eliminarSalida() {
+    if (!salEditId) return
+    await db.gastos.update(salEditId, stamp({ anulada: 1 }))
+    setSalidaOpen(false)
+    show('Salida eliminada')
   }
 
   // --- Cerrar turno ---
@@ -158,22 +172,25 @@ export default function Turno() {
               </div>
             )}
 
-            <button className="btn secondary" style={{ marginTop: 12 }} onClick={() => { setSalConcepto(''); setSalMonto(0); setSalMedio('transferencia'); setSalidaOpen(true) }}>
+            <button className="btn secondary" style={{ marginTop: 12 }} onClick={nuevaSalida}>
               Registrar salida / pago (Nequi o caja)
             </button>
 
             {salidasT.length > 0 && (
               <>
                 <div className="section-title">Salidas del turno</div>
-                <div className="helper" style={{ marginTop: -4, marginBottom: 6 }}>Solo lo que registras aquí en el turno (botón de arriba) y las comisiones pagadas. Los gastos de la pestaña Gastos NO cuentan en el cuadre.</div>
+                <div className="helper" style={{ marginTop: -4, marginBottom: 6 }}>Solo lo que registras aquí en el turno (botón de arriba) y las comisiones pagadas. Los gastos de la pestaña Gastos NO cuentan en el cuadre. Toca una salida para corregirla.</div>
                 <table className="tabla">
                   <tbody>
-                    {salidasT.slice(0, 20).map((g) => (
-                      <tr key={g.id}>
-                        <td>{g.concepto || 'Salida'}<div className="muted-cell">{labelMedioGasto(g.medioPago)}{g.responsable ? ' · ' + g.responsable : ''}</div></td>
-                        <td className="num" style={{ color: 'var(--red)', fontWeight: 700, whiteSpace: 'nowrap' }}>−{money(g.monto)}</td>
-                      </tr>
-                    ))}
+                    {salidasT.slice(0, 20).map((g) => {
+                      const editable = g.categoria !== 'comisiones'
+                      return (
+                        <tr key={g.id} onClick={editable ? () => editarSalida(g) : undefined} style={editable ? { cursor: 'pointer' } : undefined}>
+                          <td>{g.concepto || 'Salida'}<div className="muted-cell">{labelMedioGasto(g.medioPago)}{g.responsable ? ' · ' + g.responsable : ''}{editable ? ' · toca para editar' : ''}</div></td>
+                          <td className="num" style={{ color: 'var(--red)', fontWeight: 700, whiteSpace: 'nowrap' }}>−{money(g.monto)}</td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </>
@@ -212,7 +229,7 @@ export default function Turno() {
       </div>
 
       {/* Registrar salida / pago del turno */}
-      <Sheet open={salidaOpen} onClose={() => setSalidaOpen(false)} title="Registrar salida / pago">
+      <Sheet open={salidaOpen} onClose={() => setSalidaOpen(false)} title={salEditId ? 'Editar salida' : 'Registrar salida / pago'}>
         <div className="helper" style={{ marginBottom: 8 }}>Un pago que hiciste durante el turno (pago de factura, recarga, domicilio, insumo…). Se descuenta de la caja y queda registrado.</div>
         <label>¿Qué se pagó?</label>
         <input value={salConcepto} placeholder="Ej: Pago factura proveedor, recarga…"
@@ -225,7 +242,8 @@ export default function Turno() {
           <button className={`pill ${salMedio === 'caja' ? 'active' : ''}`} onClick={() => setSalMedio('caja')}>Efectivo (caja)</button>
         </div>
         <div style={{ height: 14 }} />
-        <button className="btn" onClick={guardarSalida}>Registrar salida</button>
+        <button className="btn" onClick={guardarSalida}>{salEditId ? 'Guardar cambios' : 'Registrar salida'}</button>
+        {salEditId && <><div style={{ height: 10 }} /><button className="btn danger" onClick={eliminarSalida}>Eliminar salida</button></>}
       </Sheet>
 
       {/* Abrir turno */}
