@@ -45,15 +45,21 @@ export default function Movimientos() {
 
   // --- Eliminar / editar factura (admin) ---
   async function eliminarFactura(g) {
-    for (const x of g.rows) {
-      await db.ventas.update(x.id, stamp({ anulada: 1 }))
-      if (x.tipo === 'producto') {
-        for (const it of x.items || []) {
-          const p = await db.productos.get(it.productoId)
-          if (p) await db.productos.update(p.id, stamp({ stock: (p.stock || 0) + it.cantidad }))
+    // Transaccional e idempotente: si una línea ya está anulada (p. ej. un
+    // doble toque o dos dispositivos), NO se vuelve a devolver el stock.
+    await db.transaction('rw', db.ventas, db.productos, async () => {
+      for (const x of g.rows) {
+        const fresh = await db.ventas.get(x.id)
+        if (!fresh || fresh.anulada) continue
+        await db.ventas.update(x.id, stamp({ anulada: 1 }))
+        if (x.tipo === 'producto') {
+          for (const it of x.items || []) {
+            const p = await db.productos.get(it.productoId)
+            if (p) await db.productos.update(p.id, stamp({ stock: (p.stock || 0) + it.cantidad }))
+          }
         }
       }
-    }
+    })
     show('Factura eliminada')
   }
 

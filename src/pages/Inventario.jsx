@@ -443,8 +443,10 @@ function Compras() {
             const dupNombre = existentes.find((p) => p.nombre.trim().toLowerCase() === nombreNorm)
             const dupCodigo = codigoNorm && existentes.find((p) => (p.codigo || '').trim() === codigoNorm)
             if (dupNombre || dupCodigo) {
+              // Ya existe: su stock real ya está registrado, solo sumamos lo comprado
+              // (NO el "stock ya existente", que es solo para productos nuevos de verdad).
               prod = dupNombre || dupCodigo
-              await db.productos.update(prod.id, stamp({ stock: (prod.stock || 0) + l.stockInicial + l.cantidad }))
+              await db.productos.update(prod.id, stamp({ stock: (prod.stock || 0) + l.cantidad }))
             } else {
               const id = uid()
               prod = {
@@ -458,6 +460,7 @@ function Compras() {
             }
           } else {
             prod = await db.productos.get(l.productoId)
+            if (!prod) continue // el producto ya no existe: saltamos la línea en vez de romper la factura
             await db.productos.update(prod.id, stamp({ stock: (prod.stock || 0) + l.cantidad, precioCompra: l.costoUnit }))
           }
           await db.movimientos_inv.add(stamp({

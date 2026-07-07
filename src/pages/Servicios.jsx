@@ -177,6 +177,11 @@ export default function Servicios() {
   }
   async function guardarTrab() {
     if (!trabForm.nombre.trim()) return show('Ponle un nombre')
+    // El administrador y el cajero inician sesión: SIEMPRE necesitan PIN, o la
+    // app quedaría sin forma de entrar (los lavadores sí pueden ir sin PIN).
+    const necesitaPin = trabForm.rol === 'dueño' || trabForm.rol === 'cajero'
+    if (necesitaPin && (!trabForm.pin || trabForm.pin.length !== 4))
+      return show('El administrador y el cajero necesitan un PIN de 4 dígitos para poder entrar')
     if (trabForm.pin && trabForm.pin.length !== 4) return show('El PIN debe tener 4 dígitos')
     const datos = { nombre: trabForm.nombre.trim(), pin: trabForm.pin, rol: trabForm.rol }
     // % propio del lavador: vacío = usa el % definido en cada servicio
