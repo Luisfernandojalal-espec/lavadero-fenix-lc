@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, gastoDeCaja } from '../db'
+import { db, uid, stamp, gastoDeCaja, labelMedioGasto } from '../db'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
 import { descargarCierrePDF } from '../pdf'
@@ -31,13 +31,16 @@ export default function Turno() {
   const transferencias = vTurno.reduce((s, v) => s + montoTransferencia(v), 0)
   const credito = vTurno.filter((v) => v.metodoPago === 'credito').reduce((s, v) => s + v.total, 0)
   const abonosT = (abonos || []).filter((a) => a.fecha >= desde).reduce((s, a) => s + a.monto, 0)
-  // Solo los gastos pagados DE CAJA descuadran el efectivo; los de transferencia/banco no.
-  const gastosT = (gastos || []).filter((g) => !g.anulada && g.fecha >= desde && gastoDeCaja(g)).reduce((s, g) => s + g.monto, 0)
+  // Salidas/pagos del turno (gastos registrados desde que abrió), por medio.
+  const salidasT = (gastos || []).filter((g) => !g.anulada && g.fecha >= desde).sort((a, b) => b.fecha - a.fecha)
+  // Los gastos pagados DE CAJA descuadran el efectivo; los de transferencia/banco (Nequi) bajan el saldo digital.
+  const gastosT = salidasT.filter(gastoDeCaja).reduce((s, g) => s + g.monto, 0)
+  const gastosTransferT = salidasT.filter((g) => !gastoDeCaja(g)).reduce((s, g) => s + g.monto, 0)
   // Solo el efectivo entra a la caja física (transferencias van al banco)
   const esperado = (abierto?.base || 0) + efectivo + abonosT - gastosT
-  // Transferencia/banco: base de apertura + ventas por transferencia del turno.
+  // Transferencia/banco (Nequi): base + ventas por transferencia − pagos hechos por transferencia.
   const baseTransferAbierto = abierto?.baseTransferencia || 0
-  const totalTransfer = baseTransferAbierto + transferencias
+  const totalTransfer = baseTransferAbierto + transferencias - gastosTransferT
 
   // --- Abrir turno ---
   const [abrirOpen, setAbrirOpen] = useState(false)
@@ -69,6 +72,24 @@ export default function Turno() {
     show('Apertura del turno actualizada')
   }
 
+  // --- Registrar una salida / pago del turno (ej. pagos por Nequi) ---
+  const [salidaOpen, setSalidaOpen] = useState(false)
+  const [salConcepto, setSalConcepto] = useState('')
+  const [salMonto, setSalMonto] = useState(0)
+  const [salMedio, setSalMedio] = useState('transferencia') // Nequi por defecto (el caso del cliente)
+  async function guardarSalida() {
+    if (!salConcepto.trim()) return show('Escribe qué se pagó')
+    if (salMonto <= 0) return show('Escribe el valor')
+    const now = Date.now()
+    await db.gastos.add(stamp({
+      id: uid(), concepto: salConcepto.trim(), categoria: 'otro', monto: salMonto,
+      tipo: 'variable', medioPago: salMedio, responsable: user?.nombre || '',
+      fecha: now, mes: monthKey(now),
+    }))
+    setSalidaOpen(false); setSalConcepto(''); setSalMonto(0); setSalMedio('transferencia')
+    show('Salida registrada')
+  }
+
   // --- Cerrar turno ---
   const [cerrarOpen, setCerrarOpen] = useState(false)
   const [contadoReal, setContadoReal] = useState(0)
@@ -78,6 +99,7 @@ export default function Turno() {
       estado: 'cerrado', cerradoEn: Date.now(), cerradoPor: user?.nombre || '',
       resumen: {
         contado: efectivo, transferencias, credito, abonos: abonosT, gastos: gastosT,
+        gastosTransfer: gastosTransferT, totalTransfer,
         esperado, contadoReal, diferencia, ventasCount: vTurno.length,
       },
     }
@@ -120,7 +142,8 @@ export default function Turno() {
                 <tr><td><b>Efectivo esperado en caja</b></td><td className="num"><b>{money(esperado)}</b></td></tr>
                 <tr><td className="muted-cell">Base transferencia (apertura)</td><td className="num muted-cell">{money(baseTransferAbierto)}</td></tr>
                 <tr><td className="muted-cell">Ventas por transferencia (al banco)</td><td className="num muted-cell">{money(transferencias)}</td></tr>
-                <tr><td>Total en transferencia (banco)</td><td className="num">{money(totalTransfer)}</td></tr>
+                <tr><td className="muted-cell">Pagos por transferencia (Nequi)</td><td className="num muted-cell" style={{ color: 'var(--red)' }}>−{money(gastosTransferT)}</td></tr>
+                <tr><td><b>Debe quedar en transferencia</b></td><td className="num"><b>{money(totalTransfer)}</b></td></tr>
                 <tr><td className="muted-cell">Ventas a crédito (fiado)</td><td className="num muted-cell">{money(credito)}</td></tr>
               </tbody>
             </table>
@@ -129,6 +152,26 @@ export default function Turno() {
               <div className="helper" style={{ color: 'var(--amber)', margin: '10px 0' }}>
                 Atención: hay {mesasAbiertas.length} {mesasAbiertas.length === 1 ? 'mesa abierta' : 'mesas abiertas'} sin cobrar.
               </div>
+            )}
+
+            <button className="btn secondary" style={{ marginTop: 12 }} onClick={() => { setSalConcepto(''); setSalMonto(0); setSalMedio('transferencia'); setSalidaOpen(true) }}>
+              Registrar salida / pago (Nequi o caja)
+            </button>
+
+            {salidasT.length > 0 && (
+              <>
+                <div className="section-title">Salidas del turno</div>
+                <table className="tabla">
+                  <tbody>
+                    {salidasT.slice(0, 20).map((g) => (
+                      <tr key={g.id}>
+                        <td>{g.concepto || 'Salida'}<div className="muted-cell">{labelMedioGasto(g.medioPago)}{g.responsable ? ' · ' + g.responsable : ''}</div></td>
+                        <td className="num" style={{ color: 'var(--red)', fontWeight: 700, whiteSpace: 'nowrap' }}>−{money(g.monto)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
             )}
 
             <button className="btn secondary" style={{ marginTop: 12 }} onClick={abrirEditarApertura}>
@@ -162,6 +205,23 @@ export default function Turno() {
           </>
         )}
       </div>
+
+      {/* Registrar salida / pago del turno */}
+      <Sheet open={salidaOpen} onClose={() => setSalidaOpen(false)} title="Registrar salida / pago">
+        <div className="helper" style={{ marginBottom: 8 }}>Un pago que hiciste durante el turno (ej. algo pagado por Nequi). Se descuenta del saldo y queda registrado.</div>
+        <label>¿Qué se pagó?</label>
+        <input value={salConcepto} placeholder="Ej: Recarga, domicilio, insumo…"
+          onChange={(e) => setSalConcepto(e.target.value)} />
+        <label>Valor</label>
+        <MoneyInput value={salMonto} onChange={setSalMonto} />
+        <label>¿De dónde salió?</label>
+        <div className="pill-row">
+          <button className={`pill ${salMedio === 'transferencia' ? 'active' : ''}`} onClick={() => setSalMedio('transferencia')}>Transferencia (Nequi)</button>
+          <button className={`pill ${salMedio === 'caja' ? 'active' : ''}`} onClick={() => setSalMedio('caja')}>Efectivo (caja)</button>
+        </div>
+        <div style={{ height: 14 }} />
+        <button className="btn" onClick={guardarSalida}>Registrar salida</button>
+      </Sheet>
 
       {/* Abrir turno */}
       <Sheet open={abrirOpen} onClose={() => setAbrirOpen(false)} title="Abrir turno">
@@ -220,7 +280,8 @@ export default function Turno() {
                 <tr><td>Ventas en efectivo</td><td className="num">{money(det.resumen?.contado)}</td></tr>
                 <tr><td>Base transferencia (apertura)</td><td className="num">{money(det.baseTransferencia || 0)}</td></tr>
                 <tr><td>Ventas por transferencia</td><td className="num">{money(det.resumen?.transferencias || 0)}</td></tr>
-                <tr><td>Total en transferencia (banco)</td><td className="num">{money((det.baseTransferencia || 0) + (det.resumen?.transferencias || 0))}</td></tr>
+                {(det.resumen?.gastosTransfer || 0) > 0 && <tr><td>Pagos por transferencia (Nequi)</td><td className="num" style={{ color: 'var(--red)' }}>−{money(det.resumen.gastosTransfer)}</td></tr>}
+                <tr><td>Debe quedar en transferencia</td><td className="num">{money(det.resumen?.totalTransfer ?? ((det.baseTransferencia || 0) + (det.resumen?.transferencias || 0) - (det.resumen?.gastosTransfer || 0)))}</td></tr>
                 <tr><td>Abonos recibidos</td><td className="num">{money(det.resumen?.abonos)}</td></tr>
                 <tr><td>Gastos pagados</td><td className="num">−{money(det.resumen?.gastos)}</td></tr>
                 <tr><td><b>Efectivo esperado</b></td><td className="num"><b>{money(det.resumen?.esperado)}</b></td></tr>
