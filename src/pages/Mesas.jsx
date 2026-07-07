@@ -4,7 +4,7 @@ import { db, uid, stamp, precioServicio, TIPOS_VEHICULO, esLavador, esGenerico, 
 import { money, shortDate } from '../format'
 import { Header, Sheet, useToast, SearchSelect, ConfirmSheet } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
-import { AgregarAdicional, lineaAdicional } from '../components/Adicional'
+import { AgregarAdicional, lineaAdicional, AgregarParqueo, lineaParqueo } from '../components/Adicional'
 import { facturarItems, totalDe, totalLinea, labelMedio, asignarComision } from '../ventas'
 import { useAuth } from '../auth'
 
@@ -114,6 +114,13 @@ export default function Mesas() {
     await db.mesas.update(mesa.id, stamp({ items, eventos: conEvento(mesa, `+ Adicional: ${nombre} (${money(monto)})`, user?.nombre) }))
     // Un adicional también da comisión: preguntamos quién lo hizo si falta.
     if (!linea.trabajadorId) setAsignando(linea.key)
+  }
+
+  // Parqueo en la mesa: valor abierto, sin comisión ni lavador (no pregunta nada).
+  async function addParqueoMesa({ monto }) {
+    const linea = lineaParqueo({ monto })
+    const items = [...(mesa.items || []), linea]
+    await db.mesas.update(mesa.id, stamp({ items, eventos: conEvento(mesa, `+ Parqueo (${money(monto)})`, user?.nombre) }))
   }
 
   // Cambiar el tipo de vehículo de la mesa re-precia los servicios y quita
@@ -259,7 +266,10 @@ export default function Mesas() {
           </div>
 
           <ItemsGrid servicios={servicios} productos={productos} carrito={carritoMesa} onAdd={addItem} onSub={subItem} tipoVehiculo={mesa.tipoVehiculo || 'automovil'} />
-          <AgregarAdicional onAgregar={addAdicionalMesa} />
+          <div className="btn-row" style={{ marginTop: 0 }}>
+            <AgregarAdicional onAgregar={addAdicionalMesa} />
+            <AgregarParqueo onAgregar={addParqueoMesa} />
+          </div>
 
           <div className="section-title">Cuenta de la mesa</div>
           {items.length === 0 && (

@@ -53,3 +53,46 @@ export function AgregarAdicional({ onAgregar }) {
     </>
   )
 }
+
+// Línea de "Parqueo": valor abierto, SIN comisión ni lavador. Se factura como
+// un producto (los productos no dan comisión ni piden lavador), costo 0 → el
+// valor entra completo al negocio. refId = null (no toca stock).
+export function lineaParqueo({ monto }) {
+  return {
+    key: 'parqueo:' + uid(),
+    tipo: 'producto', refId: null, nombre: 'Parqueo', esParqueo: true,
+    precioVenta: monto, precioCompra: 0, cantidad: 1,
+  }
+}
+
+// Botón + hoja para agregar un Parqueo (solo pide el valor). onAgregar({ monto }).
+export function AgregarParqueo({ onAgregar }) {
+  const [open, setOpen] = useState(false)
+  const [monto, setMonto] = useState(0)
+  const [err, setErr] = useState('')
+
+  function cerrar() { setOpen(false); setMonto(0); setErr('') }
+  function confirmar() {
+    if (monto <= 0) return setErr('Escribe el valor del parqueo')
+    onAgregar({ monto })
+    cerrar()
+  }
+
+  return (
+    <>
+      <button className="btn secondary" style={{ marginTop: 8 }} onClick={() => setOpen(true)}>
+        + Parqueo
+      </button>
+      <Sheet open={open} onClose={cerrar} title="Parqueo">
+        <div className="helper" style={{ marginBottom: 8 }}>
+          Cobro de parqueo, valor abierto. No genera comisión para ningún lavador.
+        </div>
+        <label>Valor</label>
+        <MoneyInput value={monto} onChange={(v) => { setMonto(v); setErr('') }} placeholder="Valor del parqueo" />
+        {err && <div className="helper" style={{ color: 'var(--red)', marginTop: 6 }}>{err}</div>}
+        <div style={{ height: 14 }} />
+        <button className="btn" onClick={confirmar}>Agregar a la cuenta</button>
+      </Sheet>
+    </>
+  )
+}

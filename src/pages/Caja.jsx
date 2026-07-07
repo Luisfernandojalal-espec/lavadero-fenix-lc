@@ -4,7 +4,7 @@ import { db, uid, stamp, precioServicio, TIPOS_VEHICULO, labelTipoVeh, esLavador
 import { money } from '../format'
 import { Header, Sheet, useToast, SearchSelect, MoneyInput, ConfirmSheet } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
-import { AgregarAdicional, lineaAdicional } from '../components/Adicional'
+import { AgregarAdicional, lineaAdicional, AgregarParqueo, lineaParqueo } from '../components/Adicional'
 import { facturarItems, gananciaDe, totalDe, totalLinea, compartirRecibo, folio, labelMedio, asignarComision } from '../ventas'
 import { useAuth } from '../auth'
 
@@ -55,6 +55,12 @@ export default function Caja() {
       const yo = (trabajadores || []).find((x) => x.id === user.id)
       linea = asignarComision(linea, yo || { id: user.id, nombre: user.nombre })
     }
+    setCarrito((c) => ({ ...c, [linea.key]: linea }))
+  }
+
+  // Parqueo: valor abierto, sin comisión ni lavador (línea tipo producto).
+  function addParqueo({ monto }) {
+    const linea = lineaParqueo({ monto })
     setCarrito((c) => ({ ...c, [linea.key]: linea }))
   }
 
@@ -237,7 +243,10 @@ export default function Caja() {
 
         <div className="section-title">Agregar a la cuenta</div>
         <ItemsGrid servicios={servicios} productos={productos} carrito={carrito} onAdd={add} onSub={sub} tipoVehiculo={tipoVehiculo} />
-        <AgregarAdicional onAgregar={addAdicional} />
+        <div className="btn-row" style={{ marginTop: 0 }}>
+          <AgregarAdicional onAgregar={addAdicional} />
+          <AgregarParqueo onAgregar={addParqueo} />
+        </div>
       </div>
 
       {/* Confirmación antes de cobrar */}

@@ -91,6 +91,7 @@ export async function facturarItems({ items, trabajador = null, metodo = 'efecti
       total: totalProd, costo: costoProd, ganancia: totalProd - costoProd,
     }))
     for (const i of prods) {
+      if (!i.refId) continue // líneas sin producto real (ej. Parqueo): no tocan stock
       const p = await db.productos.get(i.refId)
       if (p) await db.productos.update(p.id, stamp({ stock: Math.max(0, (p.stock || 0) - i.cantidad) }))
     }
