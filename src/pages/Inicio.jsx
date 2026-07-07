@@ -36,7 +36,6 @@ export default function Inicio() {
     .filter((g) => !g.anulada && g.categoria !== 'comisiones' && dayKey(g.fecha) === hoy && tipoGasto(g) === 'variable')
     .reduce((s, g) => s + g.monto, 0)
   const fijoDiario = Math.round((fijosPlantilla || []).reduce((s, f) => s + (f.montoEstimado || 0), 0) / 30)
-  const utilidadHoy = gananciaHoy - gastosVarHoy - fijoDiario
 
   const recientes = ventasHoy.slice().sort((a, b) => b.fecha - a.fecha).slice(0, 6)
 
@@ -95,11 +94,20 @@ export default function Inicio() {
       )}
 
       {esDueno && (
-        <div className="card stat-card" style={{ borderColor: utilidadHoy >= 0 ? 'var(--green)' : 'var(--red)' }}>
-          <div className="label">Utilidad estimada de hoy</div>
-          <div className={`value ${utilidadHoy >= 0 ? 'green' : 'red'}`}>{money(utilidadHoy)}</div>
-          <div className="meta" style={{ fontSize: 12 }}>
-            Ganancia {money(gananciaHoy)} − gastos variables de hoy {money(gastosVarHoy)} − fijos del día {money(fijoDiario)}
+        <div className="card stat-card">
+          <div className="label">Ganancia y gastos de hoy</div>
+          <div className="grid-2" style={{ marginTop: 4 }}>
+            <div>
+              <div className="meta" style={{ fontSize: 12 }}>Ganancia (ventas)</div>
+              <div className="value green" style={{ fontSize: 24 }}>{money(gananciaHoy)}</div>
+            </div>
+            <div>
+              <div className="meta" style={{ fontSize: 12 }}>Gastos de hoy</div>
+              <div className="value red" style={{ fontSize: 24 }}>−{money(gastosVarHoy)}</div>
+            </div>
+          </div>
+          <div className="meta" style={{ fontSize: 12, marginTop: 8 }}>
+            Más la parte diaria de los fijos (arriendo, luz…): {money(fijoDiario)}. Un gasto grande de un solo día (ej. un mantenimiento) no es una pérdida real; en el Balance del mes se ve repartido.
           </div>
         </div>
       )}
