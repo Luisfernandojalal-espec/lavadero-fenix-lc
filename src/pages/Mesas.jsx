@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, precioServicio, TIPOS_VEHICULO } from '../db'
 import { money, shortDate } from '../format'
@@ -196,6 +196,8 @@ export default function Mesas() {
   const [cobroOpen, setCobroOpen] = useState(false)
   const [clienteSel, setClienteSel] = useState('')
   const [clienteNuevo, setClienteNuevo] = useState('')
+  // Candado anti-doble-cobro (ignora el segundo toque si ya hay uno en curso).
+  const cobrandoRef = useRef(false)
 
   async function cobrarMesa(metodo) {
     let cliente = null
@@ -208,13 +210,19 @@ export default function Mesas() {
       }
       if (!cliente) return show('Elige o crea un cliente')
     }
-    const { total } = await facturarItems({ items: mesa.items || [], metodo, cliente, origen: mesa.nombre })
-    await db.mesas.update(mesa.id, stamp({
-      estado: 'libre', items: [], cliente: '',
-      eventos: conEvento(mesa, `Cuenta cobrada ${money(total)} · ${metodo === 'credito' ? 'fiado a ' + cliente.nombre : labelMedio(metodo).toLowerCase()}`, user?.nombre),
-    }))
-    setCobroOpen(false); setClienteSel(''); setClienteNuevo(''); setDetId(null)
-    show(`Mesa cobrada · ${money(total)}`)
+    if (cobrandoRef.current) return
+    cobrandoRef.current = true
+    try {
+      const { total } = await facturarItems({ items: mesa.items || [], metodo, cliente, origen: mesa.nombre })
+      await db.mesas.update(mesa.id, stamp({
+        estado: 'libre', items: [], cliente: '',
+        eventos: conEvento(mesa, `Cuenta cobrada ${money(total)} · ${metodo === 'credito' ? 'fiado a ' + cliente.nombre : labelMedio(metodo).toLowerCase()}`, user?.nombre),
+      }))
+      setCobroOpen(false); setClienteSel(''); setClienteNuevo(''); setDetId(null)
+      show(`Mesa cobrada · ${money(total)}`)
+    } finally {
+      cobrandoRef.current = false
+    }
   }
 
   // ============ VISTA DETALLE (mesa ocupada) ============

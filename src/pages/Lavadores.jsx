@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, TIPOS_VEHICULO, precioServicio, esLavador } from '../db'
@@ -119,11 +119,19 @@ export default function Lavadores({ embedded }) {
   const lineasCobro = Object.values(carrito)
   const totalCobro = totalDe(lineasCobro)
 
+  // Candado anti-doble-cobro (ignora el segundo toque si ya hay uno en curso).
+  const cobrandoRef = useRef(false)
   async function cobrar(metodo, cliente = null, pago = null) {
     if (lineasCobro.length === 0) return show('Agrega al menos un servicio o producto')
-    await facturarItems({ items: lineasCobro, metodo, cliente, pago })
-    show(`Cobrado ${money(totalCobro)} · ${cobroDe.nombre}`)
-    cerrarCobro()
+    if (cobrandoRef.current) return
+    cobrandoRef.current = true
+    try {
+      await facturarItems({ items: lineasCobro, metodo, cliente, pago })
+      show(`Cobrado ${money(totalCobro)} · ${cobroDe.nombre}`)
+      cerrarCobro()
+    } finally {
+      cobrandoRef.current = false
+    }
   }
   async function confirmarCredito() {
     let cliente = null

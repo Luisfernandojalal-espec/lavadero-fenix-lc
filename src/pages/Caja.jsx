@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, precioServicio, TIPOS_VEHICULO, labelTipoVeh } from '../db'
 import { money } from '../format'
@@ -119,11 +119,20 @@ export default function Caja() {
   const total = totalDe(lineas)
   const ganancia = gananciaDe(lineas)
 
+  // Candado anti-doble-cobro: si ya hay un cobro en curso, ignora el segundo
+  // toque (el ref se actualiza al instante, sin esperar re-render).
+  const cobrandoRef = useRef(false)
   async function cobrar(metodo, cliente = null, pago = null) {
     if (lineas.length === 0) return
-    const { factura } = await facturarItems({ items: lineas, metodo, cliente, pago })
-    setRecibo({ factura, fecha: Date.now(), items: lineas, total, metodo, cliente: cliente?.nombre, pago })
-    setCarrito({}); setMixtoOpen(false); setMixtoEfectivo(0)
+    if (cobrandoRef.current) return
+    cobrandoRef.current = true
+    try {
+      const { factura } = await facturarItems({ items: lineas, metodo, cliente, pago })
+      setRecibo({ factura, fecha: Date.now(), items: lineas, total, metodo, cliente: cliente?.nombre, pago })
+      setCarrito({}); setMixtoOpen(false); setMixtoEfectivo(0)
+    } finally {
+      cobrandoRef.current = false
+    }
   }
 
   async function compartir() {
