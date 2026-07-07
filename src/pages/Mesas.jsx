@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, precioServicio, TIPOS_VEHICULO, esLavador, esGenerico, ensureLavadorGenerico } from '../db'
 import { money, shortDate } from '../format'
-import { Header, Sheet, useToast, SearchSelect, ConfirmSheet } from '../components/ui'
+import { Header, Sheet, useToast, SearchSelect, MoneyInput, ConfirmSheet } from '../components/ui'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
 import { AgregarAdicional, lineaAdicional, AgregarParqueo, lineaParqueo } from '../components/Adicional'
 import { facturarItems, totalDe, totalLinea, labelMedio, asignarComision } from '../ventas'
@@ -215,10 +215,13 @@ export default function Mesas() {
   const [clienteSel, setClienteSel] = useState('')
   const [clienteNuevo, setClienteNuevo] = useState('')
   const [confirmarMetodo, setConfirmarMetodo] = useState(null)
+  // Pago mixto (parte efectivo + parte transferencia)
+  const [mixtoOpen, setMixtoOpen] = useState(false)
+  const [mixtoEfectivo, setMixtoEfectivo] = useState(0)
   // Candado anti-doble-cobro (ignora el segundo toque si ya hay uno en curso).
   const cobrandoRef = useRef(false)
 
-  async function cobrarMesa(metodo) {
+  async function cobrarMesa(metodo, pago = null) {
     let cliente = null
     if (metodo === 'credito') {
       if (clienteNuevo.trim()) {
@@ -232,12 +235,15 @@ export default function Mesas() {
     if (cobrandoRef.current) return
     cobrandoRef.current = true
     try {
-      const { total } = await facturarItems({ items: mesa.items || [], metodo, cliente, origen: mesa.nombre })
+      const { total } = await facturarItems({ items: mesa.items || [], metodo, cliente, origen: mesa.nombre, pago })
+      const detalle = metodo === 'credito' ? 'fiado a ' + cliente.nombre
+        : metodo === 'mixto' && pago ? `mixto (efectivo ${money(pago.efectivo)} · transferencia ${money(pago.transferencia)})`
+        : labelMedio(metodo).toLowerCase()
       await db.mesas.update(mesa.id, stamp({
         estado: 'libre', items: [], cliente: '',
-        eventos: conEvento(mesa, `Cuenta cobrada ${money(total)} · ${metodo === 'credito' ? 'fiado a ' + cliente.nombre : labelMedio(metodo).toLowerCase()}`, user?.nombre),
+        eventos: conEvento(mesa, `Cuenta cobrada ${money(total)} · ${detalle}`, user?.nombre),
       }))
-      setCobroOpen(false); setClienteSel(''); setClienteNuevo(''); setDetId(null)
+      setCobroOpen(false); setClienteSel(''); setClienteNuevo(''); setMixtoOpen(false); setMixtoEfectivo(0); setDetId(null)
       show(`Mesa cobrada · ${money(total)}`)
     } finally {
       cobrandoRef.current = false
@@ -370,6 +376,7 @@ export default function Mesas() {
           <div className="btn-row" style={{ marginTop: 10 }}>
             <button className="btn" onClick={() => setConfirmarMetodo('efectivo')}>Efectivo · {money(total)}</button>
             <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setConfirmarMetodo('transferencia')}>Transferencia</button>
+            <button className="btn ghost" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => { setCobroOpen(false); setMixtoEfectivo(0); setMixtoOpen(true) }}>Mixto</button>
           </div>
           <div className="divider" />
           <div className="section-title" style={{ margin: '0 0 8px' }}>O fiar a un cliente</div>
@@ -381,6 +388,21 @@ export default function Mesas() {
             onChange={(e) => { setClienteNuevo(e.target.value); if (e.target.value) setClienteSel('') }} />
           <div style={{ height: 12 }} />
           <button className="btn secondary" onClick={() => cobrarMesa('credito')}>Registrar fiado</button>
+        </Sheet>
+
+        {/* Pago mixto de la mesa: parte en efectivo y parte en transferencia */}
+        <Sheet open={mixtoOpen} onClose={() => setMixtoOpen(false)} title={`Pago mixto · ${mesa.nombre}`}>
+          <div className="dato-fuerte">Total a cobrar: <b>{money(total)}</b></div>
+          <label>¿Cuánto pagan en efectivo?</label>
+          <MoneyInput value={mixtoEfectivo} onChange={setMixtoEfectivo} />
+          <div className="helper" style={{ marginTop: 6 }}>
+            Va a transferencia: <b>{money(Math.max(0, total - Math.min(mixtoEfectivo, total)))}</b>
+          </div>
+          <div style={{ height: 14 }} />
+          <button className="btn" onClick={() => {
+            const ef = Math.max(0, Math.min(mixtoEfectivo, total))
+            cobrarMesa('mixto', { efectivo: ef, transferencia: total - ef })
+          }}>Cobrar mixto · {money(total)}</button>
         </Sheet>
 
         {/* Confirmación antes de cobrar la mesa */}
