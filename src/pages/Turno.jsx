@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, gastoDeCaja, labelMedioGasto } from '../db'
+import { db, uid, stamp, gastoDeCaja, labelMedioGasto, tipoGasto } from '../db'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
 import { descargarCierrePDF } from '../pdf'
@@ -31,8 +31,10 @@ export default function Turno() {
   const transferencias = vTurno.reduce((s, v) => s + montoTransferencia(v), 0)
   const credito = vTurno.filter((v) => v.metodoPago === 'credito').reduce((s, v) => s + v.total, 0)
   const abonosT = (abonos || []).filter((a) => a.fecha >= desde).reduce((s, a) => s + a.monto, 0)
-  // Salidas/pagos del turno (gastos registrados desde que abrió), por medio.
-  const salidasT = (gastos || []).filter((g) => !g.anulada && g.fecha >= desde).sort((a, b) => b.fecha - a.fecha)
+  // Salidas/pagos del turno: solo gastos VARIABLES del día (pagos reales que
+  // salieron de la caja/transferencia). Los gastos FIJOS del mes (arriendo, luz,
+  // nómina…) NO cuentan aquí: son costos mensuales, no movimientos del turno.
+  const salidasT = (gastos || []).filter((g) => !g.anulada && g.fecha >= desde && tipoGasto(g) === 'variable').sort((a, b) => b.fecha - a.fecha)
   // Los gastos pagados DE CAJA descuadran el efectivo; los de transferencia/banco (Nequi) bajan el saldo digital.
   const gastosT = salidasT.filter(gastoDeCaja).reduce((s, g) => s + g.monto, 0)
   const gastosTransferT = salidasT.filter((g) => !gastoDeCaja(g)).reduce((s, g) => s + g.monto, 0)
@@ -161,6 +163,7 @@ export default function Turno() {
             {salidasT.length > 0 && (
               <>
                 <div className="section-title">Salidas del turno</div>
+                <div className="helper" style={{ marginTop: -4, marginBottom: 6 }}>Solo los pagos del día que salieron de la caja o por transferencia. Los gastos fijos del mes no cuentan aquí.</div>
                 <table className="tabla">
                   <tbody>
                     {salidasT.slice(0, 20).map((g) => (
@@ -208,9 +211,9 @@ export default function Turno() {
 
       {/* Registrar salida / pago del turno */}
       <Sheet open={salidaOpen} onClose={() => setSalidaOpen(false)} title="Registrar salida / pago">
-        <div className="helper" style={{ marginBottom: 8 }}>Un pago que hiciste durante el turno (ej. algo pagado por Nequi). Se descuenta del saldo y queda registrado.</div>
+        <div className="helper" style={{ marginBottom: 8 }}>Un pago que hiciste durante el turno (pago de factura, recarga, domicilio, insumo…). Se descuenta de la caja y queda registrado.</div>
         <label>¿Qué se pagó?</label>
-        <input value={salConcepto} placeholder="Ej: Recarga, domicilio, insumo…"
+        <input value={salConcepto} placeholder="Ej: Pago factura proveedor, recarga…"
           onChange={(e) => setSalConcepto(e.target.value)} />
         <label>Valor</label>
         <MoneyInput value={salMonto} onChange={setSalMonto} />
