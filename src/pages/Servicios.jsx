@@ -97,7 +97,7 @@ export default function Servicios() {
     // neto de servicios) — por eso la categoría 'comisiones' se excluye allá.
     await db.gastos.add(stamp({
       id: uid(), concepto: `Comisiones ${pagoA.nombre}`, categoria: 'comisiones',
-      monto: montoPago, fecha: now, mes: monthKey(now),
+      monto: montoPago, tipo: 'variable', medioPago: 'caja', salidaTurno: 1, fecha: now, mes: monthKey(now),
     }))
     setPagoA(null); setMontoPago(0)
     show('Pago de comisiones registrado')

@@ -156,7 +156,7 @@ export default function Lavadores({ embedded }) {
     }))
     await db.gastos.add(stamp({
       id: uid(), concepto: `Comisiones ${pagoA.nombre}`, categoria: 'comisiones',
-      monto: montoPago, tipo: 'variable', medioPago: 'caja', fecha: now, mes: monthKey(now),
+      monto: montoPago, tipo: 'variable', medioPago: 'caja', salidaTurno: 1, fecha: now, mes: monthKey(now),
     }))
     setPagoA(null); setMontoPago(0); show('Pago de comisiones registrado')
   }

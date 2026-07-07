@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, gastoDeCaja, labelMedioGasto, tipoGasto } from '../db'
+import { db, uid, stamp, gastoDeCaja, labelMedioGasto } from '../db'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
 import { descargarCierrePDF } from '../pdf'
@@ -31,10 +31,11 @@ export default function Turno() {
   const transferencias = vTurno.reduce((s, v) => s + montoTransferencia(v), 0)
   const credito = vTurno.filter((v) => v.metodoPago === 'credito').reduce((s, v) => s + v.total, 0)
   const abonosT = (abonos || []).filter((a) => a.fecha >= desde).reduce((s, a) => s + a.monto, 0)
-  // Salidas/pagos del turno: solo gastos VARIABLES del día (pagos reales que
-  // salieron de la caja/transferencia). Los gastos FIJOS del mes (arriendo, luz,
-  // nómina…) NO cuentan aquí: son costos mensuales, no movimientos del turno.
-  const salidasT = (gastos || []).filter((g) => !g.anulada && g.fecha >= desde && tipoGasto(g) === 'variable').sort((a, b) => b.fecha - a.fecha)
+  // Salidas/pagos del turno: SOLO lo que de verdad salió de esta caja/transferencia
+  // durante el turno = lo registrado con el botón "Registrar salida / pago" y los
+  // pagos de comisión (marcados con salidaTurno). Los gastos de la pestaña Gastos
+  // (fijos y variables) son contabilidad del mes y NO tocan el cuadre del turno.
+  const salidasT = (gastos || []).filter((g) => !g.anulada && g.fecha >= desde && g.salidaTurno === 1).sort((a, b) => b.fecha - a.fecha)
   // Los gastos pagados DE CAJA descuadran el efectivo; los de transferencia/banco (Nequi) bajan el saldo digital.
   const gastosT = salidasT.filter(gastoDeCaja).reduce((s, g) => s + g.monto, 0)
   const gastosTransferT = salidasT.filter((g) => !gastoDeCaja(g)).reduce((s, g) => s + g.monto, 0)
@@ -86,6 +87,7 @@ export default function Turno() {
     await db.gastos.add(stamp({
       id: uid(), concepto: salConcepto.trim(), categoria: 'otro', monto: salMonto,
       tipo: 'variable', medioPago: salMedio, responsable: user?.nombre || '',
+      salidaTurno: 1, // salió de la caja/transferencia de ESTE turno
       fecha: now, mes: monthKey(now),
     }))
     setSalidaOpen(false); setSalConcepto(''); setSalMonto(0); setSalMedio('transferencia')
@@ -163,7 +165,7 @@ export default function Turno() {
             {salidasT.length > 0 && (
               <>
                 <div className="section-title">Salidas del turno</div>
-                <div className="helper" style={{ marginTop: -4, marginBottom: 6 }}>Solo los pagos del día que salieron de la caja o por transferencia. Los gastos fijos del mes no cuentan aquí.</div>
+                <div className="helper" style={{ marginTop: -4, marginBottom: 6 }}>Solo lo que registras aquí en el turno (botón de arriba) y las comisiones pagadas. Los gastos de la pestaña Gastos NO cuentan en el cuadre.</div>
                 <table className="tabla">
                   <tbody>
                     {salidasT.slice(0, 20).map((g) => (
