@@ -572,18 +572,20 @@ function Compras() {
         <div className="section-title" style={{ marginTop: 0 }}>Entrada de productos</div>
         <div className="helper" style={{ marginBottom: 8 }}>Elige el producto (o crea uno nuevo), pon la cantidad y el costo. Nada más.</div>
 
-        {/* Datos de factura (proveedor, NIT, N° factura) — solo en avanzado */}
+        {/* Proveedor: siempre visible (opcional) */}
+        <label>Proveedor (opcional)</label>
+        <SearchSelect value={enc.proveedorId} onChange={(v) => setEnc({ ...enc, proveedorId: v, proveedorNuevo: '' })}
+          options={(proveedores || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => ({ value: p.id, label: p.nombre }))}
+          placeholder="Buscar proveedor…" />
+        <input value={enc.proveedorNuevo} placeholder="…o escribe un proveedor nuevo"
+          onChange={(e) => setEnc({ ...enc, proveedorNuevo: e.target.value, proveedorId: e.target.value ? '' : enc.proveedorId })} />
+
+        {/* NIT, N° factura, fecha — solo en avanzado */}
         {avanzado && (
           <>
             <label>NIT del proveedor</label>
             <input value={enc.nit} placeholder="Ej: 900123456-7"
               onChange={(e) => setEnc({ ...enc, nit: e.target.value })} />
-            <label>Proveedor</label>
-            <SearchSelect value={enc.proveedorId} onChange={(v) => setEnc({ ...enc, proveedorId: v, proveedorNuevo: '' })}
-              options={(proveedores || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => ({ value: p.id, label: p.nombre }))}
-              placeholder="Buscar proveedor…" />
-            <input value={enc.proveedorNuevo} placeholder="…o nombre de un proveedor nuevo"
-              onChange={(e) => setEnc({ ...enc, proveedorNuevo: e.target.value, proveedorId: e.target.value ? '' : enc.proveedorId })} />
             <div className="grid-2">
               <div>
                 <label>N° factura</label>
@@ -713,7 +715,7 @@ function Compras() {
         )}
 
         <button className="btn ghost" style={{ marginTop: 12 }} onClick={() => setAvanzado((a) => !a)}>
-          {avanzado ? 'Ocultar opciones avanzadas' : 'Opciones avanzadas (proveedor, IVA, N° factura…)'}
+          {avanzado ? 'Ocultar opciones avanzadas' : 'Opciones avanzadas (NIT, IVA, N° factura, Excel…)'}
         </button>
 
         <div style={{ height: 12 }} />
