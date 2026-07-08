@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
-import { db, stamp } from '../db'
+import { db, stamp, esLavador } from '../db'
 import { money, dayKey, fechaLarga } from '../format'
 import { folio, labelMedio, esEfectivo, montoEfectivo, montoTransferencia } from '../ventas'
-import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
+import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 import { useAuth } from '../auth'
 
 const horaAmPm = (ts) => new Date(ts).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
@@ -21,6 +21,7 @@ export default function Movimientos() {
   const [fecha, setFecha] = useState(dayKey())        // 'YYYY-MM-DD' (día seleccionado)
   const mes = fecha.slice(0, 7)
   const ventas = useLiveQuery(() => db.ventas.where('mes').equals(mes).toArray(), [mes], [])
+  const trabajadores = useLiveQuery(() => db.trabajadores.where('activo').equals(1).toArray(), [], [])
 
   const delDia = (ventas || []).filter((v) => !v.anulada && dayKey(v.fecha) === fecha)
 
@@ -70,10 +71,14 @@ export default function Movimientos() {
   const [editG, setEditG] = useState(null)   // grupo en edición
   const [editMetodo, setEditMetodo] = useState('efectivo')
   const [editEfectivo, setEditEfectivo] = useState(0)
+  const [editLavador, setEditLavador] = useState({}) // { ventaId: trabajadorId } para líneas de servicio
   function abrirEditar(g) {
     setEditG(g)
     setEditMetodo(g.metodoPago === 'mixto' ? 'mixto' : (esEfectivo({ metodoPago: g.metodoPago }) ? 'efectivo' : g.metodoPago === 'transferencia' ? 'transferencia' : 'efectivo'))
     setEditEfectivo(g.metodoPago === 'mixto' ? g.ef : 0)
+    const lav = {}
+    for (const x of g.rows) if (x.tipo === 'servicio') lav[x.id] = x.trabajadorId || ''
+    setEditLavador(lav)
   }
   async function guardarMetodo() {
     const total = editG.rows.reduce((s, x) => s + x.total, 0)
@@ -84,6 +89,19 @@ export default function Movimientos() {
       if (editMetodo === 'mixto') { const e = Math.round(x.total * efPct); patch.pagoEfectivo = e; patch.pagoTransferencia = Math.max(0, x.total - e) }
       else if (editMetodo === 'transferencia') { patch.pagoEfectivo = 0; patch.pagoTransferencia = x.total }
       else { patch.pagoEfectivo = x.total; patch.pagoTransferencia = 0 }
+      // Reasignar lavador de una línea de servicio (recalcula su comisión).
+      if (x.tipo === 'servicio' && (editLavador[x.id] || '') !== (x.trabajadorId || '')) {
+        const t = (trabajadores || []).find((w) => w.id === editLavador[x.id])
+        // % propio del lavador si lo tiene; si no, el % que ya traía la línea.
+        const pct = t && t.comisionPct != null && t.comisionPct !== '' ? Number(t.comisionPct) : (x.comisionPct || 0)
+        const comision = Math.round((x.total || 0) * (pct / 100))
+        patch.trabajadorId = t ? t.id : null
+        patch.trabajadorNombre = t ? t.nombre : null
+        patch.comisionPct = pct
+        patch.comision = comision
+        patch.costo = comision
+        patch.ganancia = (x.total || 0) - comision
+      }
       await db.ventas.update(x.id, stamp(patch))
     }
     setEditG(null); show('Factura actualizada')
@@ -164,9 +182,11 @@ export default function Movimientos() {
       </div>
 
       {/* Editar forma de pago de la factura */}
-      <Sheet open={!!editG} onClose={() => setEditG(null)} title="Editar forma de pago">
+      <Sheet open={!!editG} onClose={() => setEditG(null)} title="Editar factura">
         {editG && (() => {
           const total = editG.rows.reduce((s, x) => s + x.total, 0)
+          const servicios = editG.rows.filter((x) => x.tipo === 'servicio')
+          const lavadores = (trabajadores || []).filter(esLavador).slice().sort((a, b) => a.nombre.localeCompare(b.nombre))
           return (
             <>
               <div className="dato-fuerte">Total de la factura: <b>{money(total)}</b></div>
@@ -183,6 +203,25 @@ export default function Movimientos() {
                   <div className="helper">Va a transferencia: <b>{money(Math.max(0, total - Math.min(editEfectivo, total)))}</b></div>
                 </>
               )}
+
+              {servicios.length > 0 && (
+                <>
+                  <label>Lavador de cada lavada</label>
+                  {servicios.map((x) => (
+                    <div key={x.id} style={{ marginBottom: 8 }}>
+                      <div className="muted-cell" style={{ marginBottom: 4 }}>{x.servicioNombre || 'Servicio'} · {money(x.total)}</div>
+                      <SearchSelect
+                        value={editLavador[x.id] || ''}
+                        placeholder="Sin lavador"
+                        onChange={(v) => setEditLavador((m) => ({ ...m, [x.id]: v }))}
+                        options={[{ value: '', label: 'Sin lavador' }, ...lavadores.map((t) => ({ value: t.id, label: t.nombre }))]}
+                      />
+                    </div>
+                  ))}
+                  <div className="helper" style={{ marginBottom: 8 }}>Cambiar el lavador le recalcula la comisión.</div>
+                </>
+              )}
+
               <div style={{ height: 14 }} />
               <button className="btn" onClick={guardarMetodo}>Guardar</button>
             </>

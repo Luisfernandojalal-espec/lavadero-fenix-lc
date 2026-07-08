@@ -252,7 +252,7 @@ export default function Caja() {
       {/* Confirmación antes de cobrar */}
       <ConfirmSheet open={!!confirmarMetodo} title="¿Confirmar cobro?"
         message={`¿Cobrar ${money(total)}?`}
-        detail={`${labelMedio(confirmarMetodo)} · ${lineas.length} ${lineas.length === 1 ? 'artículo' : 'artículos'}`}
+        detail={`${labelMedio(confirmarMetodo)} · ${lineas.length} ${lineas.length === 1 ? 'artículo' : 'artículos'}${lineas.some((l) => l.tipo === 'servicio' && !l.trabajadorId) ? ' · OJO: hay una lavada SIN lavador asignado (no se le contará comisión a nadie)' : ''}`}
         confirmLabel={`Sí, cobrar ${money(total)}`}
         onConfirm={() => { const m = confirmarMetodo; setConfirmarMetodo(null); cobrar(m) }}
         onClose={() => setConfirmarMetodo(null)} />

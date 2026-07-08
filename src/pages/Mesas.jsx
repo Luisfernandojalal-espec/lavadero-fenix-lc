@@ -408,7 +408,7 @@ export default function Mesas() {
         {/* Confirmación antes de cobrar la mesa */}
         <ConfirmSheet open={!!confirmarMetodo} title="¿Confirmar cobro?"
           message={`¿Cobrar ${money(total)}?`}
-          detail={`${labelMedio(confirmarMetodo)} · ${mesa.nombre}`}
+          detail={`${labelMedio(confirmarMetodo)} · ${mesa.nombre}${items.some((l) => l.tipo === 'servicio' && !l.trabajadorId) ? ' · OJO: hay una lavada SIN lavador asignado (no se le contará comisión a nadie)' : ''}`}
           confirmLabel={`Sí, cobrar ${money(total)}`}
           onConfirm={() => { const m = confirmarMetodo; setConfirmarMetodo(null); cobrarMesa(m) }}
           onClose={() => setConfirmarMetodo(null)} />
