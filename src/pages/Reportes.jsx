@@ -112,7 +112,11 @@ export default function Reportes() {
   const gananciaProdR = prodRango.reduce((s, x) => s + (x.total - (x.costo || 0)), 0)
   const comisionesR = servRango.reduce((s, x) => s + (x.comision || 0), 0)
   const totalVendidoR = ingresoServR + ingresoProdR
-  const gastosRango = (todosGastos || []).filter((x) => !x.anulada && x.categoria !== 'comisiones' && enRango(x.fecha))
+  // Solo gastos VARIABLES del rango (compras, insumos, mantenimiento...). Los
+  // fijos del mes (arriendo/nómina/luz) son costo mensual, NO de un día: si se
+  // metieran, un solo día cargaría todo el mes y la utilidad daría negativa.
+  // Misma regla que el cierre de turno.
+  const gastosRango = (todosGastos || []).filter((x) => !x.anulada && x.categoria !== 'comisiones' && tipoGasto(x) === 'variable' && enRango(x.fecha))
   const totalGastosR = gastosRango.reduce((s, x) => s + x.monto, 0)
   const utilidadR = (gananciaProdR + (ingresoServR - comisionesR)) - totalGastosR
   const diasRango = Math.round((localTs(fin) - localTs(ini)) / 86400000) + 1
@@ -277,7 +281,7 @@ export default function Reportes() {
                 <td className="num"><b>{money(totalVendidoR)}</b></td>
               </tr>
               <tr>
-                <td>Gastos del periodo<div className="muted-cell">sin comisiones</div></td>
+                <td>Gastos variables del periodo<div className="muted-cell">sin fijos del mes ni comisiones</div></td>
                 <td className="num" style={{ color: 'var(--red)' }}>{money(totalGastosR)}</td>
               </tr>
               <tr>
