@@ -58,12 +58,13 @@ export default function Productos({ embedded, readOnly }) {
     if (form.precioVenta <= 0) return show('Falta el precio de venta')
 
     // Validar duplicados (nombre y código de barras) contra otros productos activos.
-    const todos = await db.productos.where('activo').equals(1).toArray()
+    const all = await db.productos.toArray()
+    const activos = all.filter((p) => p.activo)
     const nombreNorm = form.nombre.trim().toLowerCase()
     const codigoNorm = form.codigo.trim()
-    if (todos.some((p) => p.id !== editId && p.nombre.trim().toLowerCase() === nombreNorm))
+    if (activos.some((p) => p.id !== editId && p.nombre.trim().toLowerCase() === nombreNorm))
       return show('Ya existe un producto con ese nombre')
-    if (codigoNorm && todos.some((p) => p.id !== editId && (p.codigo || '').trim() === codigoNorm))
+    if (codigoNorm && activos.some((p) => p.id !== editId && (p.codigo || '').trim() === codigoNorm))
       return show('Ya existe un producto con ese código de barras')
 
     const datos = { ...form, nombre: form.nombre.trim(), codigo: codigoNorm, referencia: form.referencia.trim() }
@@ -71,8 +72,18 @@ export default function Productos({ embedded, readOnly }) {
       await db.productos.update(editId, stamp(datos))
       show('Producto actualizado')
     } else {
-      await db.productos.add(stamp({ id: uid(), activo: 1, ...datos }))
-      show('Producto agregado')
+      // Si ya existe un producto BORRADO (inactivo) con el mismo nombre, se
+      // REACTIVA ese mismo registro en vez de crear uno nuevo. Así conserva su
+      // id y las ventas que lo referencian siguen enlazadas (no se rompe el
+      // descuento de stock ni el historial).
+      const borrado = all.find((p) => !p.activo && p.nombre.trim().toLowerCase() === nombreNorm)
+      if (borrado) {
+        await db.productos.update(borrado.id, stamp({ activo: 1, ...datos }))
+        show('Producto reactivado (ya existía borrado)')
+      } else {
+        await db.productos.add(stamp({ id: uid(), activo: 1, ...datos }))
+        show('Producto agregado')
+      }
     }
     setSheetOpen(false)
   }
