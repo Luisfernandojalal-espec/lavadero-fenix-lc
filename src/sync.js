@@ -61,13 +61,26 @@ async function push() {
   if (otroErr) throw otroErr
 }
 
+// Margen de solapamiento: en cada pull vuelve a pedir un poco hacia atrás para
+// tolerar pequeños desfases de reloj entre dispositivos. Volver a bajar un
+// registro no hace daño: el put es idempotente (last-write-wins por updatedAt).
+const MARGEN_PULL = 2 * 60 * 1000 // 2 min
+
 // Baja los registros que cambiaron en la nube desde la última vez.
 async function pull() {
-  const desde = getLastPull()
+  const now = Date.now()
+  let desde = getLastPull()
+  // Blindaje contra desfase de reloj: `updated_at` lo pone cada dispositivo con
+  // SU reloj. Si el marcador quedó en el FUTURO (algún equipo escribió con la
+  // hora adelantada), dejaría de bajar lo que otros escriben con hora normal y
+  // el dispositivo se "congela" mostrando datos viejos. Si detectamos eso,
+  // volvemos a bajar todo desde el principio.
+  if (desde > now) desde = 0
+  const consulta = Math.max(0, desde - MARGEN_PULL)
   const { data: filas, error } = await supabase
     .from('registros')
     .select('id, tabla, data, updated_at')
-    .gt('updated_at', desde)
+    .gt('updated_at', consulta)
     .order('updated_at', { ascending: true })
   if (error) throw error
   if (!filas || filas.length === 0) return
@@ -82,7 +95,16 @@ async function pull() {
     }
     if (fila.updated_at > maxTs) maxTs = fila.updated_at
   }
-  setLastPull(maxTs)
+  // Nunca guardes el marcador en el futuro: así un timestamp adelantado (de
+  // otro dispositivo con el reloj mal) no congela la sincronización de este.
+  setLastPull(Math.min(maxTs, now))
+}
+
+// Fuerza volver a bajar TODO de la nube (recupera un dispositivo que se quedó
+// atrás por un marcador corrupto). Reinicia el marcador y sincroniza.
+export async function resyncAll() {
+  setLastPull(0)
+  await sync()
 }
 
 let sincronizando = false

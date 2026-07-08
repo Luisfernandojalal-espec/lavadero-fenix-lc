@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { subscribeSync, sync } from '../sync'
+import { subscribeSync, sync, resyncAll } from '../sync'
 import { syncDisponible, sesionNube, conectarNube, desconectarNube } from '../supabase'
 
 // Indicador del estado de la nube + panel para conectar el dispositivo
@@ -65,6 +65,18 @@ function NubeSheet({ open, onClose, estado }) {
     setMsg('Dispositivo desconectado')
   }
 
+  async function bajarTodo() {
+    setCargando(true); setMsg('')
+    try {
+      await resyncAll()
+      setMsg('Listo: se volvió a bajar todo de la nube')
+    } catch (err) {
+      setMsg('No pude re-sincronizar: ' + (err?.message || 'revisa la conexión'))
+    } finally {
+      setCargando(false)
+    }
+  }
+
   return (
     <Sheet open={open} onClose={onClose} title="Nube / Sincronización">
       <div className="row" style={{ marginBottom: 14 }}>
@@ -85,6 +97,10 @@ function NubeSheet({ open, onClose, estado }) {
       {conectado === true ? (
         <>
           <div className="helper" style={{ marginBottom: 12 }}>Este dispositivo está conectado a la nube del negocio.</div>
+          <button className="btn ghost" onClick={bajarTodo} disabled={cargando}>
+            {cargando ? 'Bajando todo…' : 'Volver a bajar todo de la nube'}
+          </button>
+          <div className="helper" style={{ margin: '6px 0 12px' }}>Úsalo si este equipo muestra datos viejos o distintos a otro (ventas o mesas que no cuadran).</div>
           <button className="btn ghost" onClick={desconectar}>Desconectar este dispositivo</button>
         </>
       ) : (
