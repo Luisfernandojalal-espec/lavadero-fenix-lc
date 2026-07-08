@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp } from '../db'
+import { facturarItems } from '../ventas'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
 
@@ -12,6 +13,7 @@ export default function Credito() {
   const clientes = useLiveQuery(() => db.clientes.where('activo').equals(1).toArray(), [], [])
   const ventas = useLiveQuery(() => db.ventas.toArray(), [], [])
   const abonos = useLiveQuery(() => db.abonos.toArray(), [], [])
+  const productos = useLiveQuery(() => db.productos.where('activo').equals(1).toArray(), [], [])
 
   const ventasCred = (ventas || []).filter((v) => v.metodoPago === 'credito' && !v.anulada)
 
@@ -67,6 +69,52 @@ export default function Credito() {
     show('Abono registrado')
   }
 
+  // --- Fiar productos de inventario al cliente (descuenta stock al cargar) ---
+  const [prodSheet, setProdSheet] = useState(false)
+  const [carrito, setCarrito] = useState({}) // { [productoId]: cantidad }
+  const [filtro, setFiltro] = useState('')
+  const [cargando, setCargando] = useState(false)
+
+  function abrirProductos() { setCarrito({}); setFiltro(''); setProdSheet(true) }
+
+  function cambiarCant(p, delta) {
+    setCarrito((c) => {
+      const next = Math.max(0, Math.min(p.stock || 0, (c[p.id] || 0) + delta))
+      const copia = { ...c }
+      if (next === 0) delete copia[p.id]; else copia[p.id] = next
+      return copia
+    })
+  }
+
+  const productosFiltrados = (productos || [])
+    .slice()
+    .sort((a, b) => (a.nombre || '').localeCompare(b.nombre || ''))
+    .filter((p) => !filtro.trim() || (p.nombre || '').toLowerCase().includes(filtro.trim().toLowerCase()))
+
+  const itemsCarrito = Object.entries(carrito)
+    .map(([id, cant]) => { const p = (productos || []).find((x) => x.id === id); return p ? { p, cant } : null })
+    .filter(Boolean)
+  const totalCarrito = itemsCarrito.reduce((s, { p, cant }) => s + (p.precioVenta || 0) * cant, 0)
+
+  async function cargarAlFiado() {
+    if (!det) return
+    if (itemsCarrito.length === 0) return show('Agrega al menos un producto')
+    setCargando(true)
+    try {
+      const items = itemsCarrito.map(({ p, cant }) => ({
+        tipo: 'producto', refId: p.id, nombre: p.nombre,
+        precioVenta: p.precioVenta, precioCompra: p.precioCompra || 0, cantidad: cant,
+      }))
+      await facturarItems({ items, metodo: 'credito', cliente: { id: det.id, nombre: det.nombre }, origen: 'Crédito' })
+      setProdSheet(false); setCarrito({})
+      show('Cargado al fiado y descontado del inventario')
+    } catch (e) {
+      show('No se pudo cargar: ' + (e?.message || 'error'))
+    } finally {
+      setCargando(false)
+    }
+  }
+
   return (
     <>
       <Header title="Crédito" sub="Cartera: fiado y abonos de clientes" onBack={() => navigate('/')} />
@@ -106,6 +154,7 @@ export default function Credito() {
         {det && (
           <>
             <div className="dato-fuerte">Saldo: <b style={{ color: det.saldo > 0 ? 'var(--red)' : 'var(--green)' }}>{money(det.saldo)}</b></div>
+            <button className="btn" style={{ marginBottom: 6 }} onClick={abrirProductos}>Agregar productos al fiado</button>
             <button className="btn ghost" style={{ marginBottom: 6 }} onClick={() => editarCliente(det)}>Editar datos del cliente</button>
 
             <div className="section-title">Registrar abono</div>
@@ -131,6 +180,35 @@ export default function Credito() {
             </table>
           </>
         )}
+      </Sheet>
+
+      {/* Fiar productos de inventario */}
+      <Sheet open={prodSheet} onClose={() => setProdSheet(false)} title={det ? `Fiar productos a ${det.nombre}` : 'Fiar productos'}>
+        <input placeholder="Buscar producto…" value={filtro} onChange={(e) => setFiltro(e.target.value)} />
+        <div className="helper" style={{ margin: '4px 0 10px' }}>Se descuentan del inventario apenas los cargues al fiado.</div>
+        {productosFiltrados.length === 0 && <div className="empty">Sin productos en inventario.</div>}
+        {productosFiltrados.map((p) => {
+          const cant = carrito[p.id] || 0
+          const sin = (p.stock || 0) <= 0
+          return (
+            <div className="row" key={p.id}>
+              <div className="main">
+                <div className="title">{p.nombre}</div>
+                <div className="meta">{money(p.precioVenta)} · {sin ? 'sin stock' : `${p.stock} en stock`}</div>
+              </div>
+              <div className="right" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button className="btn ghost" style={{ width: 40, padding: 6 }} disabled={cant === 0} onClick={() => cambiarCant(p, -1)}>−</button>
+                <b style={{ minWidth: 18, textAlign: 'center' }}>{cant}</b>
+                <button className="btn ghost" style={{ width: 40, padding: 6 }} disabled={sin || cant >= (p.stock || 0)} onClick={() => cambiarCant(p, 1)}>+</button>
+              </div>
+            </div>
+          )
+        })}
+        <div style={{ height: 12 }} />
+        <div className="dato-fuerte">Total a fiar: <b>{money(totalCarrito)}</b></div>
+        <button className="btn" disabled={cargando || totalCarrito <= 0} onClick={cargarAlFiado}>
+          {cargando ? 'Cargando…' : 'Cargar al fiado'}
+        </button>
       </Sheet>
 
       {node}
