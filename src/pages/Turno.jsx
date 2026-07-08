@@ -31,12 +31,16 @@ export default function Turno() {
   const transferencias = vTurno.reduce((s, v) => s + montoTransferencia(v), 0)
   const credito = vTurno.filter((v) => v.metodoPago === 'credito').reduce((s, v) => s + v.total, 0)
   const abonosT = (abonos || []).filter((a) => a.fecha >= desde).reduce((s, a) => s + a.monto, 0)
-  // Salidas/pagos del turno = TODO gasto VARIABLE hecho durante el turno: lo
-  // registrado con "Registrar salida / pago", las comisiones pagadas y los gastos
-  // variables de la pestaña Gastos (efectivo baja la caja, transferencia baja el
-  // banco). Los gastos FIJOS del mes (arriendo, luz, agua, nómina) NO cuentan: son
-  // costos mensuales, no plata que salió de esta caja/turno.
-  const salidasT = (gastos || []).filter((g) => !g.anulada && g.fecha >= desde && tipoGasto(g) === 'variable').sort((a, b) => b.fecha - a.fecha)
+  // Salidas/pagos del turno (gastos VARIABLES; los FIJOS del mes nunca cuentan):
+  //  - EFECTIVO (caja): SIEMPRE cuenta. La plata física salió de la caja, sin
+  //    importar si se registró aquí o en la pestaña Gastos → baja el efectivo.
+  //  - TRANSFERENCIA: solo cuenta si se registró como salida DEL turno
+  //    (`salidaTurno`, botón "Registrar salida / pago") o es una comisión pagada.
+  //    Los pagos por transferencia de la pestaña Gastos son contabilidad del mes
+  //    (el dueño paga proveedores desde el banco) y NO tocan el cuadre del turno.
+  const salidasT = (gastos || [])
+    .filter((g) => !g.anulada && g.fecha >= desde && tipoGasto(g) === 'variable' && (gastoDeCaja(g) || g.salidaTurno === 1))
+    .sort((a, b) => b.fecha - a.fecha)
   // Los gastos pagados DE CAJA descuadran el efectivo; los de transferencia/banco (Nequi) bajan el saldo digital.
   const gastosT = salidasT.filter(gastoDeCaja).reduce((s, g) => s + g.monto, 0)
   const gastosTransferT = salidasT.filter((g) => !gastoDeCaja(g)).reduce((s, g) => s + g.monto, 0)
@@ -182,7 +186,7 @@ export default function Turno() {
             {salidasT.length > 0 && (
               <>
                 <div className="section-title">Salidas del turno</div>
-                <div className="helper" style={{ marginTop: -4, marginBottom: 6 }}>Gastos variables del turno: lo registrado aquí, las comisiones pagadas y los gastos variables de la pestaña Gastos hechos durante el turno. Los gastos fijos del mes (arriendo, luz…) NO cuentan.{esDueno ? ' Toca una salida para corregirla.' : ''}</div>
+                <div className="helper" style={{ marginTop: -4, marginBottom: 6 }}>Cuenta lo que salió del turno: los gastos en efectivo (de aquí o de la pestaña Gastos), las comisiones pagadas y los pagos por transferencia registrados aquí. Los pagos por transferencia de la pestaña Gastos y los fijos del mes NO cuentan.{esDueno ? ' Toca una salida para corregirla.' : ''}</div>
                 <table className="tabla">
                   <tbody>
                     {salidasT.slice(0, 20).map((g) => {
