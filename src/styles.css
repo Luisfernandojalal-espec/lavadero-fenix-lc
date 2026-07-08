@@ -61,6 +61,17 @@ body {
 }
 .tb-salir:active { background: var(--border); }
 
+.tb-refresh {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 6px 10px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.tb-refresh:active { background: var(--border); }
+.tb-refresh svg { display: block; }
+.tb-refresh-txt { display: none; }
+@media (min-width: 760px) { .tb-refresh-txt { display: inline; } }
+
 /* ===== Pestañas horizontales ===== */
 .tabnav {
   display: flex;

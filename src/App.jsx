@@ -74,6 +74,14 @@ export default function App() {
         </div>
         <div className="topbar-right">
           <span className="tb-user">{user.nombre}</span>
+          <button className="tb-refresh" title="Actualizar a la última versión"
+            onClick={() => window.__fenixActualizar?.()}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+              <path d="M21 3v6h-6" />
+            </svg>
+            <span className="tb-refresh-txt">Actualizar</span>
+          </button>
           <SyncBadge />
           <span className="tb-date">{fechaLarga()}</span>
           <button className="tb-salir" onClick={logout}>Salir</button>

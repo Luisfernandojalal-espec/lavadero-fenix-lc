@@ -24,6 +24,23 @@ registerSW({
   },
 })
 
+// Botón "Actualizar" de la interfaz: fuerza a buscar la versión nueva (activa
+// el service worker que esté esperando) y recarga. Así el usuario actualiza a
+// mano sin tener que saber el atajo de recargar. Expuesto como global para que
+// lo llame el botón del encabezado (ui.jsx).
+window.__fenixActualizar = async () => {
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(regs.map((r) => r.update().catch(() => {})))
+      // Si quedó un service worker nuevo esperando, actívalo ya.
+      for (const r of regs) r.waiting?.postMessage?.({ type: 'SKIP_WAITING' })
+    }
+  } catch { /* sin SW o sin soporte: recargamos igual */ }
+  // Recarga (pequeña espera para que alcance a activarse el SW nuevo).
+  setTimeout(() => window.location.reload(), 250)
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <HashRouter>
