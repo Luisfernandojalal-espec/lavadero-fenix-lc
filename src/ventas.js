@@ -92,7 +92,15 @@ export async function facturarItems({ items, trabajador = null, metodo = 'efecti
     }))
     for (const i of prods) {
       if (!i.refId) continue // líneas sin producto real (ej. Parqueo): no tocan stock
-      const p = await db.productos.get(i.refId)
+      let p = await db.productos.get(i.refId)
+      // Red de seguridad: si el id no resuelve (el producto se recreó/reimportó
+      // después de agregarlo a una mesa, o quedó huérfano), descuenta el producto
+      // ACTIVO con el mismo nombre para no dejar de descontar stock.
+      if (!p && i.nombre) {
+        const nom = i.nombre.trim().toLowerCase()
+        const activos = await db.productos.where('activo').equals(1).toArray()
+        p = activos.find((x) => (x.nombre || '').trim().toLowerCase() === nom)
+      }
       if (p) await db.productos.update(p.id, stamp({ stock: Math.max(0, (p.stock || 0) - i.cantidad) }))
     }
     total += totalProd
