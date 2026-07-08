@@ -109,8 +109,10 @@ export default function Reportes() {
   const ingresoServR = servRango.reduce((s, x) => s + x.total, 0)
   const numLavadasR = servRango.reduce((s, x) => s + (x.cantidad || 1), 0)
   const ingresoProdR = prodRango.reduce((s, x) => s + x.total, 0)
-  const gananciaProdR = prodRango.reduce((s, x) => s + (x.total - (x.costo || 0)), 0)
+  const costoProdR = prodRango.reduce((s, x) => s + (x.costo || 0), 0)
+  const gananciaProdR = ingresoProdR - costoProdR // ganancia de la nevera/mecatos
   const comisionesR = servRango.reduce((s, x) => s + (x.comision || 0), 0)
+  const gananciaServR = ingresoServR - comisionesR // ganancia del lavadero (neto tras comisión)
   const totalVendidoR = ingresoServR + ingresoProdR
   // Solo gastos VARIABLES del rango (compras, insumos, mantenimiento...). Los
   // fijos del mes (arriendo/nómina/luz) son costo mensual, NO de un día: si se
@@ -118,7 +120,7 @@ export default function Reportes() {
   // Misma regla que el cierre de turno.
   const gastosRango = (todosGastos || []).filter((x) => !x.anulada && x.categoria !== 'comisiones' && tipoGasto(x) === 'variable' && enRango(x.fecha))
   const totalGastosR = gastosRango.reduce((s, x) => s + x.monto, 0)
-  const utilidadR = (gananciaProdR + (ingresoServR - comisionesR)) - totalGastosR
+  const utilidadR = (gananciaProdR + gananciaServR) - totalGastosR
   const diasRango = Math.round((localTs(fin) - localTs(ini)) / 86400000) + 1
 
   // --- Estado actual (no depende del mes) ---
@@ -268,14 +270,25 @@ export default function Reportes() {
           </div>
           <table className="tabla">
             <tbody>
+              {/* LAVADERO (servicios) */}
               <tr>
-                <td>Lavadas (servicios)<div className="muted-cell">{numLavadasR} {numLavadasR === 1 ? 'lavada' : 'lavadas'}</div></td>
+                <td>Lavadas (servicios)<div className="muted-cell">{numLavadasR} {numLavadasR === 1 ? 'lavada' : 'lavadas'} · comisión {money(comisionesR)}</div></td>
                 <td className="num" style={{ fontWeight: 700, color: 'var(--green)' }}>{money(ingresoServR)}</td>
               </tr>
               <tr>
-                <td>Nevera y mecatos (productos)</td>
+                <td style={{ paddingLeft: 20 }}>Gana el lavadero<div className="muted-cell">venta − comisión</div></td>
+                <td className="num" style={{ fontWeight: 700, color: 'var(--green)' }}>{money(gananciaServR)}</td>
+              </tr>
+              {/* NEVERA (productos) */}
+              <tr>
+                <td>Nevera y mecatos (productos)<div className="muted-cell">costaron {money(costoProdR)}</div></td>
                 <td className="num" style={{ fontWeight: 700 }}>{money(ingresoProdR)}</td>
               </tr>
+              <tr>
+                <td style={{ paddingLeft: 20 }}>Gana la nevera<div className="muted-cell">venta − costo</div></td>
+                <td className="num" style={{ fontWeight: 700, color: 'var(--green)' }}>{money(gananciaProdR)}</td>
+              </tr>
+              {/* TOTALES */}
               <tr>
                 <td><b>Total vendido</b></td>
                 <td className="num"><b>{money(totalVendidoR)}</b></td>
@@ -285,7 +298,7 @@ export default function Reportes() {
                 <td className="num" style={{ color: 'var(--red)' }}>{money(totalGastosR)}</td>
               </tr>
               <tr>
-                <td><b>Utilidad</b><div className="muted-cell">ganancia − comisiones − gastos</div></td>
+                <td><b>Utilidad</b><div className="muted-cell">gana lavadero + gana nevera − gastos</div></td>
                 <td className="num"><b style={{ color: utilidadR >= 0 ? 'var(--green)' : 'var(--red)' }}>{money(utilidadR)}</b></td>
               </tr>
             </tbody>
