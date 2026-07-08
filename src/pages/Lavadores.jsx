@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, TIPOS_VEHICULO, precioServicio, esLavador } from '../db'
+import { db, uid, stamp, TIPOS_VEHICULO, precioServicio, esLavador, medioPagoGasto } from '../db'
 import { money, dayKey, monthKey, shortDate, fechaLarga } from '../format'
 import { esEfectivo, facturarItems, totalDe, totalLinea, asignarComision, labelMedio } from '../ventas'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
@@ -63,6 +63,8 @@ export default function Lavadores({ embedded }) {
   const [detalle, setDetalle] = useState(null)
   const [pagoA, setPagoA] = useState(null)
   const [montoPago, setMontoPago] = useState(0)
+  const [pagoMedio, setPagoMedio] = useState('efectivo') // efectivo | transferencia | mixto
+  const [pagoEfMixto, setPagoEfMixto] = useState(0)       // parte en efectivo cuando es mixto
 
   // --- Cobro rápido desde la tarjeta del lavador ---
   const [cobroDe, setCobroDe] = useState(null)     // lavador al que se le factura
@@ -146,17 +148,20 @@ export default function Lavadores({ embedded }) {
     await cobrar('credito', cliente)
   }
 
-  function abrirPago(t) { setPagoA(t); setMontoPago(statsDe(t.id).pendiente) }
+  function abrirPago(t) { setPagoA(t); setMontoPago(statsDe(t.id).pendiente); setPagoMedio('efectivo'); setPagoEfMixto(0) }
   async function pagar() {
     if (montoPago <= 0) return show('Escribe el valor a pagar')
     const now = Date.now()
+    const medio = medioPagoGasto(pagoMedio, montoPago, pagoEfMixto)
     await db.pagos_comision.add(stamp({
       id: uid(), trabajadorId: pagoA.id, trabajadorNombre: pagoA.nombre,
-      monto: montoPago, fecha: now, mes: monthKey(now), pagadoPor: user?.nombre || '',
+      monto: montoPago, medioPago: medio.medioPago, fecha: now, mes: monthKey(now), pagadoPor: user?.nombre || '',
     }))
+    // Sale del producido del día: efectivo baja la caja, transferencia baja el
+    // banco, mixto reparte. Cuenta en el cierre de turno (salidaTurno).
     await db.gastos.add(stamp({
       id: uid(), concepto: `Comisiones ${pagoA.nombre}`, categoria: 'comisiones',
-      monto: montoPago, tipo: 'variable', medioPago: 'caja', salidaTurno: 1, fecha: now, mes: monthKey(now),
+      monto: montoPago, tipo: 'variable', ...medio, salidaTurno: 1, fecha: now, mes: monthKey(now),
     }))
     setPagoA(null); setMontoPago(0); show('Pago de comisiones registrado')
   }
@@ -270,7 +275,20 @@ export default function Lavadores({ embedded }) {
             <div className="dato-fuerte">Pendiente: <b style={{ color: 'var(--red)' }}>{money(statsDe(pagoA.id).pendiente)}</b></div>
             <label>Valor a pagar (puede ser parcial)</label>
             <MoneyInput value={montoPago} onChange={setMontoPago} />
-            <div className="helper">Queda registrado como salida de caja y se descuenta del pendiente.</div>
+            <label>¿Con qué le pagas?</label>
+            <div className="pill-row">
+              <button className={`pill ${pagoMedio === 'efectivo' ? 'active' : ''}`} onClick={() => setPagoMedio('efectivo')}>Efectivo</button>
+              <button className={`pill ${pagoMedio === 'transferencia' ? 'active' : ''}`} onClick={() => setPagoMedio('transferencia')}>Transferencia</button>
+              <button className={`pill ${pagoMedio === 'mixto' ? 'active' : ''}`} onClick={() => setPagoMedio('mixto')}>Mixto</button>
+            </div>
+            {pagoMedio === 'mixto' && (
+              <>
+                <label>¿Cuánto en efectivo?</label>
+                <MoneyInput value={pagoEfMixto} onChange={setPagoEfMixto} />
+                <div className="helper">Va por transferencia: <b>{money(Math.max(0, montoPago - Math.min(pagoEfMixto, montoPago)))}</b></div>
+              </>
+            )}
+            <div className="helper" style={{ marginTop: 6 }}>Sale del producido del día: el efectivo baja la caja del turno y la transferencia baja el saldo en banco. Se descuenta del pendiente.</div>
             <div style={{ height: 14 }} />
             <button className="btn" onClick={pagar}>Registrar pago de {money(montoPago)}</button>
           </>

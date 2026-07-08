@@ -254,6 +254,7 @@ export const MEDIOS_PAGO_GASTO = [
   { id: 'banco', label: 'Cuenta bancaria' },
 ]
 export const labelMedioGasto = (id) => {
+  if (id === 'mixto') return 'Mixto'
   const m = MEDIOS_PAGO_GASTO.find((x) => x.id === id)
   return m ? m.label : 'Caja (efectivo)'
 }
@@ -261,6 +262,22 @@ export const labelMedioGasto = (id) => {
 // medio de pago se consideran de caja (así el cierre de turno no cambia).
 export function gastoDeCaja(g) {
   return !g.medioPago || g.medioPago === 'caja'
+}
+// Parte de un gasto que sale de la CAJA física / de TRANSFERENCIA (soporta
+// mixto: guarda pagoEfectivo/pagoTransferencia como las ventas mixtas).
+export const gastoMontoCaja = (g) =>
+  g.medioPago === 'mixto' ? (g.pagoEfectivo || 0) : (gastoDeCaja(g) ? g.monto : 0)
+export const gastoMontoTransfer = (g) =>
+  g.medioPago === 'mixto' ? (g.pagoTransferencia || 0) : (gastoDeCaja(g) ? 0 : g.monto)
+// Construye los campos de medio de pago de un gasto pagado en
+// efectivo / transferencia / mixto. Para mixto, `efectivo` = parte en caja.
+export function medioPagoGasto(medio, monto, efectivo = 0) {
+  if (medio === 'transferencia') return { medioPago: 'transferencia' }
+  if (medio === 'mixto') {
+    const ef = Math.max(0, Math.min(efectivo || 0, monto))
+    return { medioPago: 'mixto', pagoEfectivo: ef, pagoTransferencia: monto - ef }
+  }
+  return { medioPago: 'caja' }
 }
 
 // Clasificación fijo/variable de un gasto. Si el gasto no la trae guardada

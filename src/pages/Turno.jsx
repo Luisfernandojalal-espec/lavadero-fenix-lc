@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, gastoDeCaja, tipoGasto, labelMedioGasto } from '../db'
+import { db, uid, stamp, gastoDeCaja, gastoMontoCaja, gastoMontoTransfer, tipoGasto, labelMedioGasto } from '../db'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
 import { descargarCierrePDF } from '../pdf'
@@ -41,9 +41,10 @@ export default function Turno() {
   const salidasT = (gastos || [])
     .filter((g) => !g.anulada && g.fecha >= desde && tipoGasto(g) === 'variable' && (gastoDeCaja(g) || g.salidaTurno === 1))
     .sort((a, b) => b.fecha - a.fecha)
-  // Los gastos pagados DE CAJA descuadran el efectivo; los de transferencia/banco (Nequi) bajan el saldo digital.
-  const gastosT = salidasT.filter(gastoDeCaja).reduce((s, g) => s + g.monto, 0)
-  const gastosTransferT = salidasT.filter((g) => !gastoDeCaja(g)).reduce((s, g) => s + g.monto, 0)
+  // Los gastos pagados DE CAJA descuadran el efectivo; los de transferencia/banco (Nequi)
+  // bajan el saldo digital. Un pago mixto (ej. comisión) reparte su parte a cada lado.
+  const gastosT = salidasT.reduce((s, g) => s + gastoMontoCaja(g), 0)
+  const gastosTransferT = salidasT.reduce((s, g) => s + gastoMontoTransfer(g), 0)
   // Solo el efectivo entra a la caja física (transferencias van al banco)
   const esperado = (abierto?.base || 0) + efectivo + abonosT - gastosT
   // Transferencia/banco (Nequi): base + ventas por transferencia − pagos hechos por transferencia.
