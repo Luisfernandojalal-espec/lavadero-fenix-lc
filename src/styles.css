@@ -614,7 +614,22 @@ input:focus, select:focus { outline: 2px solid var(--primary); border-color: tra
   max-height: 90vh;
   overflow-y: auto;
 }
-.sheet h2 { margin: 4px 0 8px; font-size: 18px; }
+.sheet h2 { margin: 0; font-size: 18px; }
+.sheet-head {
+  position: sticky; top: 0;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin: -16px -16px 10px; padding: 14px 16px 10px;
+  background: var(--bg); z-index: 3;
+  border-radius: 20px 20px 0 0;
+}
+.sheet-close {
+  flex-shrink: 0;
+  width: 34px; height: 34px; border-radius: 999px;
+  background: var(--surface-2); color: var(--text);
+  font-size: 16px; line-height: 1; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.sheet-close:active { background: var(--border); }
 
 .toast {
   position: fixed;

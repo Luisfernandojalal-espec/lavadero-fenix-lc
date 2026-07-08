@@ -150,7 +150,10 @@ export function Sheet({ open, onClose, title, children }) {
   return (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        {title && <h2>{title}</h2>}
+        <div className="sheet-head">
+          {title ? <h2>{title}</h2> : <span />}
+          <button className="sheet-close" onClick={onClose} aria-label="Cerrar" title="Cerrar">✕</button>
+        </div>
         {children}
       </div>
     </div>
