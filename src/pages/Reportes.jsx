@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
-import { db, stockBajo, tipoGasto } from '../db'
-import { money, currentMonthKey, monthLabel, dayKey } from '../format'
+import { db, tipoGasto } from '../db'
+import { money, currentMonthKey, monthLabel, dayKey, fechaLarga } from '../format'
 import { Header } from '../components/ui'
 import { descargarReportePDF } from '../pdf'
 
@@ -20,6 +20,10 @@ function ultimosMeses(n) {
 
 // Formato compacto para etiquetas de barras: 57600 → "58k".
 const kMoney = (n) => (n >= 1000 ? Math.round(n / 1000) + 'k' : String(Math.round(n)))
+
+// "2026-07-08" → Date en horario LOCAL (new Date("2026-07-08") sería UTC y
+// en Colombia se correría un día). Devuelve el timestamp de medianoche local.
+const localTs = (key) => { const [y, m, d] = key.split('-').map(Number); return new Date(y, m - 1, d).getTime() }
 
 // Buckets de días (últimos n, de más viejo a más nuevo).
 function ultimosDias(n) {
@@ -81,14 +85,37 @@ export default function Reportes() {
   const [periodo, setPeriodo] = useState('mes') // dia | semana | mes (para la tendencia)
   const meses = ultimosMeses(6)
 
+  // Balance por día / por rango (independiente del selector de mes)
+  const [modo, setModo] = useState('dia') // dia | rango
+  const hoyKey = dayKey()
+  const [desde, setDesde] = useState(hoyKey)
+  const [hasta, setHasta] = useState(hoyKey)
+
   const ventas = useLiveQuery(() => db.ventas.where('mes').equals(mes).toArray(), [mes], [])
   const gastos = useLiveQuery(() => db.gastos.where('mes').equals(mes).toArray(), [mes], [])
   const productos = useLiveQuery(() => db.productos.where('activo').equals(1).toArray(), [], [])
   const todasVentas = useLiveQuery(() => db.ventas.toArray(), [], [])
+  const todosGastos = useLiveQuery(() => db.gastos.toArray(), [], [])
   const abonos = useLiveQuery(() => db.abonos.toArray(), [], [])
 
-  // Productos por acabarse (alerta de stock bajo)
-  const porAcabarse = (productos || []).filter(stockBajo).sort((a, b) => (a.stock ?? 0) - (b.stock ?? 0))
+  // --- Balance por día o por rango de fechas ---
+  // En modo "día" el rango es un solo día (desde=hasta). Las claves ISO
+  // ("2026-07-08") se comparan como texto, así que ordenan igual que fechas.
+  const [ini, fin] = modo === 'dia' ? [desde, desde] : (desde <= hasta ? [desde, hasta] : [hasta, desde])
+  const enRango = (ts) => { const k = dayKey(ts); return k >= ini && k <= fin }
+  const vRango = (todasVentas || []).filter((x) => !x.anulada && enRango(x.fecha))
+  const servRango = vRango.filter((x) => x.tipo === 'servicio')
+  const prodRango = vRango.filter((x) => x.tipo === 'producto')
+  const ingresoServR = servRango.reduce((s, x) => s + x.total, 0)
+  const numLavadasR = servRango.reduce((s, x) => s + (x.cantidad || 1), 0)
+  const ingresoProdR = prodRango.reduce((s, x) => s + x.total, 0)
+  const gananciaProdR = prodRango.reduce((s, x) => s + (x.total - (x.costo || 0)), 0)
+  const comisionesR = servRango.reduce((s, x) => s + (x.comision || 0), 0)
+  const totalVendidoR = ingresoServR + ingresoProdR
+  const gastosRango = (todosGastos || []).filter((x) => !x.anulada && x.categoria !== 'comisiones' && enRango(x.fecha))
+  const totalGastosR = gastosRango.reduce((s, x) => s + x.monto, 0)
+  const utilidadR = (gananciaProdR + (ingresoServR - comisionesR)) - totalGastosR
+  const diasRango = Math.round((localTs(fin) - localTs(ini)) / 86400000) + 1
 
   // --- Estado actual (no depende del mes) ---
   // Cuentas por cobrar = ventas a crédito vigentes − abonos recibidos
@@ -213,20 +240,53 @@ export default function Reportes() {
           ))}
         </div>
 
-        {porAcabarse.length > 0 && (
-          <div className="card alerta-stock" onClick={() => navigate('/inventario')}>
-            <div className="label" style={{ fontWeight: 700, marginBottom: 6 }}>
-              {porAcabarse.length === 1 ? 'Un producto con stock bajo' : `${porAcabarse.length} productos con stock bajo`}
-            </div>
-            {porAcabarse.slice(0, 4).map((p) => (
-              <div key={p.id} className="alerta-item">
-                <span>{p.nombre}</span>
-                <b>{p.stock ?? 0} restantes</b>
-              </div>
-            ))}
-            {porAcabarse.length > 4 && <div className="helper">y {porAcabarse.length - 4} más…</div>}
+        {/* Balance de ventas por día o por rango de fechas */}
+        <div className="card stat-card">
+          <div className="label" style={{ marginBottom: 8 }}>Balance de ventas por día y por rango</div>
+          <div className="pill-row" style={{ marginBottom: 8 }}>
+            <button className={`pill ${modo === 'dia' ? 'active' : ''}`} onClick={() => setModo('dia')}>Un día</button>
+            <button className={`pill ${modo === 'rango' ? 'active' : ''}`} onClick={() => setModo('rango')}>Rango de fechas</button>
           </div>
-        )}
+          <div className="grid-2" style={{ marginBottom: 4 }}>
+            <label style={{ fontSize: 12, color: 'var(--muted)' }}>
+              {modo === 'dia' ? 'Día' : 'Desde'}
+              <input type="date" value={desde} max={hoyKey} onChange={(e) => setDesde(e.target.value)} style={{ marginTop: 4, width: '100%' }} />
+            </label>
+            {modo === 'rango' && (
+              <label style={{ fontSize: 12, color: 'var(--muted)' }}>
+                Hasta
+                <input type="date" value={hasta} max={hoyKey} onChange={(e) => setHasta(e.target.value)} style={{ marginTop: 4, width: '100%' }} />
+              </label>
+            )}
+          </div>
+          <div className="meta" style={{ fontSize: 12, marginBottom: 4 }}>
+            {modo === 'dia' ? fechaLarga(localTs(ini)) : `${fechaLarga(localTs(ini))} → ${fechaLarga(localTs(fin))} · ${diasRango} día${diasRango === 1 ? '' : 's'}`}
+          </div>
+          <table className="tabla">
+            <tbody>
+              <tr>
+                <td>Lavadas (servicios)<div className="muted-cell">{numLavadasR} {numLavadasR === 1 ? 'lavada' : 'lavadas'}</div></td>
+                <td className="num" style={{ fontWeight: 700, color: 'var(--green)' }}>{money(ingresoServR)}</td>
+              </tr>
+              <tr>
+                <td>Nevera y mecatos (productos)</td>
+                <td className="num" style={{ fontWeight: 700 }}>{money(ingresoProdR)}</td>
+              </tr>
+              <tr>
+                <td><b>Total vendido</b></td>
+                <td className="num"><b>{money(totalVendidoR)}</b></td>
+              </tr>
+              <tr>
+                <td>Gastos del periodo<div className="muted-cell">sin comisiones</div></td>
+                <td className="num" style={{ color: 'var(--red)' }}>{money(totalGastosR)}</td>
+              </tr>
+              <tr>
+                <td><b>Utilidad</b><div className="muted-cell">ganancia − comisiones − gastos</div></td>
+                <td className="num"><b style={{ color: utilidadR >= 0 ? 'var(--green)' : 'var(--red)' }}>{money(utilidadR)}</b></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         <button className="btn ghost" style={{ marginBottom: 12 }} onClick={() => navigate('/historial')}>
           Ver historial y corregir ventas
