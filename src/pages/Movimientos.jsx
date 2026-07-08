@@ -40,6 +40,10 @@ export default function Movimientos() {
   const totEf = delDia.reduce((s, v) => s + montoEfectivo(v), 0)
   const totTr = delDia.reduce((s, v) => s + montoTransferencia(v), 0)
   const totCr = delDia.filter((v) => v.metodoPago === 'credito').reduce((s, v) => s + v.total, 0)
+  // Ventas del día separadas: lavadas (servicios) vs nevera y mecatos (productos)
+  const ventaServDia = delDia.filter((v) => v.tipo === 'servicio').reduce((s, v) => s + v.total, 0)
+  const ventaProdDia = delDia.filter((v) => v.tipo === 'producto').reduce((s, v) => s + v.total, 0)
+  const numLavadasDia = delDia.filter((v) => v.tipo === 'servicio').reduce((s, v) => s + (v.cantidad || 1), 0)
 
   const cambiarDia = (n) => { const d = new Date(fecha + 'T12:00'); d.setDate(d.getDate() + n); setFecha(dayKey(d.getTime())) }
 
@@ -117,6 +121,19 @@ export default function Movimientos() {
           <div className="kpi"><div className="kpi-label">EFECTIVO</div><div className="kpi-value green" style={{ fontSize: 18 }}>{money(totEf)}</div></div>
           <div className="kpi"><div className="kpi-label">TRANSFERENCIA</div><div className="kpi-value" style={{ fontSize: 18 }}>{money(totTr)}</div></div>
           <div className="kpi"><div className="kpi-label">CRÉDITO (FIADO)</div><div className="kpi-value red" style={{ fontSize: 18 }}>{money(totCr)}</div></div>
+        </div>
+
+        {/* Ventas del día por tipo: lavadas vs nevera */}
+        <div className="kpi-row" style={{ marginTop: 4 }}>
+          <div className="kpi">
+            <div className="kpi-label">LAVADAS (SERVICIOS)</div>
+            <div className="kpi-value green" style={{ fontSize: 18 }}>{money(ventaServDia)}</div>
+            <div className="meta" style={{ fontSize: 11 }}>{numLavadasDia} {numLavadasDia === 1 ? 'lavada' : 'lavadas'}</div>
+          </div>
+          <div className="kpi">
+            <div className="kpi-label">NEVERA Y MECATOS</div>
+            <div className="kpi-value" style={{ fontSize: 18 }}>{money(ventaProdDia)}</div>
+          </div>
         </div>
 
         <button className="btn ghost" style={{ margin: '6px 0 12px' }} onClick={() => navigate('/turno')}>Base de caja y cierre de turno</button>
