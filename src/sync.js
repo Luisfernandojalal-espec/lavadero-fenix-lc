@@ -3,7 +3,9 @@ import { supabase, syncDisponible } from './supabase'
 
 // Tablas locales que se sincronizan con la tabla "registros" de Supabase.
 const TABLAS = ['productos', 'servicios', 'trabajadores', 'ventas', 'gastos', 'movimientos_inv', 'clientes', 'abonos', 'mesas', 'turnos', 'pagos_comision', 'gastos_fijos', 'ordenes', 'proveedores', 'compras']
-const LAST_PULL_KEY = 'fenix_last_pull'
+const LAST_PULL_KEY = 'fenix_last_pull'      // legacy: cursor por el reloj del CLIENTE (ms)
+const CURSOR_KEY = 'fenix_sync_cursor'       // nuevo: cursor por el reloj del SERVIDOR (ISO)
+const PAGE = 1000                            // tamaño de página al bajar (evita el tope de PostgREST)
 
 // --- Estado observable para mostrar en la interfaz ---
 let estado = { fase: 'idle', ultima: null } // fase: idle|sincronizando|ok|offline|error
@@ -61,42 +63,86 @@ async function push() {
   if (otroErr) throw otroErr
 }
 
-// Margen de solapamiento: en cada pull vuelve a pedir un poco hacia atrás para
-// tolerar pequeños desfases de reloj entre dispositivos. Volver a bajar un
-// registro no hace daño: el put es idempotente (last-write-wins por updatedAt).
+// Aplica una fila bajada de la nube al almacén local, resolviendo conflictos
+// por "el más reciente gana" (por updatedAt del cliente, best-effort).
+async function aplicarFila(fila) {
+  if (!TABLAS.includes(fila.tabla)) return
+  const local = await db[fila.tabla].get(fila.id)
+  if (!local || (fila.updated_at || 0) >= (local.updatedAt || 0)) {
+    await db[fila.tabla].put({ ...fila.data, synced: 1 })
+  }
+}
+
+// ¿El error es porque la columna `synced_at` todavía no existe en la nube
+// (migración no aplicada aún)? En ese caso caemos al modo legacy.
+function faltaSyncedAt(error) {
+  const msg = (error?.message || '').toLowerCase()
+  return error?.code === '42703' || msg.includes('synced_at')
+}
+let modoLegacy = false // se vuelve true si la nube aún no tiene synced_at
+
+// Baja los registros que cambiaron en la nube desde la última vez, ordenados
+// por el reloj del SERVIDOR (synced_at). Como el orden lo pone un único reloj
+// central, ya no importa si el reloj de algún dispositivo está desfasado: nada
+// se queda sin bajar. Se pagina para no chocar con el tope de filas de PostgREST.
+async function pull() {
+  if (modoLegacy) return pullLegacy()
+
+  const cursor = localStorage.getItem(CURSOR_KEY) || '1970-01-01T00:00:00+00:00'
+  let maxCursor = cursor
+  let hubo = false
+  for (let desde = 0; ; desde += PAGE) {
+    const { data: filas, error } = await supabase
+      .from('registros')
+      .select('id, tabla, data, updated_at, synced_at')
+      .gt('synced_at', cursor)
+      .order('synced_at', { ascending: true })
+      .range(desde, desde + PAGE - 1)
+    if (error) {
+      if (faltaSyncedAt(error)) { modoLegacy = true; return pullLegacy() }
+      throw error
+    }
+    if (!filas || filas.length === 0) break
+    for (const fila of filas) {
+      await aplicarFila(fila)
+      if (fila.synced_at > maxCursor) maxCursor = fila.synced_at
+      hubo = true
+    }
+    if (filas.length < PAGE) break
+  }
+  // El cursor es hora del SERVIDOR: se guarda tal cual (nunca "en el futuro"
+  // desde el punto de vista de este dispositivo, porque no es su reloj).
+  if (hubo) localStorage.setItem(CURSOR_KEY, maxCursor)
+}
+
+// Margen de solapamiento del modo legacy: pide un poco hacia atrás para tolerar
+// pequeños desfases de reloj. Volver a bajar un registro es inofensivo (put
+// idempotente). Solo se usa mientras la nube no tenga synced_at.
 const MARGEN_PULL = 2 * 60 * 1000 // 2 min
 
-// Baja los registros que cambiaron en la nube desde la última vez.
-async function pull() {
+// Pull LEGACY (por reloj del cliente). Se usa únicamente si la migración de
+// synced_at aún no está aplicada. Paginado para no truncar en un resync total.
+async function pullLegacy() {
   const now = Date.now()
-  let desde = getLastPull()
-  // Blindaje contra desfase de reloj: `updated_at` lo pone cada dispositivo con
-  // SU reloj. Si el marcador quedó en el FUTURO (algún equipo escribió con la
-  // hora adelantada), dejaría de bajar lo que otros escriben con hora normal y
-  // el dispositivo se "congela" mostrando datos viejos. Si detectamos eso,
-  // volvemos a bajar todo desde el principio.
-  if (desde > now) desde = 0
-  const consulta = Math.max(0, desde - MARGEN_PULL)
-  const { data: filas, error } = await supabase
-    .from('registros')
-    .select('id, tabla, data, updated_at')
-    .gt('updated_at', consulta)
-    .order('updated_at', { ascending: true })
-  if (error) throw error
-  if (!filas || filas.length === 0) return
-
-  let maxTs = desde
-  for (const fila of filas) {
-    if (!TABLAS.includes(fila.tabla)) continue
-    const local = await db[fila.tabla].get(fila.id)
-    // "El más reciente gana": si lo local es más nuevo, no lo pisamos.
-    if (!local || fila.updated_at >= (local.updatedAt || 0)) {
-      await db[fila.tabla].put({ ...fila.data, synced: 1 })
+  let desdeTs = getLastPull()
+  if (desdeTs > now) desdeTs = 0 // marcador corrupto "en el futuro" → re-sincroniza
+  const consulta = Math.max(0, desdeTs - MARGEN_PULL)
+  let maxTs = desdeTs
+  for (let off = 0; ; off += PAGE) {
+    const { data: filas, error } = await supabase
+      .from('registros')
+      .select('id, tabla, data, updated_at')
+      .gt('updated_at', consulta)
+      .order('updated_at', { ascending: true })
+      .range(off, off + PAGE - 1)
+    if (error) throw error
+    if (!filas || filas.length === 0) break
+    for (const fila of filas) {
+      await aplicarFila(fila)
+      if (fila.updated_at > maxTs) maxTs = fila.updated_at
     }
-    if (fila.updated_at > maxTs) maxTs = fila.updated_at
+    if (filas.length < PAGE) break
   }
-  // Nunca guardes el marcador en el futuro: así un timestamp adelantado (de
-  // otro dispositivo con el reloj mal) no congela la sincronización de este.
   setLastPull(Math.min(maxTs, now))
 }
 
@@ -104,6 +150,7 @@ async function pull() {
 // atrás por un marcador corrupto). Reinicia el marcador y sincroniza.
 export async function resyncAll() {
   setLastPull(0)
+  localStorage.removeItem(CURSOR_KEY)
   await sync()
 }
 
