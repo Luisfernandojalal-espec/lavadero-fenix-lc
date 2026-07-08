@@ -110,6 +110,7 @@ export default function Reportes() {
 
   // --- Servicios ---
   const ingresoServ = ventasServ.reduce((s, x) => s + x.total, 0)
+  const numLavadas = ventasServ.reduce((s, x) => s + (x.cantidad || 1), 0)
   const comisiones = ventasServ.reduce((s, x) => s + (x.comision || 0), 0)
   const gananciaServ = ingresoServ - comisiones
 
@@ -234,6 +235,27 @@ export default function Reportes() {
         <button className="btn ghost" style={{ marginBottom: 12 }} onClick={descargarPDF}>
           Descargar reporte del mes (PDF)
         </button>
+
+        {/* Ventas por tipo: lavadas (servicios) vs nevera (productos) */}
+        <div className="card stat-card">
+          <div className="label">Ventas del mes por tipo</div>
+          <table className="tabla" style={{ marginTop: 4 }}>
+            <tbody>
+              <tr>
+                <td>Lavadas (servicios)<div className="muted-cell">{numLavadas} {numLavadas === 1 ? 'lavada' : 'lavadas'}</div></td>
+                <td className="num" style={{ fontWeight: 700, color: 'var(--green)' }}>{money(ingresoServ)}</td>
+              </tr>
+              <tr>
+                <td>Nevera y mecatos (productos)</td>
+                <td className="num" style={{ fontWeight: 700 }}>{money(ingresoProd)}</td>
+              </tr>
+              <tr>
+                <td><b>Total vendido</b></td>
+                <td className="num"><b>{money(ingresoTotal)}</b></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         {/* Tarjeta estrella: lo que pidió el cliente */}
         <div className="card stat-card" style={{ borderColor: 'var(--green)' }}>
