@@ -101,7 +101,7 @@ export default function Servicios() {
     // En el Balance NO se resta otra vez (la comisión ya está descontada del
     // neto de servicios) — por eso la categoría 'comisiones' se excluye allá.
     await db.gastos.add(stamp({
-      id: uid(), concepto: `Comisiones ${pagoA.nombre}`, categoria: 'comisiones',
+      id: uid(), concepto: `Pago de comisión a ${pagoA.nombre}`, categoria: 'comisiones',
       monto: montoPago, tipo: 'variable', ...medio, salidaTurno: 1, fecha: now, mes: monthKey(now),
     }))
     setPagoA(null); setMontoPago(0)

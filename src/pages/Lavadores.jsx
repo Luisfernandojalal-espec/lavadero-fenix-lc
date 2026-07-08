@@ -160,7 +160,7 @@ export default function Lavadores({ embedded }) {
     // Sale del producido del día: efectivo baja la caja, transferencia baja el
     // banco, mixto reparte. Cuenta en el cierre de turno (salidaTurno).
     await db.gastos.add(stamp({
-      id: uid(), concepto: `Comisiones ${pagoA.nombre}`, categoria: 'comisiones',
+      id: uid(), concepto: `Pago de comisión a ${pagoA.nombre}`, categoria: 'comisiones',
       monto: montoPago, tipo: 'variable', ...medio, salidaTurno: 1, fecha: now, mes: monthKey(now),
     }))
     setPagoA(null); setMontoPago(0); show('Pago de comisiones registrado')
