@@ -270,25 +270,14 @@ export default function Reportes() {
           </div>
           <table className="tabla">
             <tbody>
-              {/* LAVADERO (servicios) */}
               <tr>
                 <td>Lavadas (servicios)<div className="muted-cell">{numLavadasR} {numLavadasR === 1 ? 'lavada' : 'lavadas'} · comisión {money(comisionesR)}</div></td>
                 <td className="num" style={{ fontWeight: 700, color: 'var(--green)' }}>{money(ingresoServR)}</td>
               </tr>
               <tr>
-                <td style={{ paddingLeft: 20 }}>Gana el lavadero<div className="muted-cell">venta − comisión</div></td>
-                <td className="num" style={{ fontWeight: 700, color: 'var(--green)' }}>{money(gananciaServR)}</td>
-              </tr>
-              {/* NEVERA (productos) */}
-              <tr>
                 <td>Nevera y mecatos (productos)<div className="muted-cell">costaron {money(costoProdR)}</div></td>
                 <td className="num" style={{ fontWeight: 700 }}>{money(ingresoProdR)}</td>
               </tr>
-              <tr>
-                <td style={{ paddingLeft: 20 }}>Gana la nevera<div className="muted-cell">venta − costo</div></td>
-                <td className="num" style={{ fontWeight: 700, color: 'var(--green)' }}>{money(gananciaProdR)}</td>
-              </tr>
-              {/* TOTALES */}
               <tr>
                 <td><b>Total vendido</b></td>
                 <td className="num"><b>{money(totalVendidoR)}</b></td>
@@ -303,6 +292,24 @@ export default function Reportes() {
               </tr>
             </tbody>
           </table>
+        </div>
+
+        {/* Ganancia por área destacada: cuánto gana el lavadero vs la nevera */}
+        <div className="grid-2">
+          <div className="card stat-card" style={{ borderColor: 'var(--green)' }}>
+            <div className="label">Gana el lavadero</div>
+            <div className="value green">{money(gananciaServR)}</div>
+            <div className="meta" style={{ color: 'var(--muted)', fontSize: 12 }}>
+              Vendió {money(ingresoServR)} · comisión {money(comisionesR)}
+            </div>
+          </div>
+          <div className="card stat-card" style={{ borderColor: 'var(--green)' }}>
+            <div className="label">Gana la nevera</div>
+            <div className="value green">{money(gananciaProdR)}</div>
+            <div className="meta" style={{ color: 'var(--muted)', fontSize: 12 }}>
+              Vendió {money(ingresoProdR)} · costó {money(costoProdR)}
+            </div>
+          </div>
         </div>
 
         <button className="btn ghost" style={{ marginBottom: 12 }} onClick={() => navigate('/historial')}>
