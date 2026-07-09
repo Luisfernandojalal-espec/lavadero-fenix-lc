@@ -25,7 +25,7 @@ export default function Inicio() {
   const totalHoy = ventasHoy.reduce((s, v) => s + v.total, 0)
   const gananciaHoy = ventasHoy.reduce((s, v) => s + (v.ganancia || 0), 0)
   const debe = (ventas || []).filter((v) => v.metodoPago === 'credito' && !v.anulada).reduce((s, v) => s + v.total, 0)
-  const abonado = (abonos || []).reduce((s, a) => s + a.monto, 0)
+  const abonado = (abonos || []).filter((a) => !a.anulada).reduce((s, a) => s + a.monto, 0)
   const porCobrar = Math.max(0, debe - abonado)
 
   // Ganancia REAL del día: ganancia operativa de las ventas del día, menos la

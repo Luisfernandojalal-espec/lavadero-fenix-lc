@@ -19,7 +19,7 @@ export default function Credito() {
 
   function saldoDe(id) {
     const debe = ventasCred.filter((v) => v.clienteId === id).reduce((s, v) => s + v.total, 0)
-    const pagado = (abonos || []).filter((a) => a.clienteId === id).reduce((s, a) => s + a.monto, 0)
+    const pagado = (abonos || []).filter((a) => a.clienteId === id && !a.anulada).reduce((s, a) => s + a.monto, 0)
     return debe - pagado
   }
 
@@ -56,8 +56,8 @@ export default function Credito() {
       concepto: v.tipo === 'servicio' ? (v.servicioNombre || 'Servicio') : 'Venta de productos',
       monto: v.total,
     })),
-    ...(abonos || []).filter((a) => a.clienteId === det.id).map((a) => ({
-      fecha: a.fecha, concepto: 'Abono', monto: -a.monto,
+    ...(abonos || []).filter((a) => a.clienteId === det.id && !a.anulada).map((a) => ({
+      fecha: a.fecha, concepto: 'Abono', monto: -a.monto, abono: a,
     })),
   ].sort((a, b) => b.fecha - a.fecha) : []
 
@@ -67,6 +67,20 @@ export default function Credito() {
     await db.abonos.add(stamp({ id: uid(), clienteId: det.id, clienteNombre: det.nombre, monto: abono, fecha: now, mes: monthKey(now) }))
     setAbono(0)
     show('Abono registrado')
+  }
+
+  // --- Editar / eliminar un abono ya registrado ---
+  const [abonoEdit, setAbonoEdit] = useState(null) // el abono en edición
+  const [abonoMonto, setAbonoMonto] = useState(0)
+  function abrirAbono(a) { setAbonoEdit(a); setAbonoMonto(a.monto) }
+  async function guardarAbono() {
+    if (abonoMonto <= 0) return show('El abono debe ser mayor a 0')
+    await db.abonos.update(abonoEdit.id, stamp({ monto: abonoMonto }))
+    setAbonoEdit(null); show('Abono actualizado')
+  }
+  async function eliminarAbono() {
+    await db.abonos.update(abonoEdit.id, stamp({ anulada: 1 }))
+    setAbonoEdit(null); show('Abono eliminado')
   }
 
   // --- Fiar productos de inventario al cliente (descuenta stock al cargar) ---
@@ -164,15 +178,16 @@ export default function Credito() {
             </div>
 
             <div className="section-title">Movimientos</div>
+            {movimientos.some((m) => m.abono) && <div className="helper" style={{ marginBottom: 6 }}>Toca un abono para editarlo o eliminarlo.</div>}
             {movimientos.length === 0 && <div className="empty">Sin movimientos.</div>}
             <table className="tabla">
               <tbody>
                 {movimientos.map((m, i) => (
-                  <tr key={i}>
+                  <tr key={i} onClick={m.abono ? () => abrirAbono(m.abono) : undefined} style={m.abono ? { cursor: 'pointer' } : undefined}>
                     <td className="muted-cell">{shortDate(m.fecha)}</td>
-                    <td>{m.concepto}</td>
+                    <td>{m.concepto}{m.abono ? ' · editar' : ''}</td>
                     <td className="num" style={{ fontWeight: 700, color: m.monto < 0 ? 'var(--green)' : 'var(--text)' }}>
-                      {m.monto < 0 ? money(m.monto) : money(m.monto)}
+                      {money(m.monto)}
                     </td>
                   </tr>
                 ))}
@@ -209,6 +224,21 @@ export default function Credito() {
         <button className="btn" disabled={cargando || totalCarrito <= 0} onClick={cargarAlFiado}>
           {cargando ? 'Cargando…' : 'Cargar al fiado'}
         </button>
+      </Sheet>
+
+      {/* Editar / eliminar un abono */}
+      <Sheet open={!!abonoEdit} onClose={() => setAbonoEdit(null)} title="Editar abono">
+        {abonoEdit && (
+          <>
+            <div className="helper" style={{ marginBottom: 8 }}>Abono del {shortDate(abonoEdit.fecha)}</div>
+            <label>Valor del abono</label>
+            <MoneyInput value={abonoMonto} onChange={setAbonoMonto} placeholder="Valor del abono" />
+            <div style={{ height: 14 }} />
+            <button className="btn" onClick={guardarAbono}>Guardar</button>
+            <div style={{ height: 10 }} />
+            <button className="btn danger" onClick={eliminarAbono}>Eliminar abono</button>
+          </>
+        )}
       </Sheet>
 
       {node}

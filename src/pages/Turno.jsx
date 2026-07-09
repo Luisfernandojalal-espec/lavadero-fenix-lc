@@ -30,7 +30,7 @@ export default function Turno() {
   const efectivo = vTurno.reduce((s, v) => s + montoEfectivo(v), 0)
   const transferencias = vTurno.reduce((s, v) => s + montoTransferencia(v), 0)
   const credito = vTurno.filter((v) => v.metodoPago === 'credito').reduce((s, v) => s + v.total, 0)
-  const abonosT = (abonos || []).filter((a) => a.fecha >= desde).reduce((s, a) => s + a.monto, 0)
+  const abonosT = (abonos || []).filter((a) => a.fecha >= desde && !a.anulada).reduce((s, a) => s + a.monto, 0)
   // Salidas/pagos del turno (gastos VARIABLES; los FIJOS del mes nunca cuentan):
   //  - EFECTIVO (caja): SIEMPRE cuenta. La plata física salió de la caja, sin
   //    importar si se registró aquí o en la pestaña Gastos → baja el efectivo.

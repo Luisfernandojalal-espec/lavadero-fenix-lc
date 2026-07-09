@@ -126,7 +126,7 @@ export default function Reportes() {
   // --- Estado actual (no depende del mes) ---
   // Cuentas por cobrar = ventas a crédito vigentes − abonos recibidos
   const debeTotal = (todasVentas || []).filter((x) => x.metodoPago === 'credito' && !x.anulada).reduce((s, x) => s + x.total, 0)
-  const abonadoTotal = (abonos || []).reduce((s, a) => s + a.monto, 0)
+  const abonadoTotal = (abonos || []).filter((a) => !a.anulada).reduce((s, a) => s + a.monto, 0)
   const porCobrar = Math.max(0, debeTotal - abonadoTotal)
   // Valor del inventario a costo
   const valorInventario = (productos || []).reduce((s, p) => s + (p.stock || 0) * (p.precioCompra || 0), 0)
