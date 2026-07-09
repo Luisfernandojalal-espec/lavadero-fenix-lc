@@ -139,6 +139,34 @@ export default function Turno() {
 
   const difColor = (d) => (d === 0 ? 'var(--green)' : d > 0 ? 'var(--amber)' : 'var(--red)')
 
+  // Recalcula el cuadre de un turno YA cerrado con los DATOS ACTUALES (mismas
+  // fórmulas del cierre en vivo), acotado a su rango [abiertoEn, cerradoEn].
+  // Así, si después se corrige un abono / gasto / venta, el comprobante de esa
+  // noche se ajusta. El "efectivo contado" (contadoReal) NO se recalcula: fue un
+  // conteo físico manual, se conserva del cierre. La diferencia se recalcula con
+  // el esperado nuevo. (Solo cambia lo que se muestra; no se reescribe el turno.)
+  function cuadreCerrado(t) {
+    const d0 = t.abiertoEn || 0
+    const d1 = t.cerradoEn || Infinity
+    const enRango = (ts) => ts >= d0 && ts <= d1
+    const vs = (ventas || []).filter((v) => !v.anulada && enRango(v.fecha))
+    const efectivo = vs.reduce((s, v) => s + montoEfectivo(v), 0)
+    const transferencias = vs.reduce((s, v) => s + montoTransferencia(v), 0)
+    const credito = vs.filter((v) => v.metodoPago === 'credito').reduce((s, v) => s + v.total, 0)
+    const abonosR = (abonos || []).filter((a) => enRango(a.fecha) && !a.anulada).reduce((s, a) => s + a.monto, 0)
+    const salidas = (gastos || []).filter((g) => !g.anulada && enRango(g.fecha) && tipoGasto(g) === 'variable' && (gastoDeCaja(g) || g.salidaTurno === 1))
+    const gastosR = salidas.reduce((s, g) => s + gastoMontoCaja(g), 0)
+    const gastosTransferR = salidas.reduce((s, g) => s + gastoMontoTransfer(g), 0)
+    const esperado = (t.base || 0) + efectivo + abonosR - gastosR
+    const totalTransfer = (t.baseTransferencia || 0) + transferencias - gastosTransferR
+    const contadoReal = t.resumen?.contadoReal || 0
+    return {
+      contado: efectivo, transferencias, credito, abonos: abonosR, gastos: gastosR,
+      gastosTransfer: gastosTransferR, totalTransfer, esperado, contadoReal,
+      diferencia: contadoReal - esperado, ventasCount: vs.length,
+    }
+  }
+
   return (
     <>
       <Header title="Turno" sub="Apertura y cierre de caja" />
@@ -217,21 +245,24 @@ export default function Turno() {
         {esDueno && cerrados.length > 0 && (
           <>
             <div className="section-title">Cierres anteriores</div>
-            {cerrados.slice(0, 20).map((t) => (
-              <div className="row" key={t.id} onClick={() => setDet(t)} style={{ cursor: 'pointer' }}>
-                <div className="main">
-                  <div className="title">{shortDate(t.cerradoEn)}</div>
-                  <div className="meta">{t.abiertoPor} → {t.cerradoPor} · {t.resumen?.ventasCount ?? 0} ventas</div>
-                </div>
-                <div className="right">
-                  <div style={{ fontWeight: 700 }}>{money(t.resumen?.contadoReal)}</div>
-                  <div className="meta" style={{ color: difColor(t.resumen?.diferencia || 0) }}>
-                    {(t.resumen?.diferencia || 0) === 0 ? 'Cuadrada' :
-                      (t.resumen.diferencia > 0 ? `Sobró ${money(t.resumen.diferencia)}` : `Faltó ${money(-t.resumen.diferencia)}`)}
+            {cerrados.slice(0, 20).map((t) => {
+              const r = cuadreCerrado(t)
+              return (
+                <div className="row" key={t.id} onClick={() => setDet(t)} style={{ cursor: 'pointer' }}>
+                  <div className="main">
+                    <div className="title">{shortDate(t.cerradoEn)}</div>
+                    <div className="meta">{t.abiertoPor} → {t.cerradoPor} · {r.ventasCount} ventas</div>
+                  </div>
+                  <div className="right">
+                    <div style={{ fontWeight: 700 }}>{money(r.contadoReal)}</div>
+                    <div className="meta" style={{ color: difColor(r.diferencia) }}>
+                      {r.diferencia === 0 ? 'Cuadrada' :
+                        (r.diferencia > 0 ? `Sobró ${money(r.diferencia)}` : `Faltó ${money(-r.diferencia)}`)}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </>
         )}
       </div>
@@ -301,37 +332,40 @@ export default function Turno() {
 
       {/* Detalle de cierre anterior */}
       <Sheet open={!!det} onClose={() => setDet(null)} title={det ? `Cierre · ${shortDate(det.cerradoEn)}` : ''}>
-        {det && (
-          <>
-            <table className="tabla">
-              <tbody>
-                <tr><td>Apertura</td><td className="num">{shortDate(det.abiertoEn)} · {det.abiertoPor}</td></tr>
-                <tr><td>Cierre</td><td className="num">{shortDate(det.cerradoEn)} · {det.cerradoPor}</td></tr>
-                <tr><td>Base efectivo (apertura)</td><td className="num">{money(det.base)}</td></tr>
-                <tr><td>Ventas en efectivo</td><td className="num">{money(det.resumen?.contado)}</td></tr>
-                <tr><td>Base transferencia (apertura)</td><td className="num">{money(det.baseTransferencia || 0)}</td></tr>
-                <tr><td>Ventas por transferencia</td><td className="num">{money(det.resumen?.transferencias || 0)}</td></tr>
-                {(det.resumen?.gastosTransfer || 0) > 0 && <tr><td>Pagos por transferencia (Nequi)</td><td className="num" style={{ color: 'var(--red)' }}>−{money(det.resumen.gastosTransfer)}</td></tr>}
-                <tr><td>Debe quedar en transferencia</td><td className="num">{money(det.resumen?.totalTransfer ?? ((det.baseTransferencia || 0) + (det.resumen?.transferencias || 0) - (det.resumen?.gastosTransfer || 0)))}</td></tr>
-                <tr><td>Abonos recibidos</td><td className="num">{money(det.resumen?.abonos)}</td></tr>
-                <tr><td>Gastos pagados</td><td className="num">−{money(det.resumen?.gastos)}</td></tr>
-                <tr><td><b>Efectivo esperado</b></td><td className="num"><b>{money(det.resumen?.esperado)}</b></td></tr>
-                <tr><td>Efectivo contado</td><td className="num">{money(det.resumen?.contadoReal)}</td></tr>
-                <tr>
-                  <td style={{ color: difColor(det.resumen?.diferencia || 0), fontWeight: 700 }}>
-                    {(det.resumen?.diferencia || 0) === 0 ? 'Caja cuadrada' : det.resumen.diferencia > 0 ? 'Sobrante' : 'Faltante'}
-                  </td>
-                  <td className="num" style={{ color: difColor(det.resumen?.diferencia || 0), fontWeight: 700 }}>
-                    {money(Math.abs(det.resumen?.diferencia || 0))}
-                  </td>
-                </tr>
-                <tr><td className="muted-cell">Ventas a crédito</td><td className="num muted-cell">{money(det.resumen?.credito)}</td></tr>
-              </tbody>
-            </table>
-            <div style={{ height: 12 }} />
-            <button className="btn" onClick={() => descargarCierrePDF(det)}>Descargar comprobante (PDF)</button>
-          </>
-        )}
+        {det && (() => {
+          const r = cuadreCerrado(det)
+          return (
+            <>
+              <table className="tabla">
+                <tbody>
+                  <tr><td>Apertura</td><td className="num">{shortDate(det.abiertoEn)} · {det.abiertoPor}</td></tr>
+                  <tr><td>Cierre</td><td className="num">{shortDate(det.cerradoEn)} · {det.cerradoPor}</td></tr>
+                  <tr><td>Base efectivo (apertura)</td><td className="num">{money(det.base)}</td></tr>
+                  <tr><td>Ventas en efectivo</td><td className="num">{money(r.contado)}</td></tr>
+                  <tr><td>Base transferencia (apertura)</td><td className="num">{money(det.baseTransferencia || 0)}</td></tr>
+                  <tr><td>Ventas por transferencia</td><td className="num">{money(r.transferencias)}</td></tr>
+                  {r.gastosTransfer > 0 && <tr><td>Pagos por transferencia (Nequi)</td><td className="num" style={{ color: 'var(--red)' }}>−{money(r.gastosTransfer)}</td></tr>}
+                  <tr><td>Debe quedar en transferencia</td><td className="num">{money(r.totalTransfer)}</td></tr>
+                  <tr><td>Abonos recibidos</td><td className="num">{money(r.abonos)}</td></tr>
+                  <tr><td>Gastos pagados</td><td className="num">−{money(r.gastos)}</td></tr>
+                  <tr><td><b>Efectivo esperado</b></td><td className="num"><b>{money(r.esperado)}</b></td></tr>
+                  <tr><td>Efectivo contado</td><td className="num">{money(r.contadoReal)}</td></tr>
+                  <tr>
+                    <td style={{ color: difColor(r.diferencia), fontWeight: 700 }}>
+                      {r.diferencia === 0 ? 'Caja cuadrada' : r.diferencia > 0 ? 'Sobrante' : 'Faltante'}
+                    </td>
+                    <td className="num" style={{ color: difColor(r.diferencia), fontWeight: 700 }}>
+                      {money(Math.abs(r.diferencia))}
+                    </td>
+                  </tr>
+                  <tr><td className="muted-cell">Ventas a crédito</td><td className="num muted-cell">{money(r.credito)}</td></tr>
+                </tbody>
+              </table>
+              <div style={{ height: 12 }} />
+              <button className="btn" onClick={() => descargarCierrePDF({ ...det, resumen: r })}>Descargar comprobante (PDF)</button>
+            </>
+          )
+        })()}
       </Sheet>
 
       {node}
