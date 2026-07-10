@@ -27,10 +27,13 @@ export default function Gastos() {
   const gastos = useLiveQuery(() => db.gastos.where('mes').equals(mesActual).toArray(), [mesActual], [])
   const fijos = useLiveQuery(() => db.gastos_fijos.where('activo').equals(1).toArray(), [], [])
 
-  // Excluimos las compras de inventario ('inventario'): NO son un gasto del P&L
-  // (su costo ya entra al vender el producto). Sí cuentan en el Turno (la plata
-  // salió de la caja), pero eso lo maneja la pestaña Turno leyendo db.gastos.
-  const lista = (gastos || []).filter((g) => !g.anulada && g.categoria !== 'inventario').sort((a, b) => b.fecha - a.fecha)
+  // Excluimos del total del P&L las categorías que NO son gasto operativo:
+  //  - 'comisiones': ya están descontadas en la ganancia de servicios (neto).
+  //    Antes contaban en el total "variables" pero NO se mostraban en la lista
+  //    → el total no cuadraba con lo listado. (Se pagan/ven en Lavadores.)
+  //  - 'inventario': su costo ya entra al vender el producto (COGS).
+  // Ambas SÍ cuentan en el Turno (la plata salió), que lee db.gastos aparte.
+  const lista = (gastos || []).filter((g) => !g.anulada && g.categoria !== 'inventario' && g.categoria !== 'comisiones').sort((a, b) => b.fecha - a.fecha)
   const total = lista.reduce((s, g) => s + g.monto, 0)
   const totalFijo = lista.filter((g) => tipoGasto(g) === 'fijo').reduce((s, g) => s + g.monto, 0)
   const totalVariable = total - totalFijo
