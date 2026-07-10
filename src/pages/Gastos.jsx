@@ -119,6 +119,12 @@ export default function Gastos() {
   const fijosOrdenados = (fijos || []).slice().sort((a, b) => a.nombre.localeCompare(b.nombre))
   const pendientes = fijosOrdenados.filter((f) => !registroDe(f.id)).length
 
+  // Gastos fijos YA registrados este mes (los que suman en "fijos" del total).
+  // Los "huérfanos" son fijos registrados cuya plantilla se borró: hay que
+  // poder verlos y editarlos/eliminarlos igual, porque siguen sumando.
+  const idsFijosActivos = new Set(fijosOrdenados.map((f) => f.id))
+  const fijosHuerfanos = lista.filter((g) => tipoGasto(g) === 'fijo' && g.categoria !== 'comisiones' && (!g.fijoId || !idsFijosActivos.has(g.fijoId)))
+
   return (
     <>
       <Header title="Gastos" sub={monthLabel(mesActual)} onBack={() => navigate('/')} />
@@ -150,11 +156,12 @@ export default function Gastos() {
         <div className="section-title">
           Gastos fijos del mes{pendientes > 0 ? ` · ${pendientes} pendiente${pendientes > 1 ? 's' : ''}` : ''}
         </div>
-        {fijosOrdenados.length === 0 && (
+        {fijosOrdenados.length === 0 && fijosHuerfanos.length === 0 && (
           <div className="helper" style={{ marginBottom: 8 }}>
             Define aquí los gastos que se repiten cada mes (arriendo, luz, agua…). El sistema te recordará si falta registrarlos.
           </div>
         )}
+        <div className="helper" style={{ marginBottom: 6 }}>Toca el valor de un fijo ya registrado para editarlo o eliminarlo.</div>
         {fijosOrdenados.map((f) => {
           const reg = registroDe(f.id)
           return (
@@ -165,10 +172,10 @@ export default function Gastos() {
               </div>
               <div className="right">
                 {reg ? (
-                  <>
+                  <div onClick={() => abrirEditar(reg)} style={{ cursor: 'pointer', textAlign: 'right' }}>
                     <div style={{ fontWeight: 700 }}>{money(reg.monto)}</div>
-                    <span className="badge green">Registrado</span>
-                  </>
+                    <span className="badge green">Registrado · editar</span>
+                  </div>
                 ) : (
                   <button className="chip-lavador" onClick={() => abrirDesdeFijo(f)}>Registrar</button>
                 )}
@@ -176,6 +183,16 @@ export default function Gastos() {
             </div>
           )
         })}
+        {/* Fijos registrados cuya plantilla se borró (siguen sumando en el total) */}
+        {fijosHuerfanos.map((g) => (
+          <div className="row" key={g.id} onClick={() => abrirEditar(g)} style={{ cursor: 'pointer' }}>
+            <div className="main">
+              <div className="title">{g.concepto}</div>
+              <div className="meta">{labelGasto(g.categoria)} · {shortDate(g.fecha)} · toca para editar/eliminar</div>
+            </div>
+            <div className="right" style={{ fontWeight: 700, color: 'var(--red)' }}>−{money(g.monto)}</div>
+          </div>
+        ))}
         <button className="btn ghost" style={{ marginBottom: 4 }} onClick={nuevoFijo}>Agregar gasto fijo</button>
       </div>
 
