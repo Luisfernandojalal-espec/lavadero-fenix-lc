@@ -27,7 +27,10 @@ export default function Gastos() {
   const gastos = useLiveQuery(() => db.gastos.where('mes').equals(mesActual).toArray(), [mesActual], [])
   const fijos = useLiveQuery(() => db.gastos_fijos.where('activo').equals(1).toArray(), [], [])
 
-  const lista = (gastos || []).filter((g) => !g.anulada).sort((a, b) => b.fecha - a.fecha)
+  // Excluimos las compras de inventario ('inventario'): NO son un gasto del P&L
+  // (su costo ya entra al vender el producto). Sí cuentan en el Turno (la plata
+  // salió de la caja), pero eso lo maneja la pestaña Turno leyendo db.gastos.
+  const lista = (gastos || []).filter((g) => !g.anulada && g.categoria !== 'inventario').sort((a, b) => b.fecha - a.fecha)
   const total = lista.reduce((s, g) => s + g.monto, 0)
   const totalFijo = lista.filter((g) => tipoGasto(g) === 'fijo').reduce((s, g) => s + g.monto, 0)
   const totalVariable = total - totalFijo

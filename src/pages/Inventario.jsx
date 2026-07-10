@@ -362,6 +362,7 @@ const lineaIva = (l) => lineaNeto(l) * ((l.iva || 0) / 100)
 
 function Compras() {
   const { show, node } = useToast()
+  const { user } = useAuth()
   const productos = useLiveQuery(() => db.productos.where('activo').equals(1).toArray(), [], [])
   const proveedores = useLiveQuery(() => db.proveedores.where('activo').equals(1).toArray(), [], [])
   const compras = useLiveQuery(() => db.compras.toArray(), [], [])
@@ -403,7 +404,7 @@ function Compras() {
 
   async function guardarEdicionCompra() {
     try {
-      await db.transaction('rw', db.productos, db.movimientos_inv, db.compras, db.proveedores, async () => {
+      await db.transaction('rw', db.productos, db.movimientos_inv, db.compras, db.proveedores, db.gastos, async () => {
         // Proveedor (existente o nuevo)
         let proveedorId = editEnc.proveedorId
         let proveedorNombre = nombreProv(proveedorId)
@@ -433,6 +434,21 @@ function Compras() {
           numero: editEnc.numero.trim(), formaPago: editEnc.formaPago,
           items: editItems, subtotal: bruto, iva, total: totalFinal,
         }))
+        // Mantener sincronizada la SALIDA ligada (categoría 'inventario') con la
+        // compra editada: nuevo total / forma de pago; a crédito se anula.
+        const ligados = await db.gastos.filter((g) => g.compraId === editCompra.id).toArray()
+        const gLink = ligados.find((g) => !g.anulada)
+        if (editEnc.formaPago === 'credito') {
+          if (gLink) await db.gastos.update(gLink.id, stamp({ anulada: 1 }))
+        } else {
+          const patch = { monto: totalFinal, medioPago: editEnc.formaPago === 'transferencia' ? 'transferencia' : 'caja', anulada: 0 }
+          if (gLink) await db.gastos.update(gLink.id, stamp(patch))
+          else await db.gastos.add(stamp({
+            id: uid(), concepto: 'Compra de inventario' + (proveedorNombre !== '—' ? ' · ' + proveedorNombre : ''),
+            categoria: 'inventario', tipo: 'variable', salidaTurno: 1, compraId: editCompra.id,
+            responsable: user?.nombre || '', fecha: editCompra.fecha || Date.now(), mes: editCompra.mes || monthKey(Date.now()), ...patch,
+          }))
+        }
       })
       setEditCompra(null)
       show('Factura actualizada')
@@ -482,7 +498,7 @@ function Compras() {
     let creadosNuevos = 0
     let huboCompra = false
     try {
-      await db.transaction('rw', db.productos, db.movimientos_inv, db.compras, db.proveedores, async () => {
+      await db.transaction('rw', db.productos, db.movimientos_inv, db.compras, db.proveedores, db.gastos, async () => {
         const now = Date.now()
         let proveedorId = enc.proveedorId
         let proveedorNombre = nombreProv(proveedorId)
@@ -550,6 +566,20 @@ function Compras() {
             formaPago: enc.formaPago, observaciones: enc.observaciones.trim(), descuentoGlobal: enc.descuentoGlobal || 0,
             items: itemsCompra, subtotal: bruto, iva, total: totalFinal, mes: monthKey(now),
           }))
+          // Si se pagó (contado=efectivo o transferencia), registramos la SALIDA
+          // ligada a la compra para que el TURNO cuadre (la plata salió de la
+          // caja/banco). Categoría 'inventario': NO cuenta en el Balance ni en la
+          // pestaña Gastos (su costo ya entra al vender el producto → evita el
+          // doble conteo). A crédito no sale plata todavía → no se registra.
+          if (enc.formaPago !== 'credito') {
+            await db.gastos.add(stamp({
+              id: uid(), concepto: 'Compra de inventario' + (proveedorNombre !== '—' ? ' · ' + proveedorNombre : ''),
+              categoria: 'inventario', tipo: 'variable', monto: totalFinal,
+              medioPago: enc.formaPago === 'transferencia' ? 'transferencia' : 'caja',
+              salidaTurno: 1, compraId, responsable: user?.nombre || '',
+              fecha: now, mes: monthKey(now),
+            }))
+          }
         }
       })
       const nNuevos = `${creadosNuevos} producto${creadosNuevos > 1 ? 's' : ''}`

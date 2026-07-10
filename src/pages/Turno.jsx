@@ -219,7 +219,7 @@ export default function Turno() {
                 <table className="tabla">
                   <tbody>
                     {salidasT.slice(0, 20).map((g) => {
-                      const editable = esDueno && g.categoria !== 'comisiones'
+                      const editable = esDueno && g.categoria !== 'comisiones' && g.categoria !== 'inventario'
                       return (
                         <tr key={g.id} onClick={editable ? () => editarSalida(g) : undefined} style={editable ? { cursor: 'pointer' } : undefined}>
                           <td>{g.concepto || 'Salida'}<div className="muted-cell">{labelMedioGasto(g.medioPago)}{g.responsable ? ' · ' + g.responsable : ''}{editable ? ' · toca para editar' : ''}</div></td>
