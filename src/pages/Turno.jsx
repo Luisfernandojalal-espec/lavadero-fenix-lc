@@ -232,9 +232,11 @@ export default function Turno() {
               </>
             )}
 
-            <button className="btn secondary" style={{ marginTop: 12 }} onClick={abrirEditarApertura}>
-              Editar apertura (efectivo / transferencia)
-            </button>
+            {esDueno && (
+              <button className="btn secondary" style={{ marginTop: 12 }} onClick={abrirEditarApertura}>
+                Editar apertura (efectivo / transferencia)
+              </button>
+            )}
 
             <button className="btn" style={{ marginTop: 10 }} onClick={() => { setContadoReal(0); setCerrarOpen(true) }}>
               Cerrar turno
