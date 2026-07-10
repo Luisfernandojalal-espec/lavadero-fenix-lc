@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, MOTIVOS_SALIDA, CATEGORIAS_PRODUCTO, UNIDADES, FORMAS_PAGO_COMPRA, labelFormaPagoCompra, labelCategoria, STOCK_MIN_DEFAULT } from '../db'
+import { db, uid, stamp, MOTIVOS_SALIDA, CATEGORIAS_PRODUCTO, UNIDADES, FORMAS_PAGO_COMPRA, labelFormaPagoCompra, labelCategoria, STOCK_MIN_DEFAULT, medioPagoGasto } from '../db'
 import { money, monthKey, shortDate, dayKey } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 import { useAuth } from '../auth'
@@ -368,7 +368,7 @@ function Compras() {
   const compras = useLiveQuery(() => db.compras.toArray(), [], [])
   const excelRef = useRef(null)
 
-  const emptyEnc = () => ({ proveedorId: '', proveedorNuevo: '', nit: '', numero: '', fecha: dayKey(), formaPago: 'contado', observaciones: '', descuentoGlobal: 0 })
+  const emptyEnc = () => ({ proveedorId: '', proveedorNuevo: '', nit: '', numero: '', fecha: dayKey(), formaPago: 'contado', pagoEfectivo: 0, observaciones: '', descuentoGlobal: 0 })
   const [modo, setModo] = useState('lista') // 'lista' | 'nueva'
   const [enc, setEnc] = useState(emptyEnc())
   const [lineas, setLineas] = useState([])
@@ -395,7 +395,7 @@ function Compras() {
   const [editItems, setEditItems] = useState([])
   function editarCompra(c) {
     setEditCompra(c)
-    setEditEnc({ proveedorId: c.proveedorId || '', proveedorNuevo: '', nit: c.nit || '', numero: c.numero || '', formaPago: c.formaPago || 'contado' })
+    setEditEnc({ proveedorId: c.proveedorId || '', proveedorNuevo: '', nit: c.nit || '', numero: c.numero || '', formaPago: c.formaPago || 'contado', pagoEfectivo: c.pagoEfectivo || 0 })
     setEditItems((c.items || []).map((it) => ({ ...it })))
     setEditItemsBase((c.items || []).map((it) => ({ ...it })))
   }
@@ -432,16 +432,18 @@ function Compras() {
         await db.compras.update(editCompra.id, stamp({
           proveedorId: proveedorId || null, proveedorNombre, nit: editEnc.nit.trim(),
           numero: editEnc.numero.trim(), formaPago: editEnc.formaPago,
+          pagoEfectivo: editEnc.formaPago === 'mixto' ? (editEnc.pagoEfectivo || 0) : null,
           items: editItems, subtotal: bruto, iva, total: totalFinal,
         }))
         // Mantener sincronizada la SALIDA ligada (categoría 'inventario') con la
-        // compra editada: nuevo total / forma de pago; a crédito se anula.
+        // compra editada: nuevo total / forma de pago (incluye mixto); a crédito
+        // se anula (no salió plata todavía).
         const ligados = await db.gastos.filter((g) => g.compraId === editCompra.id).toArray()
         const gLink = ligados.find((g) => !g.anulada)
         if (editEnc.formaPago === 'credito') {
           if (gLink) await db.gastos.update(gLink.id, stamp({ anulada: 1 }))
         } else {
-          const patch = { monto: totalFinal, medioPago: editEnc.formaPago === 'transferencia' ? 'transferencia' : 'caja', anulada: 0 }
+          const patch = { monto: totalFinal, ...medioPagoGasto(editEnc.formaPago, totalFinal, editEnc.pagoEfectivo || 0), anulada: 0 }
           if (gLink) await db.gastos.update(gLink.id, stamp(patch))
           else await db.gastos.add(stamp({
             id: uid(), concepto: 'Compra de inventario' + (proveedorNombre !== '—' ? ' · ' + proveedorNombre : ''),
@@ -563,7 +565,8 @@ function Compras() {
           await db.compras.add(stamp({
             id: compraId, proveedorId: proveedorId || null, proveedorNombre, nit: enc.nit.trim(),
             numero: enc.numero.trim(), fecha: now, fechaFactura: enc.fecha,
-            formaPago: enc.formaPago, observaciones: enc.observaciones.trim(), descuentoGlobal: enc.descuentoGlobal || 0,
+            formaPago: enc.formaPago, pagoEfectivo: enc.formaPago === 'mixto' ? (enc.pagoEfectivo || 0) : null,
+            observaciones: enc.observaciones.trim(), descuentoGlobal: enc.descuentoGlobal || 0,
             items: itemsCompra, subtotal: bruto, iva, total: totalFinal, mes: monthKey(now),
           }))
           // Si se pagó (contado=efectivo o transferencia), registramos la SALIDA
@@ -575,7 +578,7 @@ function Compras() {
             await db.gastos.add(stamp({
               id: uid(), concepto: 'Compra de inventario' + (proveedorNombre !== '—' ? ' · ' + proveedorNombre : ''),
               categoria: 'inventario', tipo: 'variable', monto: totalFinal,
-              medioPago: enc.formaPago === 'transferencia' ? 'transferencia' : 'caja',
+              ...medioPagoGasto(enc.formaPago, totalFinal, enc.pagoEfectivo || 0),
               salidaTurno: 1, compraId, responsable: user?.nombre || '',
               fecha: now, mes: monthKey(now),
             }))
@@ -738,6 +741,13 @@ function Compras() {
                   onClick={() => setEnc({ ...enc, formaPago: f.id })}>{f.label}</button>
               ))}
             </div>
+            {enc.formaPago === 'mixto' && (
+              <>
+                <label>¿Cuánto se pagó en efectivo?</label>
+                <MoneyInput value={enc.pagoEfectivo} onChange={(v) => setEnc({ ...enc, pagoEfectivo: v })} />
+                <div className="helper">El resto va por transferencia. La parte en efectivo sale de la caja del turno.</div>
+              </>
+            )}
             <label>Observaciones (opcional)</label>
             <input value={enc.observaciones} placeholder="Notas de la compra"
               onChange={(e) => setEnc({ ...enc, observaciones: e.target.value })} />
@@ -802,6 +812,13 @@ function Compras() {
                   onClick={() => setEditEnc({ ...editEnc, formaPago: f.id })}>{f.label}</button>
               ))}
             </div>
+            {editEnc.formaPago === 'mixto' && (
+              <>
+                <label>¿Cuánto se pagó en efectivo?</label>
+                <MoneyInput value={editEnc.pagoEfectivo} onChange={(v) => setEditEnc({ ...editEnc, pagoEfectivo: v })} />
+                <div className="helper">El resto va por transferencia. La parte en efectivo sale de la caja del turno.</div>
+              </>
+            )}
 
             <div className="section-title">Productos (cantidad y costo)</div>
             <div className="helper" style={{ marginTop: -4, marginBottom: 8 }}>Si cambias la cantidad, el inventario se ajusta por la diferencia.</div>

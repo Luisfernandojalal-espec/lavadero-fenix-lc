@@ -111,9 +111,10 @@ export const labelUnidad = (id) => UNIDADES.find((u) => u.id === id)?.label || '
 
 // Formas de pago de una compra a proveedor.
 export const FORMAS_PAGO_COMPRA = [
-  { id: 'contado', label: 'Contado' },
-  { id: 'credito', label: 'Crédito' },
+  { id: 'contado', label: 'Contado (efectivo)' },
   { id: 'transferencia', label: 'Transferencia' },
+  { id: 'mixto', label: 'Mixto (efectivo + transferencia)' },
+  { id: 'credito', label: 'Crédito' },
 ]
 export const labelFormaPagoCompra = (id) => FORMAS_PAGO_COMPRA.find((f) => f.id === id)?.label || 'Contado'
 

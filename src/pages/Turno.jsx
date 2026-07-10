@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, gastoDeCaja, gastoMontoCaja, gastoMontoTransfer, tipoGasto, labelMedioGasto } from '../db'
+import { db, uid, stamp, gastoDeCaja, gastoMontoCaja, gastoMontoTransfer, tipoGasto, labelMedioGasto, medioPagoGasto } from '../db'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
 import { descargarCierrePDF } from '../pdf'
@@ -87,19 +87,21 @@ export default function Turno() {
   const [salConcepto, setSalConcepto] = useState('')
   const [salMonto, setSalMonto] = useState(0)
   const [salMedio, setSalMedio] = useState('transferencia') // Nequi por defecto (el caso del cliente)
-  function nuevaSalida() { setSalEditId(null); setSalConcepto(''); setSalMonto(0); setSalMedio('transferencia'); setSalidaOpen(true) }
-  function editarSalida(g) { setSalEditId(g.id); setSalConcepto(g.concepto || ''); setSalMonto(g.monto || 0); setSalMedio(g.medioPago || 'transferencia'); setSalidaOpen(true) }
+  const [salEfectivo, setSalEfectivo] = useState(0) // parte en efectivo cuando el medio es 'mixto'
+  function nuevaSalida() { setSalEditId(null); setSalConcepto(''); setSalMonto(0); setSalMedio('transferencia'); setSalEfectivo(0); setSalidaOpen(true) }
+  function editarSalida(g) { setSalEditId(g.id); setSalConcepto(g.concepto || ''); setSalMonto(g.monto || 0); setSalMedio(g.medioPago || 'transferencia'); setSalEfectivo(g.pagoEfectivo || 0); setSalidaOpen(true) }
   async function guardarSalida() {
     if (!salConcepto.trim()) return show('Escribe qué se pagó')
     if (salMonto <= 0) return show('Escribe el valor')
+    const mp = medioPagoGasto(salMedio, salMonto, salEfectivo) // arma medioPago (+ split si es mixto)
     if (salEditId) {
-      await db.gastos.update(salEditId, stamp({ concepto: salConcepto.trim(), monto: salMonto, medioPago: salMedio }))
+      await db.gastos.update(salEditId, stamp({ concepto: salConcepto.trim(), monto: salMonto, ...mp }))
       show('Salida actualizada')
     } else {
       const now = Date.now()
       await db.gastos.add(stamp({
         id: uid(), concepto: salConcepto.trim(), categoria: 'otro', monto: salMonto,
-        tipo: 'variable', medioPago: salMedio, responsable: user?.nombre || '',
+        tipo: 'variable', ...mp, responsable: user?.nombre || '',
         salidaTurno: 1, // salió de la caja/transferencia de ESTE turno
         fecha: now, mes: monthKey(now),
       }))
@@ -219,10 +221,14 @@ export default function Turno() {
                 <table className="tabla">
                   <tbody>
                     {salidasT.slice(0, 20).map((g) => {
-                      const editable = esDueno && g.categoria !== 'comisiones' && g.categoria !== 'inventario'
+                      const esInventario = g.categoria === 'inventario'
+                      const editable = esDueno && g.categoria !== 'comisiones' && !esInventario
+                      const medioTxt = g.medioPago === 'mixto'
+                        ? `Mixto (ef ${money(gastoMontoCaja(g))} · tr ${money(gastoMontoTransfer(g))})`
+                        : labelMedioGasto(g.medioPago)
                       return (
                         <tr key={g.id} onClick={editable ? () => editarSalida(g) : undefined} style={editable ? { cursor: 'pointer' } : undefined}>
-                          <td>{g.concepto || 'Salida'}<div className="muted-cell">{labelMedioGasto(g.medioPago)}{g.responsable ? ' · ' + g.responsable : ''}{editable ? ' · toca para editar' : ''}</div></td>
+                          <td>{g.concepto || 'Salida'}<div className="muted-cell">{medioTxt}{g.responsable ? ' · ' + g.responsable : ''}{esInventario ? ' · edítala en la factura de entrada' : (editable ? ' · toca para editar' : '')}</div></td>
                           <td className="num" style={{ color: 'var(--red)', fontWeight: 700, whiteSpace: 'nowrap' }}>−{money(g.monto)}</td>
                         </tr>
                       )
@@ -281,7 +287,15 @@ export default function Turno() {
         <div className="pill-row">
           <button className={`pill ${salMedio === 'transferencia' ? 'active' : ''}`} onClick={() => setSalMedio('transferencia')}>Transferencia (Nequi)</button>
           <button className={`pill ${salMedio === 'caja' ? 'active' : ''}`} onClick={() => setSalMedio('caja')}>Efectivo (caja)</button>
+          <button className={`pill ${salMedio === 'mixto' ? 'active' : ''}`} onClick={() => setSalMedio('mixto')}>Mixto</button>
         </div>
+        {salMedio === 'mixto' && (
+          <>
+            <label>¿Cuánto en efectivo?</label>
+            <MoneyInput value={salEfectivo} onChange={setSalEfectivo} />
+            <div className="helper">Va por transferencia (Nequi): <b>{money(Math.max(0, salMonto - Math.min(salEfectivo, salMonto)))}</b></div>
+          </>
+        )}
         <div style={{ height: 14 }} />
         <button className="btn" onClick={guardarSalida}>{salEditId ? 'Guardar cambios' : 'Registrar salida'}</button>
         {salEditId && <><div style={{ height: 10 }} /><button className="btn danger" onClick={eliminarSalida}>Eliminar salida</button></>}
