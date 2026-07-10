@@ -234,13 +234,14 @@ export default function Gastos() {
         <input value={form.comprobante} placeholder="Ej: N° de recibo o factura"
           onChange={(e) => setForm({ ...form, comprobante: e.target.value })} />
 
-        {!modoVariable && (
+        {(!modoVariable || editId) && (
           <>
-            <label>Tipo</label>
+            <label>Tipo (fijo o variable)</label>
             <div className="pill-row">
               <button className={`pill ${form.tipo === 'fijo' ? 'active' : ''}`} onClick={() => setForm({ ...form, tipo: 'fijo' })}>Fijo</button>
               <button className={`pill ${form.tipo === 'variable' ? 'active' : ''}`} onClick={() => setForm({ ...form, tipo: 'variable' })}>Variable</button>
             </div>
+            <div className="helper">Fijo = se repite cada mes (arriendo, nómina, sistema…). Variable = insumos y gastos del día.</div>
           </>
         )}
 
