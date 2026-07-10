@@ -368,7 +368,7 @@ function Compras() {
   const compras = useLiveQuery(() => db.compras.toArray(), [], [])
   const excelRef = useRef(null)
 
-  const emptyEnc = () => ({ proveedorId: '', proveedorNuevo: '', nit: '', numero: '', fecha: dayKey(), formaPago: 'contado', pagoEfectivo: 0, observaciones: '', descuentoGlobal: 0 })
+  const emptyEnc = () => ({ proveedorId: '', proveedorNuevo: '', nit: '', numero: '', fecha: dayKey(), formaPago: 'contado', pagoEfectivo: 0, afectaTurno: true, observaciones: '', descuentoGlobal: 0 })
   const [modo, setModo] = useState('lista') // 'lista' | 'nueva'
   const [enc, setEnc] = useState(emptyEnc())
   const [lineas, setLineas] = useState([])
@@ -395,7 +395,7 @@ function Compras() {
   const [editItems, setEditItems] = useState([])
   function editarCompra(c) {
     setEditCompra(c)
-    setEditEnc({ proveedorId: c.proveedorId || '', proveedorNuevo: '', nit: c.nit || '', numero: c.numero || '', formaPago: c.formaPago || 'contado', pagoEfectivo: c.pagoEfectivo || 0 })
+    setEditEnc({ proveedorId: c.proveedorId || '', proveedorNuevo: '', nit: c.nit || '', numero: c.numero || '', formaPago: c.formaPago || 'contado', pagoEfectivo: c.pagoEfectivo || 0, afectaTurno: c.afectaTurno !== false })
     setEditItems((c.items || []).map((it) => ({ ...it })))
     setEditItemsBase((c.items || []).map((it) => ({ ...it })))
   }
@@ -433,14 +433,15 @@ function Compras() {
           proveedorId: proveedorId || null, proveedorNombre, nit: editEnc.nit.trim(),
           numero: editEnc.numero.trim(), formaPago: editEnc.formaPago,
           pagoEfectivo: editEnc.formaPago === 'mixto' ? (editEnc.pagoEfectivo || 0) : null,
+          afectaTurno: editEnc.afectaTurno !== false,
           items: editItems, subtotal: bruto, iva, total: totalFinal,
         }))
         // Mantener sincronizada la SALIDA ligada (categoría 'inventario') con la
-        // compra editada: nuevo total / forma de pago (incluye mixto); a crédito
-        // se anula (no salió plata todavía).
+        // compra editada: nuevo total / forma de pago (incluye mixto). Se anula si
+        // es a crédito o si el operador dice que NO salió del turno (afectaTurno).
         const ligados = await db.gastos.filter((g) => g.compraId === editCompra.id).toArray()
         const gLink = ligados.find((g) => !g.anulada)
-        if (editEnc.formaPago === 'credito') {
+        if (editEnc.formaPago === 'credito' || editEnc.afectaTurno === false) {
           if (gLink) await db.gastos.update(gLink.id, stamp({ anulada: 1 }))
         } else {
           const patch = { monto: totalFinal, ...medioPagoGasto(editEnc.formaPago, totalFinal, editEnc.pagoEfectivo || 0), anulada: 0 }
@@ -566,15 +567,17 @@ function Compras() {
             id: compraId, proveedorId: proveedorId || null, proveedorNombre, nit: enc.nit.trim(),
             numero: enc.numero.trim(), fecha: now, fechaFactura: enc.fecha,
             formaPago: enc.formaPago, pagoEfectivo: enc.formaPago === 'mixto' ? (enc.pagoEfectivo || 0) : null,
+            afectaTurno: enc.afectaTurno !== false,
             observaciones: enc.observaciones.trim(), descuentoGlobal: enc.descuentoGlobal || 0,
             items: itemsCompra, subtotal: bruto, iva, total: totalFinal, mes: monthKey(now),
           }))
-          // Si se pagó (contado=efectivo o transferencia), registramos la SALIDA
-          // ligada a la compra para que el TURNO cuadre (la plata salió de la
-          // caja/banco). Categoría 'inventario': NO cuenta en el Balance ni en la
-          // pestaña Gastos (su costo ya entra al vender el producto → evita el
-          // doble conteo). A crédito no sale plata todavía → no se registra.
-          if (enc.formaPago !== 'credito') {
+          // Registramos la SALIDA ligada para que el TURNO cuadre (la plata salió
+          // de la caja/banco del turno) SOLO si el operador dice que salió del
+          // turno (afectaTurno). Si la pagó de otra cuenta, la compra queda solo
+          // registrada (no toca el cuadre). A crédito no sale plata todavía.
+          // Categoría 'inventario': NO cuenta en el Balance/Gastos (su costo ya
+          // entra al vender el producto → evita el doble conteo).
+          if (enc.formaPago !== 'credito' && enc.afectaTurno !== false) {
             await db.gastos.add(stamp({
               id: uid(), concepto: 'Compra de inventario' + (proveedorNombre !== '—' ? ' · ' + proveedorNombre : ''),
               categoria: 'inventario', tipo: 'variable', monto: totalFinal,
@@ -745,7 +748,19 @@ function Compras() {
               <>
                 <label>¿Cuánto se pagó en efectivo?</label>
                 <MoneyInput value={enc.pagoEfectivo} onChange={(v) => setEnc({ ...enc, pagoEfectivo: v })} />
-                <div className="helper">El resto va por transferencia. La parte en efectivo sale de la caja del turno.</div>
+                <div className="helper">El resto va por transferencia.</div>
+              </>
+            )}
+            {enc.formaPago !== 'credito' && (
+              <>
+                <label>¿De dónde salió la plata?</label>
+                <div className="pill-row">
+                  <button className={`pill ${enc.afectaTurno !== false ? 'active' : ''}`} onClick={() => setEnc({ ...enc, afectaTurno: true })}>De la caja del turno</button>
+                  <button className={`pill ${enc.afectaTurno === false ? 'active' : ''}`} onClick={() => setEnc({ ...enc, afectaTurno: false })}>De otra cuenta (solo registro)</button>
+                </div>
+                <div className="helper">{enc.afectaTurno !== false
+                  ? 'Descuenta del turno: el efectivo sale de la caja y la transferencia del saldo en transferencia.'
+                  : 'No afecta el cuadre del turno; la compra queda solo registrada (su costo entra al vender).'}</div>
               </>
             )}
             <label>Observaciones (opcional)</label>
@@ -816,7 +831,19 @@ function Compras() {
               <>
                 <label>¿Cuánto se pagó en efectivo?</label>
                 <MoneyInput value={editEnc.pagoEfectivo} onChange={(v) => setEditEnc({ ...editEnc, pagoEfectivo: v })} />
-                <div className="helper">El resto va por transferencia. La parte en efectivo sale de la caja del turno.</div>
+                <div className="helper">El resto va por transferencia.</div>
+              </>
+            )}
+            {editEnc.formaPago !== 'credito' && (
+              <>
+                <label>¿De dónde salió la plata?</label>
+                <div className="pill-row">
+                  <button className={`pill ${editEnc.afectaTurno !== false ? 'active' : ''}`} onClick={() => setEditEnc({ ...editEnc, afectaTurno: true })}>De la caja del turno</button>
+                  <button className={`pill ${editEnc.afectaTurno === false ? 'active' : ''}`} onClick={() => setEditEnc({ ...editEnc, afectaTurno: false })}>De otra cuenta (solo registro)</button>
+                </div>
+                <div className="helper">{editEnc.afectaTurno !== false
+                  ? 'Descuenta del turno: el efectivo sale de la caja y la transferencia del saldo en transferencia.'
+                  : 'No afecta el cuadre del turno; la compra queda solo registrada (su costo entra al vender).'}</div>
               </>
             )}
 
