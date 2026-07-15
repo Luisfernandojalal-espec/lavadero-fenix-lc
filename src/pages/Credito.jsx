@@ -2,13 +2,16 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp } from '../db'
-import { facturarItems } from '../ventas'
+import { facturarItems, folio } from '../ventas'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
+import { useAuth } from '../auth'
 
 export default function Credito() {
   const navigate = useNavigate()
   const { show, node } = useToast()
+  const { user } = useAuth()
+  const esDueno = user?.rol === 'dueño' // solo el administrador edita/elimina fiados
 
   const clientes = useLiveQuery(() => db.clientes.where('activo').equals(1).toArray(), [], [])
   const ventas = useLiveQuery(() => db.ventas.toArray(), [], [])
@@ -54,7 +57,7 @@ export default function Credito() {
     ...ventasCred.filter((v) => v.clienteId === det.id).map((v) => ({
       fecha: v.fecha,
       concepto: v.tipo === 'servicio' ? (v.servicioNombre || 'Servicio') : 'Venta de productos',
-      monto: v.total,
+      monto: v.total, venta: v,
     })),
     ...(abonos || []).filter((a) => a.clienteId === det.id && !a.anulada).map((a) => ({
       fecha: a.fecha, concepto: 'Abono', monto: -a.monto, abono: a,
@@ -81,6 +84,46 @@ export default function Credito() {
   async function eliminarAbono() {
     await db.abonos.update(abonoEdit.id, stamp({ anulada: 1 }))
     setAbonoEdit(null); show('Abono eliminado')
+  }
+
+  // --- Editar / eliminar una venta a crédito (fiado) — solo administrador ---
+  const [ventaEdit, setVentaEdit] = useState(null)
+  const [ventaMonto, setVentaMonto] = useState(0)
+  function abrirVenta(v) { setVentaEdit(v); setVentaMonto(v.total || 0) }
+
+  async function guardarVenta() {
+    if (ventaMonto <= 0) return show('El valor debe ser mayor a 0')
+    const v = ventaEdit
+    // Al cambiar el valor del fiado hay que recomponer la ganancia:
+    //  - servicio: la comisión se recalcula sobre el nuevo neto (su % no cambia).
+    //  - producto: el costo de lo vendido no cambia; la ganancia sí.
+    const patch = { total: ventaMonto }
+    if (v.tipo === 'servicio') {
+      const comision = Math.round(ventaMonto * ((v.comisionPct || 0) / 100))
+      patch.comision = comision; patch.costo = comision; patch.ganancia = ventaMonto - comision
+    } else {
+      patch.ganancia = ventaMonto - (v.costo || 0)
+    }
+    await db.ventas.update(v.id, stamp(patch))
+    setVentaEdit(null); show('Fiado actualizado')
+  }
+
+  async function eliminarVenta() {
+    const v = ventaEdit
+    // Transaccional e idempotente (igual que eliminar factura en Historial):
+    // si ya estaba anulada, NO se vuelve a devolver el stock.
+    await db.transaction('rw', db.ventas, db.productos, async () => {
+      const fresh = await db.ventas.get(v.id)
+      if (!fresh || fresh.anulada) return
+      await db.ventas.update(v.id, stamp({ anulada: 1 }))
+      if (v.tipo === 'producto') {
+        for (const it of v.items || []) {
+          const p = await db.productos.get(it.productoId)
+          if (p) await db.productos.update(p.id, stamp({ stock: (p.stock || 0) + it.cantidad }))
+        }
+      }
+    })
+    setVentaEdit(null); show('Fiado eliminado')
   }
 
   // --- Fiar productos de inventario al cliente (descuenta stock al cargar) ---
@@ -178,19 +221,24 @@ export default function Credito() {
             </div>
 
             <div className="section-title">Movimientos</div>
-            {movimientos.some((m) => m.abono) && <div className="helper" style={{ marginBottom: 6 }}>Toca un abono para editarlo o eliminarlo.</div>}
+            <div className="helper" style={{ marginBottom: 6 }}>
+              {esDueno ? 'Toca un abono o un fiado para editarlo o eliminarlo.' : 'Toca un abono para editarlo o eliminarlo.'}
+            </div>
             {movimientos.length === 0 && <div className="empty">Sin movimientos.</div>}
             <table className="tabla">
               <tbody>
-                {movimientos.map((m, i) => (
-                  <tr key={i} onClick={m.abono ? () => abrirAbono(m.abono) : undefined} style={m.abono ? { cursor: 'pointer' } : undefined}>
+                {movimientos.map((m, i) => {
+                  // El abono lo edita cualquiera; el fiado (venta a crédito) solo el administrador.
+                  const onTap = m.abono ? () => abrirAbono(m.abono) : (esDueno && m.venta ? () => abrirVenta(m.venta) : undefined)
+                  return (
+                  <tr key={i} onClick={onTap} style={onTap ? { cursor: 'pointer' } : undefined}>
                     <td className="muted-cell">{shortDate(m.fecha)}</td>
-                    <td>{m.concepto}{m.abono ? ' · editar' : ''}</td>
+                    <td>{m.concepto}{onTap ? ' · editar' : ''}</td>
                     <td className="num" style={{ fontWeight: 700, color: m.monto < 0 ? 'var(--green)' : 'var(--text)' }}>
                       {money(m.monto)}
                     </td>
                   </tr>
-                ))}
+                  )})}
               </tbody>
             </table>
           </>
@@ -224,6 +272,33 @@ export default function Credito() {
         <button className="btn" disabled={cargando || totalCarrito <= 0} onClick={cargarAlFiado}>
           {cargando ? 'Cargando…' : 'Cargar al fiado'}
         </button>
+      </Sheet>
+
+      {/* Editar / eliminar una venta a crédito (fiado) — solo administrador */}
+      <Sheet open={!!ventaEdit} onClose={() => setVentaEdit(null)} title="Editar fiado">
+        {ventaEdit && (
+          <>
+            <div className="helper" style={{ marginBottom: 8 }}>
+              {ventaEdit.tipo === 'servicio' ? (ventaEdit.servicioNombre || 'Servicio') : 'Venta de productos'} · {shortDate(ventaEdit.fecha)}
+              {ventaEdit.factura ? ` · ${folio(ventaEdit.factura)}` : ''}
+            </div>
+            {ventaEdit.tipo === 'producto' && (ventaEdit.items || []).length > 0 && (
+              <div className="helper" style={{ marginBottom: 8 }}>
+                {(ventaEdit.items || []).map((i) => `${i.cantidad}× ${i.nombre}`).join(', ')}
+              </div>
+            )}
+            <label>Valor de la deuda</label>
+            <MoneyInput value={ventaMonto} onChange={setVentaMonto} />
+            <div className="helper">Cambiar el valor ajusta el saldo del cliente{ventaEdit.tipo === 'servicio' ? ' y recalcula la comisión del lavador' : ''}.</div>
+            <div style={{ height: 14 }} />
+            <button className="btn" onClick={guardarVenta}>Guardar</button>
+            <div style={{ height: 10 }} />
+            <button className="btn danger" onClick={eliminarVenta}>Eliminar fiado</button>
+            <div className="helper" style={{ marginTop: 6 }}>
+              Al eliminarlo se borra la deuda{ventaEdit.tipo === 'producto' ? ' y los productos vuelven al inventario' : ''}.
+            </div>
+          </>
+        )}
       </Sheet>
 
       {/* Editar / eliminar un abono */}
