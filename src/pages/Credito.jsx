@@ -45,6 +45,15 @@ export default function Credito() {
     else await db.clientes.add(stamp({ id: uid(), activo: 1, ...datos }))
     setCliSheet(false); show('Cliente guardado')
   }
+  // Saldo del cliente que se está editando (para permitir borrarlo solo si no debe)
+  const saldoCliEdit = cliEdit ? (lista.find((c) => c.id === cliEdit)?.saldo ?? 0) : 0
+  async function eliminarCliente() {
+    if (saldoCliEdit > 0) return show('No puedes eliminar un cliente que debe. Primero salda su cuenta.')
+    // Borrado suave (activo:0) para que se propague por sync; sus ventas quedan
+    // en el historial, solo desaparece de la cartera.
+    await db.clientes.update(cliEdit, stamp({ activo: 0 }))
+    setCliSheet(false); setDetId(null); show('Cliente eliminado')
+  }
 
   // --- Detalle de cliente + abono ---
   const [detId, setDetId] = useState(null)
@@ -204,6 +213,17 @@ export default function Credito() {
         <input inputMode="tel" value={cliForm.telefono} onChange={(e) => setCliForm({ ...cliForm, telefono: e.target.value })} />
         <div style={{ height: 14 }} />
         <button className="btn" onClick={guardarCliente}>{cliEdit ? 'Guardar' : 'Agregar cliente'}</button>
+        {cliEdit && esDueno && (
+          <>
+            <div style={{ height: 10 }} />
+            <button className="btn danger" onClick={eliminarCliente} disabled={saldoCliEdit > 0}>Eliminar cliente</button>
+            <div className="helper" style={{ marginTop: 6 }}>
+              {saldoCliEdit > 0
+                ? `No se puede eliminar: debe ${money(saldoCliEdit)}. Primero salda su cuenta.`
+                : 'Se quita de la cartera. Sus ventas quedan en el historial.'}
+            </div>
+          </>
+        )}
       </Sheet>
 
       {/* Detalle del cliente */}
