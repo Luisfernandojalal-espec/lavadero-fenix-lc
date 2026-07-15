@@ -30,7 +30,12 @@ export default function Turno() {
   const efectivo = vTurno.reduce((s, v) => s + montoEfectivo(v), 0)
   const transferencias = vTurno.reduce((s, v) => s + montoTransferencia(v), 0)
   const credito = vTurno.filter((v) => v.metodoPago === 'credito').reduce((s, v) => s + v.total, 0)
-  const abonosT = (abonos || []).filter((a) => a.fecha >= desde && !a.anulada).reduce((s, a) => s + a.monto, 0)
+  // Abonos del turno repartidos por cómo pagó el cliente: el efectivo entra a la
+  // caja y la transferencia al banco. (gastoMontoCaja/Transfer sirven para
+  // cualquier movimiento con medioPago; un abono viejo sin medioPago = efectivo.)
+  const abonosDelTurno = (abonos || []).filter((a) => a.fecha >= desde && !a.anulada)
+  const abonosT = abonosDelTurno.reduce((s, a) => s + gastoMontoCaja(a), 0)
+  const abonosTransferT = abonosDelTurno.reduce((s, a) => s + gastoMontoTransfer(a), 0)
   // Salidas/pagos del turno (gastos VARIABLES; los FIJOS del mes nunca cuentan):
   //  - EFECTIVO (caja): SIEMPRE cuenta. La plata física salió de la caja, sin
   //    importar si se registró aquí o en la pestaña Gastos → baja el efectivo.
@@ -47,9 +52,10 @@ export default function Turno() {
   const gastosTransferT = salidasT.reduce((s, g) => s + gastoMontoTransfer(g), 0)
   // Solo el efectivo entra a la caja física (transferencias van al banco)
   const esperado = (abierto?.base || 0) + efectivo + abonosT - gastosT
-  // Transferencia/banco (Nequi): base + ventas por transferencia − pagos hechos por transferencia.
+  // Transferencia/banco (Nequi): base + ventas por transferencia + abonos que el
+  // cliente pagó por transferencia − pagos hechos por transferencia.
   const baseTransferAbierto = abierto?.baseTransferencia || 0
-  const totalTransfer = baseTransferAbierto + transferencias - gastosTransferT
+  const totalTransfer = baseTransferAbierto + transferencias + abonosTransferT - gastosTransferT
 
   // --- Abrir turno ---
   const [abrirOpen, setAbrirOpen] = useState(false)
@@ -124,7 +130,7 @@ export default function Turno() {
     const cerrado = {
       estado: 'cerrado', cerradoEn: Date.now(), cerradoPor: user?.nombre || '',
       resumen: {
-        contado: efectivo, transferencias, credito, abonos: abonosT, gastos: gastosT,
+        contado: efectivo, transferencias, credito, abonos: abonosT, abonosTransfer: abonosTransferT, gastos: gastosT,
         gastosTransfer: gastosTransferT, totalTransfer,
         esperado, contadoReal, diferencia, ventasCount: vTurno.length,
       },
@@ -155,15 +161,17 @@ export default function Turno() {
     const efectivo = vs.reduce((s, v) => s + montoEfectivo(v), 0)
     const transferencias = vs.reduce((s, v) => s + montoTransferencia(v), 0)
     const credito = vs.filter((v) => v.metodoPago === 'credito').reduce((s, v) => s + v.total, 0)
-    const abonosR = (abonos || []).filter((a) => enRango(a.fecha) && !a.anulada).reduce((s, a) => s + a.monto, 0)
+    const abonosRango = (abonos || []).filter((a) => enRango(a.fecha) && !a.anulada)
+    const abonosR = abonosRango.reduce((s, a) => s + gastoMontoCaja(a), 0)          // los que entraron en efectivo
+    const abonosTransferR = abonosRango.reduce((s, a) => s + gastoMontoTransfer(a), 0) // los que entraron por transferencia
     const salidas = (gastos || []).filter((g) => !g.anulada && enRango(g.fecha) && tipoGasto(g) === 'variable' && (gastoDeCaja(g) || g.salidaTurno === 1))
     const gastosR = salidas.reduce((s, g) => s + gastoMontoCaja(g), 0)
     const gastosTransferR = salidas.reduce((s, g) => s + gastoMontoTransfer(g), 0)
     const esperado = (t.base || 0) + efectivo + abonosR - gastosR
-    const totalTransfer = (t.baseTransferencia || 0) + transferencias - gastosTransferR
+    const totalTransfer = (t.baseTransferencia || 0) + transferencias + abonosTransferR - gastosTransferR
     const contadoReal = t.resumen?.contadoReal || 0
     return {
-      contado: efectivo, transferencias, credito, abonos: abonosR, gastos: gastosR,
+      contado: efectivo, transferencias, credito, abonos: abonosR, abonosTransfer: abonosTransferR, gastos: gastosR,
       gastosTransfer: gastosTransferR, totalTransfer, esperado, contadoReal,
       diferencia: contadoReal - esperado, ventasCount: vs.length,
     }
@@ -191,11 +199,12 @@ export default function Turno() {
               <tbody>
                 <tr><td>Base efectivo (apertura)</td><td className="num">{money(abierto.base)}</td></tr>
                 <tr><td>Ventas en efectivo ({efectivoV.length})</td><td className="num" style={{ color: 'var(--green)', fontWeight: 700 }}>{money(efectivo)}</td></tr>
-                <tr><td>Abonos recibidos</td><td className="num" style={{ color: 'var(--green)' }}>{money(abonosT)}</td></tr>
+                <tr><td>Abonos recibidos (efectivo)</td><td className="num" style={{ color: 'var(--green)' }}>{money(abonosT)}</td></tr>
                 <tr><td>Gastos pagados de caja</td><td className="num" style={{ color: 'var(--red)' }}>−{money(gastosT)}</td></tr>
                 <tr><td><b>Efectivo esperado en caja</b></td><td className="num"><b>{money(esperado)}</b></td></tr>
                 <tr><td className="muted-cell">Base transferencia (apertura)</td><td className="num muted-cell">{money(baseTransferAbierto)}</td></tr>
                 <tr><td className="muted-cell">Ventas por transferencia (al banco)</td><td className="num muted-cell">{money(transferencias)}</td></tr>
+                {abonosTransferT > 0 && <tr><td className="muted-cell">Abonos por transferencia</td><td className="num muted-cell" style={{ color: 'var(--green)' }}>{money(abonosTransferT)}</td></tr>}
                 <tr><td className="muted-cell">Pagos por transferencia (Nequi)</td><td className="num muted-cell" style={{ color: 'var(--red)' }}>−{money(gastosTransferT)}</td></tr>
                 <tr><td><b>Debe quedar en transferencia</b></td><td className="num"><b>{money(totalTransfer)}</b></td></tr>
                 <tr><td className="muted-cell">Ventas a crédito (fiado)</td><td className="num muted-cell">{money(credito)}</td></tr>
@@ -362,7 +371,8 @@ export default function Turno() {
                   <tr><td>Ventas por transferencia</td><td className="num">{money(r.transferencias)}</td></tr>
                   {r.gastosTransfer > 0 && <tr><td>Pagos por transferencia (Nequi)</td><td className="num" style={{ color: 'var(--red)' }}>−{money(r.gastosTransfer)}</td></tr>}
                   <tr><td>Debe quedar en transferencia</td><td className="num">{money(r.totalTransfer)}</td></tr>
-                  <tr><td>Abonos recibidos</td><td className="num">{money(r.abonos)}</td></tr>
+                  {(r.abonosTransfer || 0) > 0 && <tr><td>Abonos por transferencia</td><td className="num">{money(r.abonosTransfer)}</td></tr>}
+                  <tr><td>Abonos recibidos (efectivo)</td><td className="num">{money(r.abonos)}</td></tr>
                   <tr><td>Gastos pagados</td><td className="num">−{money(r.gastos)}</td></tr>
                   <tr><td><b>Efectivo esperado</b></td><td className="num"><b>{money(r.esperado)}</b></td></tr>
                   <tr><td>Efectivo contado</td><td className="num">{money(r.contadoReal)}</td></tr>

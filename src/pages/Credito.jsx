@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp } from '../db'
+import { db, uid, stamp, medioPagoGasto, gastoMontoCaja, gastoMontoTransfer } from '../db'
 import { facturarItems, folio } from '../ventas'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
@@ -59,9 +59,18 @@ export default function Credito() {
   // --- Detalle de cliente + abono ---
   const [detId, setDetId] = useState(null)
   const [abono, setAbono] = useState(0)
+  // Cómo pagó el cliente el abono: caja (efectivo) / transferencia / mixto.
+  // Sin esto el turno daba por hecho que TODO abono entraba en efectivo.
+  const [abonoMedio, setAbonoMedio] = useState('caja')
+  const [abonoEf, setAbonoEf] = useState(0) // parte en efectivo cuando es mixto
   const det = lista.find((c) => c.id === detId)
 
-  function abrirDetalle(c) { setDetId(c.id); setAbono(0) }
+  function abrirDetalle(c) { setDetId(c.id); setAbono(0); setAbonoMedio('caja'); setAbonoEf(0) }
+
+  // Etiqueta del medio de un abono (los viejos, sin medioPago, eran efectivo).
+  const labelMedioAbono = (a) => a.medioPago === 'transferencia' ? 'Transferencia'
+    : a.medioPago === 'mixto' ? `Mixto (ef ${money(gastoMontoCaja(a))} · tr ${money(gastoMontoTransfer(a))})`
+      : 'Efectivo'
 
   const movimientos = det ? [
     ...ventasCred.filter((v) => v.clienteId === det.id).map((v) => ({
@@ -70,25 +79,36 @@ export default function Credito() {
       monto: v.total, venta: v,
     })),
     ...(abonos || []).filter((a) => a.clienteId === det.id && !a.anulada).map((a) => ({
-      fecha: a.fecha, concepto: 'Abono', monto: -a.monto, abono: a,
+      fecha: a.fecha, concepto: `Abono · ${labelMedioAbono(a)}`, monto: -a.monto, abono: a,
     })),
   ].sort((a, b) => b.fecha - a.fecha) : []
 
   async function registrarAbono() {
     if (abono <= 0) return show('Escribe el valor del abono')
     const now = Date.now()
-    await db.abonos.add(stamp({ id: uid(), clienteId: det.id, clienteNombre: det.nombre, monto: abono, fecha: now, mes: monthKey(now) }))
-    setAbono(0)
+    await db.abonos.add(stamp({
+      id: uid(), clienteId: det.id, clienteNombre: det.nombre, monto: abono,
+      ...medioPagoGasto(abonoMedio, abono, abonoEf), // medioPago (+ split si es mixto)
+      fecha: now, mes: monthKey(now),
+    }))
+    setAbono(0); setAbonoMedio('caja'); setAbonoEf(0)
     show('Abono registrado')
   }
 
   // --- Editar / eliminar un abono ya registrado ---
   const [abonoEdit, setAbonoEdit] = useState(null) // el abono en edición
   const [abonoMonto, setAbonoMonto] = useState(0)
-  function abrirAbono(a) { setAbonoEdit(a); setAbonoMonto(a.monto) }
+  const [abonoEditMedio, setAbonoEditMedio] = useState('caja')
+  const [abonoEditEf, setAbonoEditEf] = useState(0)
+  function abrirAbono(a) {
+    setAbonoEdit(a); setAbonoMonto(a.monto)
+    setAbonoEditMedio(a.medioPago || 'caja'); setAbonoEditEf(a.pagoEfectivo || 0)
+  }
   async function guardarAbono() {
     if (abonoMonto <= 0) return show('El abono debe ser mayor a 0')
-    await db.abonos.update(abonoEdit.id, stamp({ monto: abonoMonto }))
+    await db.abonos.update(abonoEdit.id, stamp({
+      monto: abonoMonto, ...medioPagoGasto(abonoEditMedio, abonoMonto, abonoEditEf),
+    }))
     setAbonoEdit(null); show('Abono actualizado')
   }
   async function eliminarAbono() {
@@ -242,10 +262,22 @@ export default function Credito() {
             )}
 
             <div className="section-title">Registrar abono</div>
-            <div className="btn-row">
-              <MoneyInput value={abono} onChange={setAbono} placeholder="Valor del abono" />
-              <button className="btn" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={registrarAbono}>Abonar</button>
+            <MoneyInput value={abono} onChange={setAbono} placeholder="Valor del abono" />
+            <label>¿Cómo pagó?</label>
+            <div className="pill-row">
+              <button className={`pill ${abonoMedio === 'caja' ? 'active' : ''}`} onClick={() => setAbonoMedio('caja')}>Efectivo</button>
+              <button className={`pill ${abonoMedio === 'transferencia' ? 'active' : ''}`} onClick={() => setAbonoMedio('transferencia')}>Transferencia</button>
+              <button className={`pill ${abonoMedio === 'mixto' ? 'active' : ''}`} onClick={() => setAbonoMedio('mixto')}>Mixto</button>
             </div>
+            {abonoMedio === 'mixto' && (
+              <>
+                <label>¿Cuánto en efectivo?</label>
+                <MoneyInput value={abonoEf} onChange={setAbonoEf} />
+                <div className="helper">Va por transferencia: <b>{money(Math.max(0, abono - Math.min(abonoEf, abono)))}</b></div>
+              </>
+            )}
+            <div style={{ height: 10 }} />
+            <button className="btn" onClick={registrarAbono}>Abonar</button>
 
             <div className="section-title">Movimientos</div>
             <div className="helper" style={{ marginBottom: 6 }}>
@@ -335,6 +367,19 @@ export default function Credito() {
             <div className="helper" style={{ marginBottom: 8 }}>Abono del {shortDate(abonoEdit.fecha)}</div>
             <label>Valor del abono</label>
             <MoneyInput value={abonoMonto} onChange={setAbonoMonto} placeholder="Valor del abono" />
+            <label>¿Cómo pagó?</label>
+            <div className="pill-row">
+              <button className={`pill ${abonoEditMedio === 'caja' ? 'active' : ''}`} onClick={() => setAbonoEditMedio('caja')}>Efectivo</button>
+              <button className={`pill ${abonoEditMedio === 'transferencia' ? 'active' : ''}`} onClick={() => setAbonoEditMedio('transferencia')}>Transferencia</button>
+              <button className={`pill ${abonoEditMedio === 'mixto' ? 'active' : ''}`} onClick={() => setAbonoEditMedio('mixto')}>Mixto</button>
+            </div>
+            {abonoEditMedio === 'mixto' && (
+              <>
+                <label>¿Cuánto en efectivo?</label>
+                <MoneyInput value={abonoEditEf} onChange={setAbonoEditEf} />
+                <div className="helper">Va por transferencia: <b>{money(Math.max(0, abonoMonto - Math.min(abonoEditEf, abonoMonto)))}</b></div>
+              </>
+            )}
             <div style={{ height: 14 }} />
             <button className="btn" onClick={guardarAbono}>Guardar</button>
             <div style={{ height: 10 }} />
