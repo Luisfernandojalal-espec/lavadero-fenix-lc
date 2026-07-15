@@ -47,13 +47,14 @@ export default function Credito() {
   }
   // Saldo del cliente que se está editando (para permitir borrarlo solo si no debe)
   const saldoCliEdit = cliEdit ? (lista.find((c) => c.id === cliEdit)?.saldo ?? 0) : 0
-  async function eliminarCliente() {
-    if (saldoCliEdit > 0) return show('No puedes eliminar un cliente que debe. Primero salda su cuenta.')
-    // Borrado suave (activo:0) para que se propague por sync; sus ventas quedan
-    // en el historial, solo desaparece de la cartera.
-    await db.clientes.update(cliEdit, stamp({ activo: 0 }))
+  // Borrado suave (activo:0) para que se propague por sync; sus ventas quedan
+  // en el historial, solo desaparece de la cartera. Nunca si el cliente debe.
+  async function borrarCliente(id, saldo) {
+    if (saldo > 0) return show('No puedes eliminar un cliente que debe. Primero salda su cuenta.')
+    await db.clientes.update(id, stamp({ activo: 0 }))
     setCliSheet(false); setDetId(null); show('Cliente eliminado')
   }
+  const eliminarCliente = () => borrarCliente(cliEdit, saldoCliEdit)
 
   // --- Detalle de cliente + abono ---
   const [detId, setDetId] = useState(null)
@@ -233,6 +234,12 @@ export default function Credito() {
             <div className="dato-fuerte">Saldo: <b style={{ color: det.saldo > 0 ? 'var(--red)' : 'var(--green)' }}>{money(det.saldo)}</b></div>
             <button className="btn" style={{ marginBottom: 6 }} onClick={abrirProductos}>Agregar productos al fiado</button>
             <button className="btn ghost" style={{ marginBottom: 6 }} onClick={() => editarCliente(det)}>Editar datos del cliente</button>
+            {/* Eliminar el cliente a UN toque desde su ficha (solo dueño y si no debe) */}
+            {esDueno && det.saldo <= 0 && (
+              <button className="btn danger" style={{ marginBottom: 6 }} onClick={() => borrarCliente(det.id, det.saldo)}>
+                Eliminar cliente
+              </button>
+            )}
 
             <div className="section-title">Registrar abono</div>
             <div className="btn-row">
