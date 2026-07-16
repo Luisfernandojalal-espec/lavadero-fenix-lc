@@ -94,24 +94,29 @@ export default function Turno() {
   const [salMonto, setSalMonto] = useState(0)
   const [salMedio, setSalMedio] = useState('transferencia') // Nequi por defecto (el caso del cliente)
   const [salEfectivo, setSalEfectivo] = useState(0) // parte en efectivo cuando el medio es 'mixto'
-  function nuevaSalida() { setSalEditId(null); setSalConcepto(''); setSalMonto(0); setSalMedio('transferencia'); setSalEfectivo(0); setSalidaOpen(true) }
-  function editarSalida(g) { setSalEditId(g.id); setSalConcepto(g.concepto || ''); setSalMonto(g.monto || 0); setSalMedio(g.medioPago || 'transferencia'); setSalEfectivo(g.pagoEfectivo || 0); setSalidaOpen(true) }
+  // 'gasto' = pago del negocio (cuenta como gasto). 'retiro' = plata que el
+  // dueño/socios sacan de la caja: SÍ sale del turno pero NO es un gasto del
+  // negocio (no resta de la utilidad ni suma a "gastos variables").
+  const [salTipo, setSalTipo] = useState('gasto')
+  function nuevaSalida() { setSalEditId(null); setSalConcepto(''); setSalMonto(0); setSalMedio('transferencia'); setSalEfectivo(0); setSalTipo('gasto'); setSalidaOpen(true) }
+  function editarSalida(g) { setSalEditId(g.id); setSalConcepto(g.concepto || ''); setSalMonto(g.monto || 0); setSalMedio(g.medioPago || 'transferencia'); setSalEfectivo(g.pagoEfectivo || 0); setSalTipo(g.categoria === 'retiro' ? 'retiro' : 'gasto'); setSalidaOpen(true) }
   async function guardarSalida() {
-    if (!salConcepto.trim()) return show('Escribe qué se pagó')
+    if (!salConcepto.trim()) return show(salTipo === 'retiro' ? 'Escribe de qué es el retiro' : 'Escribe qué se pagó')
     if (salMonto <= 0) return show('Escribe el valor')
     const mp = medioPagoGasto(salMedio, salMonto, salEfectivo) // arma medioPago (+ split si es mixto)
+    const categoria = salTipo === 'retiro' ? 'retiro' : 'otro'
     if (salEditId) {
-      await db.gastos.update(salEditId, stamp({ concepto: salConcepto.trim(), monto: salMonto, ...mp }))
+      await db.gastos.update(salEditId, stamp({ concepto: salConcepto.trim(), monto: salMonto, categoria, ...mp }))
       show('Salida actualizada')
     } else {
       const now = Date.now()
       await db.gastos.add(stamp({
-        id: uid(), concepto: salConcepto.trim(), categoria: 'otro', monto: salMonto,
+        id: uid(), concepto: salConcepto.trim(), categoria, monto: salMonto,
         tipo: 'variable', ...mp, responsable: user?.nombre || '',
         salidaTurno: 1, // salió de la caja/transferencia de ESTE turno
         fecha: now, mes: monthKey(now),
       }))
-      show('Salida registrada')
+      show(salTipo === 'retiro' ? 'Retiro registrado' : 'Salida registrada')
     }
     setSalidaOpen(false)
   }
@@ -235,9 +240,10 @@ export default function Turno() {
                       const medioTxt = g.medioPago === 'mixto'
                         ? `Mixto (ef ${money(gastoMontoCaja(g))} · tr ${money(gastoMontoTransfer(g))})`
                         : labelMedioGasto(g.medioPago)
+                      const esRetiro = g.categoria === 'retiro'
                       return (
                         <tr key={g.id} onClick={editable ? () => editarSalida(g) : undefined} style={editable ? { cursor: 'pointer' } : undefined}>
-                          <td>{g.concepto || 'Salida'}<div className="muted-cell">{medioTxt}{g.responsable ? ' · ' + g.responsable : ''}{esInventario ? ' · edítala en la factura de entrada' : (editable ? ' · toca para editar' : '')}</div></td>
+                          <td>{g.concepto || 'Salida'}{esRetiro ? <span className="badge" style={{ marginLeft: 6, background: 'rgba(37,99,235,.12)', color: 'var(--primary)' }}>Retiro</span> : ''}<div className="muted-cell">{medioTxt}{g.responsable ? ' · ' + g.responsable : ''}{esInventario ? ' · edítala en la factura de entrada' : (editable ? ' · toca para editar' : '')}</div></td>
                           <td className="num" style={{ color: 'var(--red)', fontWeight: 700, whiteSpace: 'nowrap' }}>−{money(g.monto)}</td>
                         </tr>
                       )
@@ -286,14 +292,23 @@ export default function Turno() {
 
       {/* Registrar salida / pago del turno */}
       <Sheet open={salidaOpen} onClose={() => setSalidaOpen(false)} title={salEditId ? 'Editar salida' : 'Registrar salida / pago'}>
-        <div className="helper" style={{ marginBottom: 8 }}>Un pago que hiciste durante el turno (recarga, domicilio, insumo…). Se descuenta de la caja y queda registrado.</div>
-        {!salEditId && (
+        <label>¿Qué es?</label>
+        <div className="pill-row">
+          <button className={`pill ${salTipo === 'gasto' ? 'active' : ''}`} onClick={() => setSalTipo('gasto')}>Gasto del negocio</button>
+          <button className={`pill ${salTipo === 'retiro' ? 'active' : ''}`} onClick={() => setSalTipo('retiro')}>Retiro (plata para ti)</button>
+        </div>
+        <div className="helper" style={{ marginBottom: 8 }}>
+          {salTipo === 'retiro'
+            ? 'Plata que sacas de la caja para ti o los socios. Sale del turno pero NO es un gasto (no baja la utilidad del negocio).'
+            : 'Un pago del negocio (recarga, domicilio, insumo, factura…). Se descuenta de la caja y cuenta como gasto.'}
+        </div>
+        {!salEditId && salTipo === 'gasto' && (
           <div className="helper" style={{ marginBottom: 8, color: 'var(--amber)' }}>
             Si es una compra de productos para vender (cerveza, gaseosa, mecatos…), NO la registres aquí: hazla en Inventario → Factura de entrada, que descuenta la plata del turno y suma el stock. Registrarla en los dos lados la cuenta doble.
           </div>
         )}
-        <label>¿Qué se pagó?</label>
-        <input value={salConcepto} placeholder="Ej: Pago factura proveedor, recarga…"
+        <label>{salTipo === 'retiro' ? '¿De qué es el retiro?' : '¿Qué se pagó?'}</label>
+        <input value={salConcepto} placeholder={salTipo === 'retiro' ? 'Ej: Retiro para mí, gasto personal…' : 'Ej: Pago factura proveedor, recarga…'}
           onChange={(e) => setSalConcepto(e.target.value)} />
         <label>Valor</label>
         <MoneyInput value={salMonto} onChange={setSalMonto} />

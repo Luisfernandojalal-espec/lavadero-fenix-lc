@@ -33,7 +33,7 @@ export default function Gastos() {
   //    → el total no cuadraba con lo listado. (Se pagan/ven en Lavadores.)
   //  - 'inventario': su costo ya entra al vender el producto (COGS).
   // Ambas SÍ cuentan en el Turno (la plata salió), que lee db.gastos aparte.
-  const lista = (gastos || []).filter((g) => !g.anulada && g.categoria !== 'inventario' && g.categoria !== 'comisiones').sort((a, b) => b.fecha - a.fecha)
+  const lista = (gastos || []).filter((g) => !g.anulada && g.categoria !== 'inventario' && g.categoria !== 'comisiones' && g.categoria !== 'retiro').sort((a, b) => b.fecha - a.fecha)
   const total = lista.reduce((s, g) => s + g.monto, 0)
   const totalFijo = lista.filter((g) => tipoGasto(g) === 'fijo').reduce((s, g) => s + g.monto, 0)
   const totalVariable = total - totalFijo

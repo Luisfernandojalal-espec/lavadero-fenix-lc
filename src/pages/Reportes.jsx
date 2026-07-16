@@ -118,7 +118,7 @@ export default function Reportes() {
   // fijos del mes (arriendo/nómina/luz) son costo mensual, NO de un día: si se
   // metieran, un solo día cargaría todo el mes y la utilidad daría negativa.
   // Misma regla que el cierre de turno.
-  const gastosRango = (todosGastos || []).filter((x) => !x.anulada && x.categoria !== 'comisiones' && x.categoria !== 'inventario' && tipoGasto(x) === 'variable' && enRango(x.fecha))
+  const gastosRango = (todosGastos || []).filter((x) => !x.anulada && x.categoria !== 'comisiones' && x.categoria !== 'inventario' && x.categoria !== 'retiro' && tipoGasto(x) === 'variable' && enRango(x.fecha))
   const totalGastosR = gastosRango.reduce((s, x) => s + x.monto, 0)
   const utilidadR = (gananciaProdR + gananciaServR) - totalGastosR
   const diasRango = Math.round((localTs(fin) - localTs(ini)) / 86400000) + 1
@@ -152,7 +152,7 @@ export default function Reportes() {
   // la comisión ya está descontada del neto de servicios. Restarlos otra
   // vez duplicaría el descuento. (Sí cuentan en el cierre de turno, porque
   // ahí lo que importa es el efectivo que salió de la caja.)
-  const gastosMes = (gastos || []).filter((x) => !x.anulada && x.categoria !== 'comisiones' && x.categoria !== 'inventario')
+  const gastosMes = (gastos || []).filter((x) => !x.anulada && x.categoria !== 'comisiones' && x.categoria !== 'inventario' && x.categoria !== 'retiro')
   const totalGastos = gastosMes.reduce((s, x) => s + x.monto, 0)
   const gastosFijos = gastosMes.filter((x) => tipoGasto(x) === 'fijo').reduce((s, x) => s + x.monto, 0)
   const gastosVariables = totalGastos - gastosFijos
