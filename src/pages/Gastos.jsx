@@ -145,6 +145,9 @@ export default function Gastos() {
         <div className="section-title" style={{ marginTop: 4 }}>Gastos variables (día a día)</div>
         <button className="btn" onClick={abrirVariable}>Agregar gasto variable</button>
         <div className="helper" style={{ margin: '6px 0 4px' }}>Insumos y gastos del día. Se descuentan de la utilidad de hoy y del mes.</div>
+        <div className="helper" style={{ margin: '0 0 4px', color: 'var(--amber)' }}>
+          OJO: las compras de productos para vender (cerveza, gaseosa, mecatos…) NO van aquí — regístralas en Inventario → Factura de entrada, que descuenta la plata y suma el stock sin contar doble.
+        </div>
         {variablesLista.length === 0 && <div className="empty" style={{ padding: '10px 0' }}>Aún no hay gastos variables este mes.</div>}
         {variablesLista.map((g) => (
           <div className="row" key={g.id} onClick={() => abrirEditar(g)} style={{ cursor: 'pointer' }}>
@@ -205,6 +208,11 @@ export default function Gastos() {
       {/* Registrar / editar gasto */}
       <Sheet open={sheetOpen} onClose={() => setSheetOpen(false)}
         title={editId ? 'Editar gasto' : (modoVariable ? 'Gasto variable' : 'Registrar gasto')}>
+        {!editId && (
+          <div className="helper" style={{ marginBottom: 8, color: 'var(--amber)' }}>
+            ¿Es una compra de productos para vender? NO la registres aquí: hazla en Inventario → Factura de entrada (ella sola descuenta la plata del turno y suma el stock).
+          </div>
+        )}
         {!modoVariable && (
           <>
             <label>Categoría</label>

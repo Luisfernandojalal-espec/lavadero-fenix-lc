@@ -286,7 +286,12 @@ export default function Turno() {
 
       {/* Registrar salida / pago del turno */}
       <Sheet open={salidaOpen} onClose={() => setSalidaOpen(false)} title={salEditId ? 'Editar salida' : 'Registrar salida / pago'}>
-        <div className="helper" style={{ marginBottom: 8 }}>Un pago que hiciste durante el turno (pago de factura, recarga, domicilio, insumo…). Se descuenta de la caja y queda registrado.</div>
+        <div className="helper" style={{ marginBottom: 8 }}>Un pago que hiciste durante el turno (recarga, domicilio, insumo…). Se descuenta de la caja y queda registrado.</div>
+        {!salEditId && (
+          <div className="helper" style={{ marginBottom: 8, color: 'var(--amber)' }}>
+            Si es una compra de productos para vender (cerveza, gaseosa, mecatos…), NO la registres aquí: hazla en Inventario → Factura de entrada, que descuenta la plata del turno y suma el stock. Registrarla en los dos lados la cuenta doble.
+          </div>
+        )}
         <label>¿Qué se pagó?</label>
         <input value={salConcepto} placeholder="Ej: Pago factura proveedor, recarga…"
           onChange={(e) => setSalConcepto(e.target.value)} />
