@@ -343,54 +343,63 @@ export default function Reportes() {
           </table>
         </div>
 
-        {/* Tarjeta estrella: lo que pidió el cliente */}
-        <div className="card stat-card" style={{ borderColor: 'var(--green)' }}>
-          <div className="label">Ganancia de productos (nevera y mecatos)</div>
-          <div className="value green">{money(gananciaProd)}</div>
-          <div className="meta" style={{ color: 'var(--muted)', fontSize: 13 }}>
-            Vendiste {money(ingresoProd)} · te costaron {money(costoProd)}
-          </div>
+        {/* Cuentas claras del mes: el camino de la plata, paso a paso.
+            Cada línea sale de la anterior — así no queda la duda de si las
+            comisiones o los costos "faltan por restar". */}
+        <div className="card stat-card">
+          <div className="label">Cuentas claras del mes (paso a paso)</div>
+          <table className="tabla" style={{ marginTop: 4 }}>
+            <tbody>
+              <tr>
+                <td>Total vendido<div className="muted-cell">lavadas + nevera</div></td>
+                <td className="num" style={{ fontWeight: 700 }}>{money(ingresoTotal)}</td>
+              </tr>
+              <tr>
+                <td>− Comisiones de los lavadores<div className="muted-cell">su parte de las lavadas</div></td>
+                <td className="num" style={{ color: 'var(--amber)' }}>−{money(comisiones)}</td>
+              </tr>
+              <tr>
+                <td>− Lo que costaron los productos vendidos</td>
+                <td className="num" style={{ color: 'var(--amber)' }}>−{money(costoProd)}</td>
+              </tr>
+              <tr>
+                <td><b>= Te queda antes de gastos</b><div className="muted-cell">utilidad bruta</div></td>
+                <td className="num"><b>{money(utilidadBruta)}</b></td>
+              </tr>
+              <tr>
+                <td>− Gastos del mes<div className="muted-cell">fijos {money(gastosFijos)} · variables {money(gastosVariables)}</div></td>
+                <td className="num" style={{ color: 'var(--red)' }}>−{money(totalGastos)}</td>
+              </tr>
+              <tr>
+                <td><b>= Ganancia del mes</b><div className="muted-cell">lo que de verdad deja el negocio</div></td>
+                <td className="num"><b style={{ fontSize: 18, color: utilidad >= 0 ? 'var(--green)' : 'var(--red)' }}>{money(utilidad)}</b></td>
+              </tr>
+            </tbody>
+          </table>
         </div>
 
+        {/* Ganancia por área, igual que en el balance por día (consistencia) */}
         <div className="grid-2">
-          <div className="card stat-card">
-            <div className="label">Servicios (neto)</div>
-            <div className="value">{money(gananciaServ)}</div>
-            <div className="meta" style={{ fontSize: 12 }}>Vendido {money(ingresoServ)}</div>
+          <div className="card stat-card" style={{ borderColor: 'var(--green)' }}>
+            <div className="label">Gana el lavadero</div>
+            <div className="value green">{money(gananciaServ)}</div>
+            <div className="meta" style={{ color: 'var(--muted)', fontSize: 12 }}>
+              Vendió {money(ingresoServ)} · comisión {money(comisiones)}
+            </div>
           </div>
-          <div className="card stat-card">
-            <div className="label">Comisiones</div>
-            <div className="value" style={{ color: 'var(--amber)' }}>{money(comisiones)}</div>
-            <div className="meta" style={{ fontSize: 12 }}>A pagar a trabajadores</div>
+          <div className="card stat-card" style={{ borderColor: 'var(--green)' }}>
+            <div className="label">Gana la nevera</div>
+            <div className="value green">{money(gananciaProd)}</div>
+            <div className="meta" style={{ color: 'var(--muted)', fontSize: 12 }}>
+              Vendió {money(ingresoProd)} · costó {money(costoProd)}
+            </div>
           </div>
         </div>
 
         <div className="card stat-card">
-          <div className="label">Gastos del mes</div>
-          <div className="value red">{money(totalGastos)}</div>
-          <div className="meta" style={{ fontSize: 12 }}>Fijos {money(gastosFijos)} · Variables {money(gastosVariables)}</div>
-        </div>
-
-        {/* Utilidad neta */}
-        <div className="card stat-card" style={{ background: utilidad >= 0 ? 'rgba(34,197,94,.10)' : 'rgba(239,68,68,.10)', borderColor: utilidad >= 0 ? 'var(--green)' : 'var(--red)' }}>
-          <div className="label">Utilidad neta del mes</div>
-          <div className={`value ${utilidad >= 0 ? 'green' : 'red'}`}>{money(utilidad)}</div>
-          <div className="meta" style={{ fontSize: 12 }}>
-            Productos + servicios − comisiones − gastos
-          </div>
-        </div>
-
-        <div className="grid-2">
-          <div className="card stat-card">
-            <div className="label">Utilidad bruta</div>
-            <div className="value">{money(utilidadBruta)}</div>
-            <div className="meta" style={{ fontSize: 12 }}>Antes de gastos</div>
-          </div>
-          <div className="card stat-card">
-            <div className="label">Ticket promedio</div>
-            <div className="value">{money(ticketPromedio)}</div>
-            <div className="meta" style={{ fontSize: 12 }}>{numFacturas} factura{numFacturas === 1 ? '' : 's'}</div>
-          </div>
+          <div className="label">Ticket promedio</div>
+          <div className="value">{money(ticketPromedio)}</div>
+          <div className="meta" style={{ fontSize: 12 }}>{numFacturas} factura{numFacturas === 1 ? '' : 's'} en el mes</div>
         </div>
 
         {/* Tendencia de ventas (comparativo por día / semana / mes) */}
