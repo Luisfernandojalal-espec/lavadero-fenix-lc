@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, TIPOS_VEHICULO, precioServicio, esLavador, medioPagoGasto } from '../db'
 import { money, dayKey, monthKey, shortDate, fechaLarga } from '../format'
-import { esEfectivo, montoEfectivo, montoTransferencia, facturarItems, totalDe, totalLinea, asignarComision, labelMedio } from '../ventas'
+import { montoEfectivo, montoTransferencia, facturarItems, totalDe, totalLinea, asignarComision, labelMedio } from '../ventas'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
 import { AgregarAdicional, lineaAdicional } from '../components/Adicional'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect, ConfirmSheet } from '../components/ui'
@@ -150,21 +150,26 @@ export default function Lavadores({ embedded }) {
   }
 
   function abrirPago(t) { setPagoA(t); setMontoPago(statsDe(t.id).pendiente); setPagoMedio('efectivo'); setPagoEfMixto(0) }
+  const pagandoRef = useRef(false) // candado anti-doble-toque (doble pago de comisión)
   async function pagar() {
     if (montoPago <= 0) return show('Escribe el valor a pagar')
-    const now = Date.now()
-    const medio = medioPagoGasto(pagoMedio, montoPago, pagoEfMixto)
-    await db.pagos_comision.add(stamp({
-      id: uid(), trabajadorId: pagoA.id, trabajadorNombre: pagoA.nombre,
-      monto: montoPago, medioPago: medio.medioPago, fecha: now, mes: monthKey(now), pagadoPor: user?.nombre || '',
-    }))
-    // Sale del producido del día: efectivo baja la caja, transferencia baja el
-    // banco, mixto reparte. Cuenta en el cierre de turno (salidaTurno).
-    await db.gastos.add(stamp({
-      id: uid(), concepto: `Pago de comisión a ${pagoA.nombre}`, categoria: 'comisiones',
-      monto: montoPago, tipo: 'variable', ...medio, salidaTurno: 1, fecha: now, mes: monthKey(now),
-    }))
-    setPagoA(null); setMontoPago(0); show('Pago de comisiones registrado')
+    if (pagandoRef.current) return
+    pagandoRef.current = true
+    try {
+      const now = Date.now()
+      const medio = medioPagoGasto(pagoMedio, montoPago, pagoEfMixto)
+      await db.pagos_comision.add(stamp({
+        id: uid(), trabajadorId: pagoA.id, trabajadorNombre: pagoA.nombre,
+        monto: montoPago, medioPago: medio.medioPago, fecha: now, mes: monthKey(now), pagadoPor: user?.nombre || '',
+      }))
+      // Sale del producido del día: efectivo baja la caja, transferencia baja el
+      // banco, mixto reparte. Cuenta en el cierre de turno (salidaTurno).
+      await db.gastos.add(stamp({
+        id: uid(), concepto: `Pago de comisión a ${pagoA.nombre}`, categoria: 'comisiones',
+        monto: montoPago, tipo: 'variable', ...medio, salidaTurno: 1, fecha: now, mes: monthKey(now),
+      }))
+      setPagoA(null); setMontoPago(0); show('Pago de comisiones registrado')
+    } finally { pagandoRef.current = false }
   }
 
   const lista = (trabajadores || []).filter(esLavador)

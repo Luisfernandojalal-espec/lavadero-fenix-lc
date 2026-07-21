@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, tipoGasto } from '../db'
+import { db, tipoGasto, esGastoPnL } from '../db'
 import { LOGO_URL, money, dayKey, shortDate, currentMonthKey, monthLabel } from '../format'
 import { labelMedio } from '../ventas'
 import { useAuth } from '../auth'
@@ -42,7 +42,7 @@ export default function Inicio() {
   // Las comisiones no se restan (ya vienen descontadas en la ganancia de servicios).
   const mesHoy = hoy.slice(0, 7)
   const esVariableMes = (g) =>
-    !g.anulada && g.categoria !== 'comisiones' && g.categoria !== 'inventario' && g.categoria !== 'retiro' && g.categoria !== 'prestamo' && dayKey(g.fecha).slice(0, 7) === mesHoy && tipoGasto(g) === 'variable'
+    esGastoPnL(g) && dayKey(g.fecha).slice(0, 7) === mesHoy && tipoGasto(g) === 'variable'
   // Lo realmente gastado en variables HOY (solo para mostrarlo en la nota).
   const gastosVarHoy = (gastosAll || [])
     .filter((g) => esVariableMes(g) && dayKey(g.fecha) === hoy)

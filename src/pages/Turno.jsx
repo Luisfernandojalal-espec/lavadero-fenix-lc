@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, gastoDeCaja, gastoMontoCaja, gastoMontoTransfer, tipoGasto, labelMedioGasto, medioPagoGasto } from '../db'
 import { money, monthKey, shortDate } from '../format'
@@ -61,7 +61,11 @@ export default function Turno() {
   const [abrirOpen, setAbrirOpen] = useState(false)
   const [base, setBase] = useState(0)                 // efectivo con el que se abre
   const [baseTransfer, setBaseTransfer] = useState(0) // transferencia/banco con la que se abre
+  const guardandoRef = useRef(false) // candado anti-doble-toque para los .add
   async function abrirTurno() {
+    if (guardandoRef.current) return
+    guardandoRef.current = true
+    try {
     // Evita dos turnos abiertos (ej. otro dispositivo lo abrió hace un momento)
     const yaAbierto = (await db.turnos.toArray()).some((t) => t.estado === 'abierto')
     if (yaAbierto) { setAbrirOpen(false); return show('Ya hay un turno abierto') }
@@ -72,6 +76,7 @@ export default function Turno() {
     }))
     setAbrirOpen(false); setBase(0); setBaseTransfer(0)
     show('Turno abierto')
+    } finally { guardandoRef.current = false }
   }
 
   // --- Editar la apertura de un turno YA abierto (ajustar bases sin cerrarlo) ---
@@ -103,22 +108,26 @@ export default function Turno() {
   async function guardarSalida() {
     if (!salConcepto.trim()) return show(salTipo === 'retiro' ? 'Escribe de qué es el retiro' : 'Escribe qué se pagó')
     if (salMonto <= 0) return show('Escribe el valor')
-    const mp = medioPagoGasto(salMedio, salMonto, salEfectivo) // arma medioPago (+ split si es mixto)
-    const categoria = salTipo === 'retiro' ? 'retiro' : 'otro'
-    if (salEditId) {
-      await db.gastos.update(salEditId, stamp({ concepto: salConcepto.trim(), monto: salMonto, categoria, ...mp }))
-      show('Salida actualizada')
-    } else {
-      const now = Date.now()
-      await db.gastos.add(stamp({
-        id: uid(), concepto: salConcepto.trim(), categoria, monto: salMonto,
-        tipo: 'variable', ...mp, responsable: user?.nombre || '',
-        salidaTurno: 1, // salió de la caja/transferencia de ESTE turno
-        fecha: now, mes: monthKey(now),
-      }))
-      show(salTipo === 'retiro' ? 'Retiro registrado' : 'Salida registrada')
-    }
-    setSalidaOpen(false)
+    if (guardandoRef.current) return
+    guardandoRef.current = true
+    try {
+      const mp = medioPagoGasto(salMedio, salMonto, salEfectivo) // arma medioPago (+ split si es mixto)
+      const categoria = salTipo === 'retiro' ? 'retiro' : 'otro'
+      if (salEditId) {
+        await db.gastos.update(salEditId, stamp({ concepto: salConcepto.trim(), monto: salMonto, categoria, ...mp }))
+        show('Salida actualizada')
+      } else {
+        const now = Date.now()
+        await db.gastos.add(stamp({
+          id: uid(), concepto: salConcepto.trim(), categoria, monto: salMonto,
+          tipo: 'variable', ...mp, responsable: user?.nombre || '',
+          salidaTurno: 1, // salió de la caja/transferencia de ESTE turno
+          fecha: now, mes: monthKey(now),
+        }))
+        show(salTipo === 'retiro' ? 'Retiro registrado' : 'Salida registrada')
+      }
+      setSalidaOpen(false)
+    } finally { guardandoRef.current = false }
   }
   async function eliminarSalida() {
     if (!salEditId) return

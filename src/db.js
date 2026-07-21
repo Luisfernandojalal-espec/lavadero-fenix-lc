@@ -107,7 +107,6 @@ export const UNIDADES = [
   { id: 'kg', label: 'Kilogramo' },
   { id: 'libra', label: 'Libra' },
 ]
-export const labelUnidad = (id) => UNIDADES.find((u) => u.id === id)?.label || 'Unidad'
 
 // Formas de pago de una compra a proveedor.
 export const FORMAS_PAGO_COMPRA = [
@@ -291,6 +290,16 @@ export function tipoGasto(g) {
 export function tipoPorCategoria(catId) {
   return CATEGORIAS_FIJAS.includes(catId) ? 'fijo' : 'variable'
 }
+
+// Categorías que SÍ tocan la caja/turno pero NO son gasto del P&L:
+//  - comisiones: ya descontadas en el neto de servicios.
+//  - inventario: su costo entra al vender el producto (COGS).
+//  - retiro: plata que el dueño saca para sí.
+//  - prestamo: plata prestada a un cliente (es cartera, no gasto).
+// Un solo sitio para no olvidar ninguna al excluirlas del Balance/Gastos/Inicio.
+export const CATEGORIAS_NO_PNL = ['comisiones', 'inventario', 'retiro', 'prestamo']
+// ¿Este gasto cuenta como gasto operativo del mes (P&L)? (no anulado y no de las de arriba)
+export const esGastoPnL = (g) => !g.anulada && !CATEGORIAS_NO_PNL.includes(g.categoria)
 
 export function labelCategoria(catId) {
   const c = CATEGORIAS_PRODUCTO.find((x) => x.id === catId)

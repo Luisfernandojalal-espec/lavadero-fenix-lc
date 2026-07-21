@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, CATEGORIAS_GASTO, MEDIOS_PAGO_GASTO, labelMedioGasto, tipoGasto, tipoPorCategoria } from '../db'
+import { db, uid, stamp, CATEGORIAS_GASTO, MEDIOS_PAGO_GASTO, labelMedioGasto, tipoGasto, tipoPorCategoria, esGastoPnL } from '../db'
 import { money, monthKey, currentMonthKey, monthLabel, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 import { useAuth } from '../auth'
@@ -33,7 +33,7 @@ export default function Gastos() {
   //    → el total no cuadraba con lo listado. (Se pagan/ven en Lavadores.)
   //  - 'inventario': su costo ya entra al vender el producto (COGS).
   // Ambas SÍ cuentan en el Turno (la plata salió), que lee db.gastos aparte.
-  const lista = (gastos || []).filter((g) => !g.anulada && g.categoria !== 'inventario' && g.categoria !== 'comisiones' && g.categoria !== 'retiro' && g.categoria !== 'prestamo').sort((a, b) => b.fecha - a.fecha)
+  const lista = (gastos || []).filter(esGastoPnL).sort((a, b) => b.fecha - a.fecha)
   const total = lista.reduce((s, g) => s + g.monto, 0)
   const totalFijo = lista.filter((g) => tipoGasto(g) === 'fijo').reduce((s, g) => s + g.monto, 0)
   const totalVariable = total - totalFijo
@@ -66,9 +66,13 @@ export default function Gastos() {
     setSheetOpen(true)
   }
 
+  const guardandoRef = useRef(false) // candado anti-doble-toque para el .add
   async function guardar() {
     if (modoVariable && !form.concepto.trim()) return show('Escribe el concepto')
     if (form.monto <= 0) return show('Falta el monto')
+    if (guardandoRef.current) return
+    guardandoRef.current = true
+    try {
     const cat = CATEGORIAS_GASTO.find((c) => c.id === form.categoria)
     const concepto = form.concepto.trim() || (cat ? cat.label : 'Gasto')
     const extra = {
@@ -93,6 +97,7 @@ export default function Gastos() {
       show('Gasto registrado')
     }
     setSheetOpen(false)
+    } finally { guardandoRef.current = false }
   }
   async function eliminar() {
     await db.gastos.update(editId, stamp({ anulada: 1 }))

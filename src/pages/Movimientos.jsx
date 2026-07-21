@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
 import { db, stamp, esLavador } from '../db'
 import { money, dayKey, fechaLarga } from '../format'
-import { folio, labelMedio, esEfectivo, montoEfectivo, montoTransferencia } from '../ventas'
+import { folio, labelMedio, montoEfectivo, montoTransferencia } from '../ventas'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 import { useAuth } from '../auth'
 

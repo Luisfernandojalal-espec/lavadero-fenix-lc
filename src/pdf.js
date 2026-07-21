@@ -100,12 +100,6 @@ export async function descargarCierrePDF(t) {
   doc.save(`Cierre_${dfecha.getFullYear()}-${p(dfecha.getMonth() + 1)}-${p(dfecha.getDate())}_${p(dfecha.getHours())}${p(dfecha.getMinutes())}.pdf`)
 }
 
-// Devuelve una URL para previsualizar el PDF (usada en pruebas).
-export async function reportePDFBlobUrl(d) {
-  const doc = await construirReporte(d)
-  return doc.output('bloburl')
-}
-
 async function construirReporte(d) {
   const doc = new jsPDF({ unit: 'pt', format: 'a4' })
   const W = doc.internal.pageSize.getWidth()

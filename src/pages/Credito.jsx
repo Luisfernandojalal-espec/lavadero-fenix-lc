@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, medioPagoGasto, gastoMontoCaja, gastoMontoTransfer } from '../db'
@@ -92,16 +92,21 @@ export default function Credito() {
     })),
   ].sort((a, b) => b.fecha - a.fecha) : []
 
+  const guardandoRef = useRef(false) // candado anti-doble-toque para los .add
   async function registrarAbono() {
     if (abono <= 0) return show('Escribe el valor del abono')
-    const now = Date.now()
-    await db.abonos.add(stamp({
-      id: uid(), clienteId: det.id, clienteNombre: det.nombre, monto: abono,
-      ...medioPagoGasto(abonoMedio, abono, abonoEf), // medioPago (+ split si es mixto)
-      fecha: now, mes: monthKey(now),
-    }))
-    setAbono(0); setAbonoMedio('caja'); setAbonoEf(0)
-    show('Abono registrado')
+    if (guardandoRef.current) return
+    guardandoRef.current = true
+    try {
+      const now = Date.now()
+      await db.abonos.add(stamp({
+        id: uid(), clienteId: det.id, clienteNombre: det.nombre, monto: abono,
+        ...medioPagoGasto(abonoMedio, abono, abonoEf), // medioPago (+ split si es mixto)
+        fecha: now, mes: monthKey(now),
+      }))
+      setAbono(0); setAbonoMedio('caja'); setAbonoEf(0)
+      show('Abono registrado')
+    } finally { guardandoRef.current = false }
   }
 
   // --- Editar / eliminar un abono ya registrado ---
@@ -144,21 +149,25 @@ export default function Credito() {
   }
   async function guardarPrestamo() {
     if (prestMonto <= 0) return show('Escribe el valor del préstamo')
-    const concepto = `Préstamo a ${det?.nombre || prestEdit?.clienteNombre || ''}${prestNota.trim() ? ' · ' + prestNota.trim() : ''}`
-    const mp = medioPagoGasto(prestMedio, prestMonto, prestEf)
-    if (prestEdit) {
-      await db.gastos.update(prestEdit.id, stamp({ monto: prestMonto, concepto, ...mp }))
-      setPrestSheet(false); setPrestEdit(null); show('Préstamo actualizado')
-    } else {
-      const now = Date.now()
-      await db.gastos.add(stamp({
-        id: uid(), concepto, categoria: 'prestamo', monto: prestMonto,
-        tipo: 'variable', ...mp, salidaTurno: 1,
-        clienteId: det.id, clienteNombre: det.nombre,
-        responsable: user?.nombre || '', fecha: now, mes: monthKey(now),
-      }))
-      setPrestSheet(false); show('Préstamo registrado y descontado del turno')
-    }
+    if (guardandoRef.current) return
+    guardandoRef.current = true
+    try {
+      const concepto = `Préstamo a ${det?.nombre || prestEdit?.clienteNombre || ''}${prestNota.trim() ? ' · ' + prestNota.trim() : ''}`
+      const mp = medioPagoGasto(prestMedio, prestMonto, prestEf)
+      if (prestEdit) {
+        await db.gastos.update(prestEdit.id, stamp({ monto: prestMonto, concepto, ...mp }))
+        setPrestSheet(false); setPrestEdit(null); show('Préstamo actualizado')
+      } else {
+        const now = Date.now()
+        await db.gastos.add(stamp({
+          id: uid(), concepto, categoria: 'prestamo', monto: prestMonto,
+          tipo: 'variable', ...mp, salidaTurno: 1,
+          clienteId: det.id, clienteNombre: det.nombre,
+          responsable: user?.nombre || '', fecha: now, mes: monthKey(now),
+        }))
+        setPrestSheet(false); show('Préstamo registrado y descontado del turno')
+      }
+    } finally { guardandoRef.current = false }
   }
   async function eliminarPrestamo() {
     await db.gastos.update(prestEdit.id, stamp({ anulada: 1 }))
@@ -302,7 +311,9 @@ export default function Credito() {
           <>
             <div className="dato-fuerte">Saldo: <b style={{ color: det.saldo > 0 ? 'var(--red)' : 'var(--green)' }}>{money(det.saldo)}</b></div>
             <button className="btn" style={{ marginBottom: 6 }} onClick={abrirProductos}>Agregar productos al fiado</button>
-            <button className="btn secondary" style={{ marginBottom: 6 }} onClick={abrirPrestamo}>Prestar plata (efectivo o transferencia)</button>
+            {esDueno && (
+              <button className="btn secondary" style={{ marginBottom: 6 }} onClick={abrirPrestamo}>Prestar plata (efectivo o transferencia)</button>
+            )}
             <button className="btn ghost" style={{ marginBottom: 6 }} onClick={() => editarCliente(det)}>Editar datos del cliente</button>
             {/* Eliminar el cliente a UN toque desde su ficha (solo dueño y si no debe) */}
             {esDueno && det.saldo <= 0 && (

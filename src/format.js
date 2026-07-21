@@ -14,18 +14,6 @@ export function money(n) {
   return cop.format(Math.round(Number(n) || 0))
 }
 
-// Solo el número con separador de miles, sin símbolo (para inputs)
-export function thousands(n) {
-  return new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 }).format(Number(n) || 0)
-}
-
-// Convierte texto del usuario ("12.000" o "12000") a número
-export function parseMoney(str) {
-  if (typeof str === 'number') return str
-  const clean = String(str).replace(/[^\d]/g, '')
-  return clean ? parseInt(clean, 10) : 0
-}
-
 // Clave de mes "2026-06" desde un timestamp
 export function monthKey(ts) {
   const d = new Date(ts)

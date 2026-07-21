@@ -363,6 +363,7 @@ const lineaIva = (l) => lineaNeto(l) * ((l.iva || 0) / 100)
 function Compras() {
   const { show, node } = useToast()
   const { user } = useAuth()
+  const guardandoRef = useRef(false) // candado anti-doble-toque (doble compra = doble stock + doble salida)
   const productos = useLiveQuery(() => db.productos.where('activo').equals(1).toArray(), [], [])
   const proveedores = useLiveQuery(() => db.proveedores.where('activo').equals(1).toArray(), [], [])
   const compras = useLiveQuery(() => db.compras.toArray(), [], [])
@@ -403,6 +404,8 @@ function Compras() {
   function updateEditItem(idx, patch) { setEditItems((its) => its.map((it, i) => (i === idx ? { ...it, ...patch } : it))) }
 
   async function guardarEdicionCompra() {
+    if (guardandoRef.current) return
+    guardandoRef.current = true
     try {
       await db.transaction('rw', db.productos, db.movimientos_inv, db.compras, db.proveedores, db.gastos, async () => {
         // Proveedor (existente o nuevo)
@@ -457,7 +460,7 @@ function Compras() {
       show('Factura actualizada')
     } catch (e) {
       show('No se pudo actualizar la factura')
-    }
+    } finally { guardandoRef.current = false }
   }
   function agregarLineaNueva(modo) { setLineas((ls) => [...ls, emptyLinea(modo)]) }
   function updateLinea(key, patch) { setLineas((ls) => ls.map((l) => (l.key === key ? { ...l, ...patch } : l))) }
@@ -497,6 +500,8 @@ function Compras() {
     if (conDatos.length === 0) return show('Agrega al menos un producto (nombre o elige uno existente)')
     const codigos = conDatos.filter((l) => l.modo === 'nuevo').map((l) => l.codigo.trim()).filter(Boolean)
     if (new Set(codigos).size !== codigos.length) return show('Hay códigos de barras repetidos en la factura')
+    if (guardandoRef.current) return
+    guardandoRef.current = true
 
     let creadosNuevos = 0
     let huboCompra = false
@@ -597,7 +602,7 @@ function Compras() {
       setModo('lista')
     } catch (e) {
       show('No se pudo guardar la factura')
-    }
+    } finally { guardandoRef.current = false }
   }
 
   // -------- VISTA NUEVA FACTURA --------

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation } from 'react-router-dom'
-import { db, seedIfEmpty } from './db'
+import { seedIfEmpty } from './db'
 import { startSync, sync } from './sync'
 import { syncDisponible } from './supabase'
 import { LOGO_URL, fechaLarga } from './format'

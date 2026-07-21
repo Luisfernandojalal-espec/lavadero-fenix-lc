@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, borrarTodo, TIPOS_VEHICULO, precioServicio, precioMinServicio, esServicioBase, ROLES, labelRol, medioPagoGasto } from '../db'
@@ -88,24 +88,29 @@ export default function Servicios() {
     setPagoMedio('efectivo'); setPagoEfMixto(0)
   }
 
+  const pagandoRef = useRef(false) // candado anti-doble-toque (doble pago de comisión)
   async function pagarComision() {
     if (montoPago <= 0) return show('Escribe el valor a pagar')
-    const now = Date.now()
-    const medio = medioPagoGasto(pagoMedio, montoPago, pagoEfMixto)
-    await db.pagos_comision.add(stamp({
-      id: uid(), trabajadorId: pagoA.id, trabajadorNombre: pagoA.nombre,
-      monto: montoPago, medioPago: medio.medioPago, fecha: now, mes: monthKey(now), pagadoPor: user?.nombre || '',
-    }))
-    // Sale del producido del día: efectivo baja la caja, transferencia baja el
-    // banco, mixto reparte. Cuenta en el cierre de turno (salidaTurno).
-    // En el Balance NO se resta otra vez (la comisión ya está descontada del
-    // neto de servicios) — por eso la categoría 'comisiones' se excluye allá.
-    await db.gastos.add(stamp({
-      id: uid(), concepto: `Pago de comisión a ${pagoA.nombre}`, categoria: 'comisiones',
-      monto: montoPago, tipo: 'variable', ...medio, salidaTurno: 1, fecha: now, mes: monthKey(now),
-    }))
-    setPagoA(null); setMontoPago(0)
-    show('Pago de comisiones registrado')
+    if (pagandoRef.current) return
+    pagandoRef.current = true
+    try {
+      const now = Date.now()
+      const medio = medioPagoGasto(pagoMedio, montoPago, pagoEfMixto)
+      await db.pagos_comision.add(stamp({
+        id: uid(), trabajadorId: pagoA.id, trabajadorNombre: pagoA.nombre,
+        monto: montoPago, medioPago: medio.medioPago, fecha: now, mes: monthKey(now), pagadoPor: user?.nombre || '',
+      }))
+      // Sale del producido del día: efectivo baja la caja, transferencia baja el
+      // banco, mixto reparte. Cuenta en el cierre de turno (salidaTurno).
+      // En el Balance NO se resta otra vez (la comisión ya está descontada del
+      // neto de servicios) — por eso la categoría 'comisiones' se excluye allá.
+      await db.gastos.add(stamp({
+        id: uid(), concepto: `Pago de comisión a ${pagoA.nombre}`, categoria: 'comisiones',
+        monto: montoPago, tipo: 'variable', ...medio, salidaTurno: 1, fecha: now, mes: monthKey(now),
+      }))
+      setPagoA(null); setMontoPago(0)
+      show('Pago de comisiones registrado')
+    } finally { pagandoRef.current = false }
   }
 
   // --- Servicios ---

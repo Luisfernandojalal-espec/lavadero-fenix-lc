@@ -1,14 +1,7 @@
 import { db, uid, stamp } from './db'
 import { monthKey } from './format'
 
-// Medios de pago del sistema.
 // 'contado' es el valor histórico (ventas viejas): se trata como efectivo.
-export const MEDIOS_PAGO = [
-  { id: 'efectivo', label: 'Efectivo' },
-  { id: 'transferencia', label: 'Transferencia' },
-  { id: 'mixto', label: 'Mixto (efectivo + transferencia)' },
-  { id: 'credito', label: 'Crédito (fiado)' },
-]
 export const esEfectivo = (v) => v.metodoPago === 'efectivo' || v.metodoPago === 'contado' || !v.metodoPago
 export const labelMedio = (id) =>
   id === 'transferencia' ? 'Transferencia' : id === 'credito' ? 'Crédito (fiado)' : id === 'mixto' ? 'Mixto' : 'Efectivo'
@@ -78,6 +71,9 @@ export async function facturarItems({ items, trabajador = null, metodo = 'efecti
     if (metodo === 'credito') return { pagoEfectivo: 0, pagoTransferencia: 0 }
     return { pagoEfectivo: rowTotal, pagoTransferencia: 0 } // efectivo / contado
   }
+  // Todo el registro de la venta + descuento de stock va en UNA transacción:
+  // si algo falla a mitad (varios ítems), no queda la venta sin stock ni al revés.
+  return await db.transaction('rw', db.ventas, db.productos, async () => {
   let total = 0
 
   if (prods.length) {
@@ -129,6 +125,7 @@ export async function facturarItems({ items, trabajador = null, metodo = 'efecti
   }
 
   return { total, factura }
+  })
 }
 
 // Texto del recibo para compartir (WhatsApp, etc.).
