@@ -90,6 +90,11 @@ function NubeSheet({ open, onClose, estado }) {
             {estado.fase === 'error' && 'Hubo un error al sincronizar'}
             {estado.fase === 'idle' && 'Listo'}
           </div>
+          {estado.fase === 'error' && estado.mensaje && (
+            <div className="meta" style={{ color: 'var(--red)', fontSize: 11, marginTop: 4, wordBreak: 'break-word' }}>
+              Detalle: {estado.mensaje}
+            </div>
+          )}
         </div>
         <button className="btn ghost" style={{ width: 'auto' }} onClick={() => sync()}>Sincronizar</button>
       </div>

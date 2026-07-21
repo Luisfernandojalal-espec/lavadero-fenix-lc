@@ -79,6 +79,15 @@ function faltaSyncedAt(error) {
   const msg = (error?.message || '').toLowerCase()
   return error?.code === '42703' || msg.includes('synced_at')
 }
+// PostgREST responde 416 / PGRST103 ("Requested Range Not Satisfiable") cuando
+// el offset de .range() supera el total de filas. Eso NO es un error: significa
+// que ya no hay más páginas. (Pasa cuando una página trae exactamente PAGE
+// filas y no había más.) Antes tumbaba la sincronización con "error".
+function esFinDeRango(error) {
+  const msg = (error?.message || '').toLowerCase()
+  return error?.code === 'PGRST103' || error?.status === 416 ||
+    msg.includes('range not satisfiable') || msg.includes('not satisfiable')
+}
 let modoLegacy = false // se vuelve true si la nube aún no tiene synced_at
 
 // Baja los registros que cambiaron en la nube desde la última vez, ordenados
@@ -100,6 +109,7 @@ async function pull() {
       .range(desde, desde + PAGE - 1)
     if (error) {
       if (faltaSyncedAt(error)) { modoLegacy = true; return pullLegacy() }
+      if (esFinDeRango(error)) break // no hay más páginas, no es error
       throw error
     }
     if (!filas || filas.length === 0) break
@@ -135,7 +145,10 @@ async function pullLegacy() {
       .gt('updated_at', consulta)
       .order('updated_at', { ascending: true })
       .range(off, off + PAGE - 1)
-    if (error) throw error
+    if (error) {
+      if (esFinDeRango(error)) break // no hay más páginas, no es error
+      throw error
+    }
     if (!filas || filas.length === 0) break
     for (const fila of filas) {
       await aplicarFila(fila)
@@ -167,13 +180,14 @@ export async function sync() {
   try {
     await push()
     await pull()
-    setEstado({ fase: 'ok', ultima: Date.now() })
+    setEstado({ fase: 'ok', ultima: Date.now(), mensaje: null })
   } catch (e) {
     if (e?.auth) {
       setEstado({ fase: 'auth' }) // el dispositivo necesita conectarse a la nube
     } else {
-      console.warn('[sync] error:', e?.message || e)
-      setEstado({ fase: 'error' })
+      const mensaje = e?.message || String(e)
+      console.warn('[sync] error:', mensaje)
+      setEstado({ fase: 'error', mensaje }) // guardamos el detalle para mostrarlo
     }
   } finally {
     sincronizando = false
