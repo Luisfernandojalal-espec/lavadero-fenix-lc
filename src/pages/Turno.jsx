@@ -236,14 +236,15 @@ export default function Turno() {
                   <tbody>
                     {salidasT.slice(0, 20).map((g) => {
                       const esInventario = g.categoria === 'inventario'
-                      const editable = esDueno && g.categoria !== 'comisiones' && !esInventario
+                      const esPrestamo = g.categoria === 'prestamo'
+                      const editable = esDueno && g.categoria !== 'comisiones' && !esInventario && !esPrestamo
                       const medioTxt = g.medioPago === 'mixto'
                         ? `Mixto (ef ${money(gastoMontoCaja(g))} · tr ${money(gastoMontoTransfer(g))})`
                         : labelMedioGasto(g.medioPago)
                       const esRetiro = g.categoria === 'retiro'
                       return (
                         <tr key={g.id} onClick={editable ? () => editarSalida(g) : undefined} style={editable ? { cursor: 'pointer' } : undefined}>
-                          <td>{g.concepto || 'Salida'}{esRetiro ? <span className="badge" style={{ marginLeft: 6, background: 'rgba(37,99,235,.12)', color: 'var(--primary)' }}>Retiro</span> : ''}<div className="muted-cell">{medioTxt}{g.responsable ? ' · ' + g.responsable : ''}{esInventario ? ' · edítala en la factura de entrada' : (editable ? ' · toca para editar' : '')}</div></td>
+                          <td>{g.concepto || 'Salida'}{esRetiro ? <span className="badge" style={{ marginLeft: 6, background: 'rgba(37,99,235,.12)', color: 'var(--primary)' }}>Retiro</span> : ''}<div className="muted-cell">{medioTxt}{g.responsable ? ' · ' + g.responsable : ''}{esInventario ? ' · edítala en la factura de entrada' : esPrestamo ? ' · edítalo en Créditos' : (editable ? ' · toca para editar' : '')}</div></td>
                           <td className="num" style={{ color: 'var(--red)', fontWeight: 700, whiteSpace: 'nowrap' }}>−{money(g.monto)}</td>
                         </tr>
                       )

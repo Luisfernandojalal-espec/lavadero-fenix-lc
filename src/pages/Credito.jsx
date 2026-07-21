@@ -16,14 +16,20 @@ export default function Credito() {
   const clientes = useLiveQuery(() => db.clientes.where('activo').equals(1).toArray(), [], [])
   const ventas = useLiveQuery(() => db.ventas.toArray(), [], [])
   const abonos = useLiveQuery(() => db.abonos.toArray(), [], [])
+  const gastosAll = useLiveQuery(() => db.gastos.toArray(), [], [])
   const productos = useLiveQuery(() => db.productos.where('activo').equals(1).toArray(), [], [])
 
   const ventasCred = (ventas || []).filter((v) => v.metodoPago === 'credito' && !v.anulada)
+  // Préstamos de plata a clientes: viven en db.gastos (categoria 'prestamo',
+  // salidaTurno:1 → descuentan la caja/transferencia del turno al prestar),
+  // pero NO son gasto del negocio (excluidos del P&L) y SÍ suman a la deuda.
+  const prestamos = (gastosAll || []).filter((g) => g.categoria === 'prestamo' && !g.anulada)
 
   function saldoDe(id) {
     const debe = ventasCred.filter((v) => v.clienteId === id).reduce((s, v) => s + v.total, 0)
+    const prestado = prestamos.filter((g) => g.clienteId === id).reduce((s, g) => s + g.monto, 0)
     const pagado = (abonos || []).filter((a) => a.clienteId === id && !a.anulada).reduce((s, a) => s + a.monto, 0)
-    return debe - pagado
+    return debe + prestado - pagado
   }
 
   const lista = (clientes || [])
@@ -78,6 +84,9 @@ export default function Credito() {
       concepto: v.tipo === 'servicio' ? (v.servicioNombre || 'Servicio') : 'Venta de productos',
       monto: v.total, venta: v,
     })),
+    ...prestamos.filter((g) => g.clienteId === det.id).map((g) => ({
+      fecha: g.fecha, concepto: `Préstamo · ${labelMedioAbono(g)}`, monto: g.monto, prestamo: g,
+    })),
     ...(abonos || []).filter((a) => a.clienteId === det.id && !a.anulada).map((a) => ({
       fecha: a.fecha, concepto: `Abono · ${labelMedioAbono(a)}`, monto: -a.monto, abono: a,
     })),
@@ -114,6 +123,46 @@ export default function Credito() {
   async function eliminarAbono() {
     await db.abonos.update(abonoEdit.id, stamp({ anulada: 1 }))
     setAbonoEdit(null); show('Abono eliminado')
+  }
+
+  // --- Prestar plata al cliente (crédito en dinero) ---
+  // Crea un "gasto" categoria 'prestamo' con salidaTurno:1: la plata sale de la
+  // caja (efectivo) o del saldo en transferencia del turno AL MOMENTO de
+  // prestar, pero no cuenta como gasto del negocio. La deuda sube en la ficha
+  // del cliente y los abonos (que ya tienen forma de pago) la van devolviendo.
+  const [prestSheet, setPrestSheet] = useState(false)
+  const [prestEdit, setPrestEdit] = useState(null) // null = nuevo; gasto = editando
+  const [prestMonto, setPrestMonto] = useState(0)
+  const [prestMedio, setPrestMedio] = useState('caja')
+  const [prestEf, setPrestEf] = useState(0)
+  const [prestNota, setPrestNota] = useState('')
+  function abrirPrestamo() { setPrestEdit(null); setPrestMonto(0); setPrestMedio('caja'); setPrestEf(0); setPrestNota(''); setPrestSheet(true) }
+  function abrirEditarPrestamo(g) {
+    setPrestEdit(g); setPrestMonto(g.monto); setPrestMedio(g.medioPago || 'caja')
+    setPrestEf(g.pagoEfectivo || 0); setPrestNota((g.concepto || '').replace(/^Préstamo a [^·]*·?\s*/, ''))
+    setPrestSheet(true)
+  }
+  async function guardarPrestamo() {
+    if (prestMonto <= 0) return show('Escribe el valor del préstamo')
+    const concepto = `Préstamo a ${det?.nombre || prestEdit?.clienteNombre || ''}${prestNota.trim() ? ' · ' + prestNota.trim() : ''}`
+    const mp = medioPagoGasto(prestMedio, prestMonto, prestEf)
+    if (prestEdit) {
+      await db.gastos.update(prestEdit.id, stamp({ monto: prestMonto, concepto, ...mp }))
+      setPrestSheet(false); setPrestEdit(null); show('Préstamo actualizado')
+    } else {
+      const now = Date.now()
+      await db.gastos.add(stamp({
+        id: uid(), concepto, categoria: 'prestamo', monto: prestMonto,
+        tipo: 'variable', ...mp, salidaTurno: 1,
+        clienteId: det.id, clienteNombre: det.nombre,
+        responsable: user?.nombre || '', fecha: now, mes: monthKey(now),
+      }))
+      setPrestSheet(false); show('Préstamo registrado y descontado del turno')
+    }
+  }
+  async function eliminarPrestamo() {
+    await db.gastos.update(prestEdit.id, stamp({ anulada: 1 }))
+    setPrestSheet(false); setPrestEdit(null); show('Préstamo eliminado')
   }
 
   // --- Editar / eliminar una venta a crédito (fiado) — solo administrador ---
@@ -253,6 +302,7 @@ export default function Credito() {
           <>
             <div className="dato-fuerte">Saldo: <b style={{ color: det.saldo > 0 ? 'var(--red)' : 'var(--green)' }}>{money(det.saldo)}</b></div>
             <button className="btn" style={{ marginBottom: 6 }} onClick={abrirProductos}>Agregar productos al fiado</button>
+            <button className="btn secondary" style={{ marginBottom: 6 }} onClick={abrirPrestamo}>Prestar plata (efectivo o transferencia)</button>
             <button className="btn ghost" style={{ marginBottom: 6 }} onClick={() => editarCliente(det)}>Editar datos del cliente</button>
             {/* Eliminar el cliente a UN toque desde su ficha (solo dueño y si no debe) */}
             {esDueno && det.saldo <= 0 && (
@@ -287,8 +337,10 @@ export default function Credito() {
             <table className="tabla">
               <tbody>
                 {movimientos.map((m, i) => {
-                  // El abono lo edita cualquiera; el fiado (venta a crédito) solo el administrador.
-                  const onTap = m.abono ? () => abrirAbono(m.abono) : (esDueno && m.venta ? () => abrirVenta(m.venta) : undefined)
+                  // El abono lo edita cualquiera; el fiado y el préstamo solo el administrador.
+                  const onTap = m.abono ? () => abrirAbono(m.abono)
+                    : (esDueno && m.venta ? () => abrirVenta(m.venta)
+                      : (esDueno && m.prestamo ? () => abrirEditarPrestamo(m.prestamo) : undefined))
                   return (
                   <tr key={i} onClick={onTap} style={onTap ? { cursor: 'pointer' } : undefined}>
                     <td className="muted-cell">{shortDate(m.fecha)}</td>
@@ -331,6 +383,34 @@ export default function Credito() {
         <button className="btn" disabled={cargando || totalCarrito <= 0} onClick={cargarAlFiado}>
           {cargando ? 'Cargando…' : 'Cargar al fiado'}
         </button>
+      </Sheet>
+
+      {/* Prestar plata / editar préstamo */}
+      <Sheet open={prestSheet} onClose={() => { setPrestSheet(false); setPrestEdit(null) }}
+        title={prestEdit ? 'Editar préstamo' : (det ? `Prestar plata a ${det.nombre}` : 'Prestar plata')}>
+        <div className="helper" style={{ marginBottom: 8 }}>
+          La plata sale de la caja o de la transferencia del turno en este momento, y queda como deuda del cliente. Cuando abone, vuelve a entrar según cómo pague. No cuenta como gasto del negocio.
+        </div>
+        <label>Valor del préstamo</label>
+        <MoneyInput value={prestMonto} onChange={setPrestMonto} />
+        <label>¿De dónde sale la plata?</label>
+        <div className="pill-row">
+          <button className={`pill ${prestMedio === 'caja' ? 'active' : ''}`} onClick={() => setPrestMedio('caja')}>Efectivo (caja)</button>
+          <button className={`pill ${prestMedio === 'transferencia' ? 'active' : ''}`} onClick={() => setPrestMedio('transferencia')}>Transferencia</button>
+          <button className={`pill ${prestMedio === 'mixto' ? 'active' : ''}`} onClick={() => setPrestMedio('mixto')}>Mixto</button>
+        </div>
+        {prestMedio === 'mixto' && (
+          <>
+            <label>¿Cuánto en efectivo?</label>
+            <MoneyInput value={prestEf} onChange={setPrestEf} />
+            <div className="helper">Va por transferencia: <b>{money(Math.max(0, prestMonto - Math.min(prestEf, prestMonto)))}</b></div>
+          </>
+        )}
+        <label>Motivo (opcional)</label>
+        <input value={prestNota} placeholder="Ej: calamidad, adelanto…" onChange={(e) => setPrestNota(e.target.value)} />
+        <div style={{ height: 14 }} />
+        <button className="btn" onClick={guardarPrestamo}>{prestEdit ? 'Guardar' : 'Prestar y descontar del turno'}</button>
+        {prestEdit && <><div style={{ height: 10 }} /><button className="btn danger" onClick={eliminarPrestamo}>Eliminar préstamo</button></>}
       </Sheet>
 
       {/* Editar / eliminar una venta a crédito (fiado) — solo administrador */}

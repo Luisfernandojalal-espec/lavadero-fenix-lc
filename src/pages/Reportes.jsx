@@ -118,7 +118,7 @@ export default function Reportes() {
   // fijos del mes (arriendo/nómina/luz) son costo mensual, NO de un día: si se
   // metieran, un solo día cargaría todo el mes y la utilidad daría negativa.
   // Misma regla que el cierre de turno.
-  const gastosRango = (todosGastos || []).filter((x) => !x.anulada && x.categoria !== 'comisiones' && x.categoria !== 'inventario' && x.categoria !== 'retiro' && tipoGasto(x) === 'variable' && enRango(x.fecha))
+  const gastosRango = (todosGastos || []).filter((x) => !x.anulada && x.categoria !== 'comisiones' && x.categoria !== 'inventario' && x.categoria !== 'retiro' && x.categoria !== 'prestamo' && tipoGasto(x) === 'variable' && enRango(x.fecha))
   const totalGastosR = gastosRango.reduce((s, x) => s + x.monto, 0)
   const utilidadR = (gananciaProdR + gananciaServR) - totalGastosR
   const diasRango = Math.round((localTs(fin) - localTs(ini)) / 86400000) + 1
@@ -126,8 +126,10 @@ export default function Reportes() {
   // --- Estado actual (no depende del mes) ---
   // Cuentas por cobrar = ventas a crédito vigentes − abonos recibidos
   const debeTotal = (todasVentas || []).filter((x) => x.metodoPago === 'credito' && !x.anulada).reduce((s, x) => s + x.total, 0)
+  // Los préstamos de plata a clientes (categoria 'prestamo') también son cartera.
+  const prestadoTotal = (todosGastos || []).filter((g) => g.categoria === 'prestamo' && !g.anulada).reduce((s, g) => s + g.monto, 0)
   const abonadoTotal = (abonos || []).filter((a) => !a.anulada).reduce((s, a) => s + a.monto, 0)
-  const porCobrar = Math.max(0, debeTotal - abonadoTotal)
+  const porCobrar = Math.max(0, debeTotal + prestadoTotal - abonadoTotal)
   // Valor del inventario a costo
   const valorInventario = (productos || []).reduce((s, p) => s + (p.stock || 0) * (p.precioCompra || 0), 0)
 
@@ -152,7 +154,7 @@ export default function Reportes() {
   // la comisión ya está descontada del neto de servicios. Restarlos otra
   // vez duplicaría el descuento. (Sí cuentan en el cierre de turno, porque
   // ahí lo que importa es el efectivo que salió de la caja.)
-  const gastosMes = (gastos || []).filter((x) => !x.anulada && x.categoria !== 'comisiones' && x.categoria !== 'inventario' && x.categoria !== 'retiro')
+  const gastosMes = (gastos || []).filter((x) => !x.anulada && x.categoria !== 'comisiones' && x.categoria !== 'inventario' && x.categoria !== 'retiro' && x.categoria !== 'prestamo')
   const totalGastos = gastosMes.reduce((s, x) => s + x.monto, 0)
   const gastosFijos = gastosMes.filter((x) => tipoGasto(x) === 'fijo').reduce((s, x) => s + x.monto, 0)
   const gastosVariables = totalGastos - gastosFijos

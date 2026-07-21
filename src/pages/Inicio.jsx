@@ -25,8 +25,10 @@ export default function Inicio() {
   const totalHoy = ventasHoy.reduce((s, v) => s + v.total, 0)
   const gananciaHoy = ventasHoy.reduce((s, v) => s + (v.ganancia || 0), 0)
   const debe = (ventas || []).filter((v) => v.metodoPago === 'credito' && !v.anulada).reduce((s, v) => s + v.total, 0)
+  // Los préstamos de plata a clientes también son cartera por cobrar.
+  const prestado = (gastosAll || []).filter((g) => g.categoria === 'prestamo' && !g.anulada).reduce((s, g) => s + g.monto, 0)
   const abonado = (abonos || []).filter((a) => !a.anulada).reduce((s, a) => s + a.monto, 0)
-  const porCobrar = Math.max(0, debe - abonado)
+  const porCobrar = Math.max(0, debe + prestado - abonado)
 
   // Ganancia REAL del día: ganancia operativa de las ventas del día, menos la
   // tajada diaria de los costos del mes. Los costos se reparten ÷ 30 para que un
@@ -37,7 +39,7 @@ export default function Inicio() {
   // Las comisiones no se restan (ya vienen descontadas en la ganancia de servicios).
   const mesHoy = hoy.slice(0, 7)
   const esVariableMes = (g) =>
-    !g.anulada && g.categoria !== 'comisiones' && g.categoria !== 'inventario' && g.categoria !== 'retiro' && dayKey(g.fecha).slice(0, 7) === mesHoy && tipoGasto(g) === 'variable'
+    !g.anulada && g.categoria !== 'comisiones' && g.categoria !== 'inventario' && g.categoria !== 'retiro' && g.categoria !== 'prestamo' && dayKey(g.fecha).slice(0, 7) === mesHoy && tipoGasto(g) === 'variable'
   // Lo realmente gastado en variables HOY (solo para mostrarlo en la nota).
   const gastosVarHoy = (gastosAll || [])
     .filter((g) => esVariableMes(g) && dayKey(g.fecha) === hoy)
