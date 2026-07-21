@@ -11,7 +11,7 @@ function labelGasto(id) {
   return c ? c.label : 'Otro'
 }
 
-const emptyForm = { concepto: '', categoria: 'arriendo', monto: 0, tipo: 'fijo', fijoId: null, medioPago: 'caja', responsable: '', comprobante: '' }
+const emptyForm = { concepto: '', categoria: 'arriendo', monto: 0, tipo: 'fijo', fijoId: null, medioPago: 'caja', salidaTurno: false, responsable: '', comprobante: '' }
 const emptyFijo = { nombre: '', categoria: 'arriendo', montoEstimado: 0 }
 
 export default function Gastos() {
@@ -55,7 +55,7 @@ export default function Gastos() {
     setModoVariable(tipoGasto(g) === 'variable' && !g.fijoId)
     setForm({
       concepto: g.concepto, categoria: g.categoria, monto: g.monto, tipo: tipoGasto(g), fijoId: g.fijoId || null,
-      medioPago: g.medioPago || 'caja', responsable: g.responsable || '', comprobante: g.comprobante || '',
+      medioPago: g.medioPago || 'caja', salidaTurno: g.salidaTurno === 1, responsable: g.responsable || '', comprobante: g.comprobante || '',
     })
     setSheetOpen(true)
   }
@@ -73,6 +73,10 @@ export default function Gastos() {
     const concepto = form.concepto.trim() || (cat ? cat.label : 'Gasto')
     const extra = {
       medioPago: form.medioPago || 'caja',
+      // Un gasto por transferencia/banco solo descuadra el turno si el operador
+      // dice que salió de la plata DEL turno (Nequi del día). El efectivo de
+      // caja siempre cuenta, con o sin este flag.
+      salidaTurno: form.tipo === 'variable' && form.salidaTurno ? 1 : 0,
       responsable: form.responsable.trim(),
       comprobante: form.comprobante.trim(),
     }
@@ -236,7 +240,21 @@ export default function Gastos() {
               onClick={() => setForm({ ...form, medioPago: m.id })}>{m.label}</button>
           ))}
         </div>
-        {form.medioPago !== 'caja' && (
+        {form.medioPago !== 'caja' && form.tipo === 'variable' && (
+          <>
+            <label>¿Salió del Nequi / transferencia del turno?</label>
+            <div className="pill-row">
+              <button className={`pill ${form.salidaTurno ? 'active' : ''}`} onClick={() => setForm({ ...form, salidaTurno: true })}>Sí, del turno (descuenta ya)</button>
+              <button className={`pill ${!form.salidaTurno ? 'active' : ''}`} onClick={() => setForm({ ...form, salidaTurno: false })}>No, de otra cuenta</button>
+            </div>
+            <div className="helper">
+              {form.salidaTurno
+                ? 'Baja de una vez el "Debe quedar en transferencia" del turno abierto.'
+                : 'No afecta el cuadre del turno (pago del banco del dueño; solo cuenta en el mes).'}
+            </div>
+          </>
+        )}
+        {form.medioPago !== 'caja' && form.tipo !== 'variable' && (
           <div className="helper">No sale del efectivo de la caja (no afecta el cuadre del turno).</div>
         )}
 
