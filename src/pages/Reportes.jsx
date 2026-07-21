@@ -125,11 +125,13 @@ export default function Reportes() {
 
   // --- Estado actual (no depende del mes) ---
   // Cuentas por cobrar = ventas a crédito vigentes − abonos recibidos
-  const debeTotal = (todasVentas || []).filter((x) => x.metodoPago === 'credito' && !x.anulada).reduce((s, x) => s + x.total, 0)
-  // Los préstamos de plata a clientes (categoria 'prestamo') también son cartera.
-  const prestadoTotal = (todosGastos || []).filter((g) => g.categoria === 'prestamo' && !g.anulada).reduce((s, g) => s + g.monto, 0)
-  const abonadoTotal = (abonos || []).filter((a) => !a.anulada).reduce((s, a) => s + a.monto, 0)
-  const porCobrar = Math.max(0, debeTotal + prestadoTotal - abonadoTotal)
+  // Cartera POR CLIENTE (fiados + préstamos − abonos), igual que la pestaña
+  // Crédito e Inicio: solo lo positivo de cada cliente.
+  const saldoPorCliente = {}
+  for (const x of (todasVentas || [])) if (x.metodoPago === 'credito' && !x.anulada) saldoPorCliente[x.clienteId] = (saldoPorCliente[x.clienteId] || 0) + x.total
+  for (const g of (todosGastos || [])) if (g.categoria === 'prestamo' && !g.anulada) saldoPorCliente[g.clienteId] = (saldoPorCliente[g.clienteId] || 0) + g.monto
+  for (const a of (abonos || [])) if (!a.anulada) saldoPorCliente[a.clienteId] = (saldoPorCliente[a.clienteId] || 0) - a.monto
+  const porCobrar = Object.values(saldoPorCliente).reduce((s, v) => s + Math.max(0, v), 0)
   // Valor del inventario a costo
   const valorInventario = (productos || []).reduce((s, p) => s + (p.stock || 0) * (p.precioCompra || 0), 0)
 
@@ -231,7 +233,9 @@ export default function Reportes() {
       totalGastos, utilidad,
       porCobrar, valorInventario,
       ranking, trabRanking,
-      gastos: (gastos || []).filter((g) => !g.anulada),
+      // El detalle del PDF debe listar SOLO los gastos que suman en totalGastos
+      // (excluye comisiones/inventario/retiro/prestamo), si no el detalle no cuadra.
+      gastos: gastosMes,
     })
   }
 

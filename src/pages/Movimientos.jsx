@@ -22,6 +22,7 @@ export default function Movimientos() {
   const mes = fecha.slice(0, 7)
   const ventas = useLiveQuery(() => db.ventas.where('mes').equals(mes).toArray(), [mes], [])
   const trabajadores = useLiveQuery(() => db.trabajadores.where('activo').equals(1).toArray(), [], [])
+  const servicios = useLiveQuery(() => db.servicios.toArray(), [], [])
 
   const delDia = (ventas || []).filter((v) => !v.anulada && dayKey(v.fecha) === fecha)
 
@@ -74,7 +75,10 @@ export default function Movimientos() {
   const [editLavador, setEditLavador] = useState({}) // { ventaId: trabajadorId } para líneas de servicio
   function abrirEditar(g) {
     setEditG(g)
-    setEditMetodo(g.metodoPago === 'mixto' ? 'mixto' : (esEfectivo({ metodoPago: g.metodoPago }) ? 'efectivo' : g.metodoPago === 'transferencia' ? 'transferencia' : 'efectivo'))
+    // OJO: si la venta era a CRÉDITO hay que arrancar en 'credito', si no,
+    // "Editar pago" (aunque solo sea para cambiar el lavador) la convertía a
+    // efectivo → borraba la deuda del cliente y metía efectivo falso al turno.
+    setEditMetodo(g.metodoPago === 'mixto' ? 'mixto' : g.metodoPago === 'credito' ? 'credito' : (g.metodoPago === 'transferencia' ? 'transferencia' : 'efectivo'))
     setEditEfectivo(g.metodoPago === 'mixto' ? g.ef : 0)
     const lav = {}
     for (const x of g.rows) if (x.tipo === 'servicio') lav[x.id] = x.trabajadorId || ''
@@ -88,12 +92,16 @@ export default function Movimientos() {
       const patch = { metodoPago: editMetodo }
       if (editMetodo === 'mixto') { const e = Math.round(x.total * efPct); patch.pagoEfectivo = e; patch.pagoTransferencia = Math.max(0, x.total - e) }
       else if (editMetodo === 'transferencia') { patch.pagoEfectivo = 0; patch.pagoTransferencia = x.total }
+      else if (editMetodo === 'credito') { patch.pagoEfectivo = 0; patch.pagoTransferencia = 0 } // sigue siendo deuda: no entra plata
       else { patch.pagoEfectivo = x.total; patch.pagoTransferencia = 0 }
       // Reasignar lavador de una línea de servicio (recalcula su comisión).
       if (x.tipo === 'servicio' && (editLavador[x.id] || '') !== (x.trabajadorId || '')) {
         const t = (trabajadores || []).find((w) => w.id === editLavador[x.id])
-        // % propio del lavador si lo tiene; si no, el % que ya traía la línea.
-        const pct = t && t.comisionPct != null && t.comisionPct !== '' ? Number(t.comisionPct) : (x.comisionPct || 0)
+        // % propio del lavador si lo tiene; si no, el % BASE del servicio (no el
+        // % que traía la línea, que podía ser el % personal del lavador anterior).
+        const pctServ = (servicios || []).find((s) => s.id === x.servicioId)?.comisionPct
+        const pct = (t && t.comisionPct != null && t.comisionPct !== '') ? Number(t.comisionPct)
+          : (pctServ != null && pctServ !== '' ? Number(pctServ) : (x.comisionPct || 0))
         const comision = Math.round((x.total || 0) * (pct / 100))
         patch.trabajadorId = t ? t.id : null
         patch.trabajadorNombre = t ? t.nombre : null
@@ -195,7 +203,13 @@ export default function Movimientos() {
                 <button className={`pill ${editMetodo === 'efectivo' ? 'active' : ''}`} onClick={() => setEditMetodo('efectivo')}>Efectivo</button>
                 <button className={`pill ${editMetodo === 'transferencia' ? 'active' : ''}`} onClick={() => setEditMetodo('transferencia')}>Transferencia</button>
                 <button className={`pill ${editMetodo === 'mixto' ? 'active' : ''}`} onClick={() => setEditMetodo('mixto')}>Mixto</button>
+                <button className={`pill ${editMetodo === 'credito' ? 'active' : ''}`} onClick={() => setEditMetodo('credito')}>Crédito (fiado)</button>
               </div>
+              {editMetodo === 'credito' && (
+                <div className="helper" style={{ color: 'var(--amber)' }}>
+                  {editG.metodoPago === 'credito' ? 'Sigue como fiado: la deuda del cliente no cambia.' : 'Pasará a fiado: se sumará a la deuda del cliente de esta factura.'}
+                </div>
+              )}
               {editMetodo === 'mixto' && (
                 <>
                   <label>¿Cuánto en efectivo?</label>

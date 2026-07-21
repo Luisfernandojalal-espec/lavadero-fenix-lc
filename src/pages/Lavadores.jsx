@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, TIPOS_VEHICULO, precioServicio, esLavador, medioPagoGasto } from '../db'
 import { money, dayKey, monthKey, shortDate, fechaLarga } from '../format'
-import { esEfectivo, facturarItems, totalDe, totalLinea, asignarComision, labelMedio } from '../ventas'
+import { esEfectivo, montoEfectivo, montoTransferencia, facturarItems, totalDe, totalLinea, asignarComision, labelMedio } from '../ventas'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
 import { AgregarAdicional, lineaAdicional } from '../components/Adicional'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect, ConfirmSheet } from '../components/ui'
@@ -32,8 +32,9 @@ export default function Lavadores({ embedded }) {
 
   // KPIs de HOY
   const kServicios = ventasServHoy.reduce((s, v) => s + (v.cantidad || 1), 0)
-  const kEfectivo = ventasHoy.filter(esEfectivo).reduce((s, v) => s + v.total, 0)
-  const kTransfer = ventasHoy.filter((v) => v.metodoPago === 'transferencia').reduce((s, v) => s + v.total, 0)
+  // Reparte cada venta por su parte real (soporta pago mixto: ef + tr por línea).
+  const kEfectivo = ventasHoy.reduce((s, v) => s + montoEfectivo(v), 0)
+  const kTransfer = ventasHoy.reduce((s, v) => s + montoTransferencia(v), 0)
   const kTotal = ventasHoy.reduce((s, v) => s + v.total, 0)
 
   function statsDe(tId) {

@@ -24,11 +24,14 @@ export default function Inicio() {
   const ventasHoy = (ventas || []).filter((v) => !v.anulada && dayKey(v.fecha) === hoy)
   const totalHoy = ventasHoy.reduce((s, v) => s + v.total, 0)
   const gananciaHoy = ventasHoy.reduce((s, v) => s + (v.ganancia || 0), 0)
-  const debe = (ventas || []).filter((v) => v.metodoPago === 'credito' && !v.anulada).reduce((s, v) => s + v.total, 0)
-  // Los préstamos de plata a clientes también son cartera por cobrar.
-  const prestado = (gastosAll || []).filter((g) => g.categoria === 'prestamo' && !g.anulada).reduce((s, g) => s + g.monto, 0)
-  const abonado = (abonos || []).filter((a) => !a.anulada).reduce((s, a) => s + a.monto, 0)
-  const porCobrar = Math.max(0, debe + prestado - abonado)
+  // Cartera POR CLIENTE (fiados + préstamos − abonos), igual que la pestaña
+  // Crédito: se suma solo lo positivo de cada cliente. Un clamp global daría un
+  // número distinto si algún cliente abonó de más (saldo negativo).
+  const saldoPorCliente = {}
+  for (const v of (ventas || [])) if (v.metodoPago === 'credito' && !v.anulada) saldoPorCliente[v.clienteId] = (saldoPorCliente[v.clienteId] || 0) + v.total
+  for (const g of (gastosAll || [])) if (g.categoria === 'prestamo' && !g.anulada) saldoPorCliente[g.clienteId] = (saldoPorCliente[g.clienteId] || 0) + g.monto
+  for (const a of (abonos || [])) if (!a.anulada) saldoPorCliente[a.clienteId] = (saldoPorCliente[a.clienteId] || 0) - a.monto
+  const porCobrar = Object.values(saldoPorCliente).reduce((s, v) => s + Math.max(0, v), 0)
 
   // Ganancia REAL del día: ganancia operativa de las ventas del día, menos la
   // tajada diaria de los costos del mes. Los costos se reparten ÷ 30 para que un
