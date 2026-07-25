@@ -18,8 +18,8 @@ export default function Turno() {
   const gastos = useLiveQuery(() => db.gastos.toArray(), [], [])
   const mesas = useLiveQuery(() => db.mesas.where('activo').equals(1).toArray(), [], [])
 
-  const abierto = (turnos || []).find((t) => t.estado === 'abierto')
-  const cerrados = (turnos || []).filter((t) => t.estado === 'cerrado').sort((a, b) => b.cerradoEn - a.cerradoEn)
+  const abierto = (turnos || []).find((t) => t.estado === 'abierto' && !t.anulada)
+  const cerrados = (turnos || []).filter((t) => t.estado === 'cerrado' && !t.anulada).sort((a, b) => b.cerradoEn - a.cerradoEn)
   const mesasAbiertas = (mesas || []).filter((m) => m.estado === 'ocupada')
 
   // Resumen en vivo del turno abierto
@@ -158,6 +158,27 @@ export default function Turno() {
 
   // Detalle de un cierre anterior
   const [det, setDet] = useState(null)
+  // Corregir / eliminar un cierre ya hecho (solo dueño). Sirve para el caso de
+  // cerrar el turno sin teclear el efectivo contado (aparece "Faltó $X") o para
+  // borrar un turno creado por error (ej. uno repetido para "arreglar" el otro).
+  const [corrigiendo, setCorrigiendo] = useState(false)
+  const [confirmDel, setConfirmDel] = useState(false)
+  const [contadoEdit, setContadoEdit] = useState(0)
+  function abrirDetalle(t) { setCorrigiendo(false); setConfirmDel(false); setDet(t) }
+  async function guardarCorreccion() {
+    if (!det) return
+    const nuevoResumen = { ...(det.resumen || {}), contadoReal: contadoEdit }
+    await db.turnos.update(det.id, stamp({ resumen: nuevoResumen }))
+    setDet({ ...det, resumen: nuevoResumen }) // refresca el sheet abierto
+    setCorrigiendo(false)
+    show('Efectivo contado corregido')
+  }
+  async function eliminarCierre() {
+    if (!det) return
+    await db.turnos.update(det.id, stamp({ anulada: 1 })) // borrado suave (se propaga por sync)
+    setConfirmDel(false); setDet(null)
+    show('Cierre eliminado')
+  }
 
   const difColor = (d) => (d === 0 ? 'var(--green)' : d > 0 ? 'var(--amber)' : 'var(--red)')
 
@@ -281,7 +302,7 @@ export default function Turno() {
             {cerrados.slice(0, 20).map((t) => {
               const r = cuadreCerrado(t)
               return (
-                <div className="row" key={t.id} onClick={() => setDet(t)} style={{ cursor: 'pointer' }}>
+                <div className="row" key={t.id} onClick={() => abrirDetalle(t)} style={{ cursor: 'pointer' }}>
                   <div className="main">
                     <div className="title">{shortDate(t.cerradoEn)}</div>
                     <div className="meta">{t.abiertoPor} → {t.cerradoPor} · {r.ventasCount} ventas</div>
@@ -419,6 +440,46 @@ export default function Turno() {
               </table>
               <div style={{ height: 12 }} />
               <button className="btn" onClick={() => descargarCierrePDF({ ...det, resumen: r })}>Descargar comprobante (PDF)</button>
+
+              {esDueno && (
+                <div style={{ marginTop: 16, borderTop: '1px solid var(--line)', paddingTop: 14 }}>
+                  {!corrigiendo ? (
+                    <button className="btn secondary" onClick={() => { setContadoEdit(r.contadoReal); setCorrigiendo(true) }}>
+                      Corregir efectivo contado
+                    </button>
+                  ) : (
+                    <>
+                      <label>Efectivo contado real (lo que de verdad quedó en caja)</label>
+                      <MoneyInput value={contadoEdit} onChange={setContadoEdit} />
+                      <div className="helper" style={{ marginTop: 6, color: difColor(contadoEdit - r.esperado) }}>
+                        {contadoEdit - r.esperado === 0 ? 'Quedaría cuadrada.' :
+                          contadoEdit - r.esperado > 0 ? `Sobraría ${money(contadoEdit - r.esperado)}` :
+                            `Faltaría ${money(r.esperado - contadoEdit)}`}
+                      </div>
+                      <div className="helper">Úsalo si al cerrar no tecleaste la plata que recibiste. Corrige solo el conteo; no cambia las ventas.</div>
+                      <div style={{ height: 10 }} />
+                      <button className="btn" onClick={guardarCorreccion}>Guardar corrección</button>
+                      <div style={{ height: 6 }} />
+                      <button className="btn secondary" onClick={() => setCorrigiendo(false)}>Cancelar</button>
+                    </>
+                  )}
+
+                  <div style={{ height: 10 }} />
+                  {!confirmDel ? (
+                    <button className="btn danger" onClick={() => setConfirmDel(true)}>Eliminar este cierre</button>
+                  ) : (
+                    <>
+                      <div className="helper" style={{ color: 'var(--red)' }}>
+                        ¿Eliminar este cierre? Úsalo solo si fue creado por error (ej. un turno repetido). No borra las ventas, solo este registro de cuadre.
+                      </div>
+                      <div style={{ height: 6 }} />
+                      <button className="btn danger" onClick={eliminarCierre}>Sí, eliminar cierre</button>
+                      <div style={{ height: 6 }} />
+                      <button className="btn secondary" onClick={() => setConfirmDel(false)}>Cancelar</button>
+                    </>
+                  )}
+                </div>
+              )}
             </>
           )
         })()}
