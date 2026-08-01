@@ -11,7 +11,7 @@ function labelGasto(id) {
   return c ? c.label : 'Otro'
 }
 
-const emptyForm = { concepto: '', categoria: 'arriendo', monto: 0, tipo: 'fijo', fijoId: null, medioPago: 'caja', salidaTurno: false, responsable: '', comprobante: '' }
+const emptyForm = { concepto: '', categoria: 'arriendo', monto: 0, tipo: 'fijo', fijoId: null, medioPago: 'caja', salidaTurno: false, fueraDeTurno: false, responsable: '', comprobante: '' }
 const emptyFijo = { nombre: '', categoria: 'arriendo', montoEstimado: 0 }
 
 export default function Gastos() {
@@ -55,7 +55,8 @@ export default function Gastos() {
     setModoVariable(tipoGasto(g) === 'variable' && !g.fijoId)
     setForm({
       concepto: g.concepto, categoria: g.categoria, monto: g.monto, tipo: tipoGasto(g), fijoId: g.fijoId || null,
-      medioPago: g.medioPago || 'caja', salidaTurno: g.salidaTurno === 1, responsable: g.responsable || '', comprobante: g.comprobante || '',
+      medioPago: g.medioPago || 'caja', salidaTurno: g.salidaTurno === 1, fueraDeTurno: g.fueraDeTurno === 1,
+      responsable: g.responsable || '', comprobante: g.comprobante || '',
     })
     setSheetOpen(true)
   }
@@ -78,9 +79,11 @@ export default function Gastos() {
     const extra = {
       medioPago: form.medioPago || 'caja',
       // Un gasto por transferencia/banco solo descuadra el turno si el operador
-      // dice que salió de la plata DEL turno (Nequi del día). El efectivo de
-      // caja siempre cuenta, con o sin este flag.
+      // dice que salió de la plata DEL turno (Nequi del día).
       salidaTurno: form.tipo === 'variable' && form.salidaTurno ? 1 : 0,
+      // El efectivo cuenta SIEMPRE, salvo que digan que salió de otra plata
+      // (no del cajón del turno). Solo aplica a variables pagados en caja.
+      fueraDeTurno: form.tipo === 'variable' && form.medioPago === 'caja' && form.fueraDeTurno ? 1 : 0,
       responsable: form.responsable.trim(),
       comprobante: form.comprobante.trim(),
     }
@@ -162,7 +165,7 @@ export default function Gastos() {
           <div className="row" key={g.id} onClick={() => abrirEditar(g)} style={{ cursor: 'pointer' }}>
             <div className="main">
               <div className="title">{g.concepto}</div>
-              <div className="meta">{shortDate(g.fecha)}{g.medioPago && g.medioPago !== 'caja' ? ` · ${labelMedioGasto(g.medioPago)}` : ''}{g.responsable ? ` · ${g.responsable}` : ''}</div>
+              <div className="meta">{shortDate(g.fecha)}{g.medioPago && g.medioPago !== 'caja' ? ` · ${labelMedioGasto(g.medioPago)}` : ''}{g.fueraDeTurno === 1 ? ' · de otra plata' : ''}{g.responsable ? ` · ${g.responsable}` : ''}</div>
             </div>
             <div className="right" style={{ fontWeight: 700, color: 'var(--red)' }}>−{money(g.monto)}</div>
           </div>
@@ -245,6 +248,20 @@ export default function Gastos() {
               onClick={() => setForm({ ...form, medioPago: m.id })}>{m.label}</button>
           ))}
         </div>
+        {form.medioPago === 'caja' && form.tipo === 'variable' && (
+          <>
+            <label>¿De cuál efectivo salió?</label>
+            <div className="pill-row">
+              <button className={`pill ${!form.fueraDeTurno ? 'active' : ''}`} onClick={() => setForm({ ...form, fueraDeTurno: false })}>De la caja del turno</button>
+              <button className={`pill ${form.fueraDeTurno ? 'active' : ''}`} onClick={() => setForm({ ...form, fueraDeTurno: true })}>De otra plata</button>
+            </div>
+            <div className="helper">
+              {form.fueraDeTurno
+                ? 'No descuadra el turno: la plata no salió del cajón (ej. efectivo que estaba en la casa). Sí cuenta como gasto del mes.'
+                : 'Baja de una vez el "Efectivo esperado en caja" del turno abierto.'}
+            </div>
+          </>
+        )}
         {form.medioPago !== 'caja' && form.tipo === 'variable' && (
           <>
             <label>¿Salió del Nequi / transferencia del turno?</label>

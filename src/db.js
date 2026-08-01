@@ -263,6 +263,16 @@ export const labelMedioGasto = (id) => {
 export function gastoDeCaja(g) {
   return !g.medioPago || g.medioPago === 'caja'
 }
+// ¿Este gasto toca el cuadre del turno (caja física / saldo en transferencia)?
+//  - Efectivo: cuenta SIEMPRE... salvo que se marque `fueraDeTurno` (la plata
+//    salió de otro efectivo del negocio, no del cajón del turno). Sin la marca
+//    cuenta igual que antes, así que los gastos viejos no cambian.
+//  - Transferencia / banco: solo si se registró como salida DEL turno.
+// Ojo: esto NO cambia el P&L — el gasto sigue contando en el mes (esGastoPnL).
+export function gastoTocaTurno(g) {
+  if (g.fueraDeTurno === 1) return false
+  return gastoDeCaja(g) || g.salidaTurno === 1
+}
 // Parte de un gasto que sale de la CAJA física / de TRANSFERENCIA (soporta
 // mixto: guarda pagoEfectivo/pagoTransferencia como las ventas mixtas).
 export const gastoMontoCaja = (g) =>

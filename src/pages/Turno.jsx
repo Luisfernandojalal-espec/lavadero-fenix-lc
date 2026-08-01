@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, gastoDeCaja, gastoMontoCaja, gastoMontoTransfer, tipoGasto, labelMedioGasto, medioPagoGasto } from '../db'
+import { db, uid, stamp, gastoDeCaja, gastoTocaTurno, gastoMontoCaja, gastoMontoTransfer, tipoGasto, labelMedioGasto, medioPagoGasto } from '../db'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
 import { descargarCierrePDF } from '../pdf'
@@ -39,12 +39,14 @@ export default function Turno() {
   // Salidas/pagos del turno (gastos VARIABLES; los FIJOS del mes nunca cuentan):
   //  - EFECTIVO (caja): SIEMPRE cuenta. La plata física salió de la caja, sin
   //    importar si se registró aquí o en la pestaña Gastos → baja el efectivo.
+  //    Excepción: si se marcó "de otra plata" (`fueraDeTurno`), no salió de este
+  //    cajón y no descuadra (ej. se pagó con efectivo que estaba en la casa).
   //  - TRANSFERENCIA: solo cuenta si se registró como salida DEL turno
   //    (`salidaTurno`, botón "Registrar salida / pago") o es una comisión pagada.
   //    Los pagos por transferencia de la pestaña Gastos son contabilidad del mes
   //    (el dueño paga proveedores desde el banco) y NO tocan el cuadre del turno.
   const salidasT = (gastos || [])
-    .filter((g) => !g.anulada && g.fecha >= desde && tipoGasto(g) === 'variable' && (gastoDeCaja(g) || g.salidaTurno === 1))
+    .filter((g) => !g.anulada && g.fecha >= desde && tipoGasto(g) === 'variable' && gastoTocaTurno(g))
     .sort((a, b) => b.fecha - a.fecha)
   // Los gastos pagados DE CAJA descuadran el efectivo; los de transferencia/banco (Nequi)
   // bajan el saldo digital. Un pago mixto (ej. comisión) reparte su parte a cada lado.
@@ -199,7 +201,7 @@ export default function Turno() {
     const abonosRango = (abonos || []).filter((a) => enRango(a.fecha) && !a.anulada)
     const abonosR = abonosRango.reduce((s, a) => s + gastoMontoCaja(a), 0)          // los que entraron en efectivo
     const abonosTransferR = abonosRango.reduce((s, a) => s + gastoMontoTransfer(a), 0) // los que entraron por transferencia
-    const salidas = (gastos || []).filter((g) => !g.anulada && enRango(g.fecha) && tipoGasto(g) === 'variable' && (gastoDeCaja(g) || g.salidaTurno === 1))
+    const salidas = (gastos || []).filter((g) => !g.anulada && enRango(g.fecha) && tipoGasto(g) === 'variable' && gastoTocaTurno(g))
     const gastosR = salidas.reduce((s, g) => s + gastoMontoCaja(g), 0)
     const gastosTransferR = salidas.reduce((s, g) => s + gastoMontoTransfer(g), 0)
     const esperado = (t.base || 0) + efectivo + abonosR - gastosR
