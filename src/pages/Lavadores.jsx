@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, TIPOS_VEHICULO, precioServicio, esLavador, medioPagoGasto } from '../db'
+import { db, uid, stamp, TIPOS_VEHICULO, precioServicio, esLavador, medioPagoGasto, labelMedioGasto } from '../db'
 import { money, dayKey, monthKey, shortDate, fechaLarga } from '../format'
 import { montoEfectivo, montoTransferencia, facturarItems, totalDe, totalLinea, asignarComision, labelMedio } from '../ventas'
 import { ItemsGrid, lineaDesde } from '../components/ItemsGrid'
@@ -17,6 +17,7 @@ export default function Lavadores({ embedded }) {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { show, node } = useToast()
+  const esDueno = user?.rol === 'dueño' // solo el dueño anula pagos de comisión
 
   const trabajadores = useLiveQuery(() => db.trabajadores.where('activo').equals(1).toArray(), [], [])
   const ventas = useLiveQuery(() => db.ventas.toArray(), [], [])
@@ -43,8 +44,13 @@ export default function Lavadores({ embedded }) {
     const total = mias.reduce((s, v) => s + v.total, 0)
     const comisionHoy = mias.reduce((s, v) => s + (v.comision || 0), 0)
     const generado = ventasServ.filter((v) => v.trabajadorId === tId).reduce((s, v) => s + (v.comision || 0), 0)
-    const pagado = (pagos || []).filter((p) => p.trabajadorId === tId).reduce((s, p) => s + p.monto, 0)
-    return { servicios, total, comisionHoy, pendiente: Math.max(0, generado - pagado) }
+    const pagado = (pagos || []).filter((p) => p.trabajadorId === tId && !p.anulada).reduce((s, p) => s + p.monto, 0)
+    // saldo SIN recortar: si es negativo se le pagó DE MÁS (queda a favor del
+    // lavadero). Antes se recortaba con Math.max(0,…) y eso escondía el
+    // sobrepago: la tarjeta decía "Pendiente $0" y el botón Pagar desaparecía
+    // sin explicar por qué. Ahora se muestra tal cual.
+    const saldo = generado - pagado
+    return { servicios, total, comisionHoy, generado, pagado, saldo, pendiente: Math.max(0, saldo) }
   }
 
   // Productos vendidos en las MISMAS facturas donde el lavador hizo servicios
@@ -149,7 +155,7 @@ export default function Lavadores({ embedded }) {
     await cobrar('credito', cliente)
   }
 
-  function abrirPago(t) { setPagoA(t); setMontoPago(statsDe(t.id).pendiente); setPagoMedio('efectivo'); setPagoEfMixto(0) }
+  function abrirPago(t) { setPagoA(t); setMontoPago(Math.max(0, statsDe(t.id).saldo)); setPagoMedio('efectivo'); setPagoEfMixto(0) }
   const pagandoRef = useRef(false) // candado anti-doble-toque (doble pago de comisión)
   async function pagar() {
     if (montoPago <= 0) return show('Escribe el valor a pagar')
@@ -158,18 +164,44 @@ export default function Lavadores({ embedded }) {
     try {
       const now = Date.now()
       const medio = medioPagoGasto(pagoMedio, montoPago, pagoEfMixto)
+      const pagoId = uid()
       await db.pagos_comision.add(stamp({
-        id: uid(), trabajadorId: pagoA.id, trabajadorNombre: pagoA.nombre,
+        id: pagoId, trabajadorId: pagoA.id, trabajadorNombre: pagoA.nombre,
         monto: montoPago, medioPago: medio.medioPago, fecha: now, mes: monthKey(now), pagadoPor: user?.nombre || '',
       }))
       // Sale del producido del día: efectivo baja la caja, transferencia baja el
       // banco, mixto reparte. Cuenta en el cierre de turno (salidaTurno).
+      // `pagoId` liga el gasto con su pago para poder anular los dos juntos.
       await db.gastos.add(stamp({
-        id: uid(), concepto: `Pago de comisión a ${pagoA.nombre}`, categoria: 'comisiones',
+        id: uid(), concepto: `Pago de comisión a ${pagoA.nombre}`, categoria: 'comisiones', pagoId,
         monto: montoPago, tipo: 'variable', ...medio, salidaTurno: 1, fecha: now, mes: monthKey(now),
       }))
       setPagoA(null); setMontoPago(0); show('Pago de comisiones registrado')
     } finally { pagandoRef.current = false }
+  }
+
+  // --- Anular un pago de comisión mal hecho (ej. quedó registrado dos veces) ---
+  // Borrado SUAVE (anulada:1) para que se propague por sync, igual que abonos y
+  // facturas. Anula también el gasto ligado, si no la plata seguiría descontada
+  // del turno. Los pagos viejos no traen `pagoId`, así que se busca el gasto por
+  // concepto + monto + fecha cercana (así se pueden corregir los ya hechos).
+  const [confirmAnular, setConfirmAnular] = useState(null)
+  async function anularPago(p) {
+    await db.transaction('rw', db.pagos_comision, db.gastos, async () => {
+      const actual = await db.pagos_comision.get(p.id)
+      if (!actual || actual.anulada) return // idempotente (doble toque / ya anulado)
+      await db.pagos_comision.update(p.id, stamp({ anulada: 1 }))
+      const gastos = await db.gastos.where('categoria').equals('comisiones').toArray()
+      let ligado = gastos.find((g) => g.pagoId === p.id && !g.anulada)
+      if (!ligado) {
+        ligado = gastos.find((g) => !g.anulada && !g.pagoId && g.monto === p.monto &&
+          Math.abs((g.fecha || 0) - (p.fecha || 0)) < 120000 &&
+          String(g.concepto || '').includes(p.trabajadorNombre || ''))
+      }
+      if (ligado) await db.gastos.update(ligado.id, stamp({ anulada: 1 }))
+    })
+    setConfirmAnular(null)
+    show('Pago anulado')
   }
 
   const lista = (trabajadores || []).filter(esLavador)
@@ -200,12 +232,14 @@ export default function Lavadores({ embedded }) {
             <div className="lav-total">{money(st.total)}</div>
             <div className="lav-meta">Comisión hoy {money(st.comisionHoy)}</div>
             <div className="lav-meta">
-              Pendiente <b style={{ color: st.pendiente > 0 ? 'var(--red)' : 'var(--green)' }}>{money(st.pendiente)}</b>
+              {st.saldo < 0
+                ? <>A favor <b style={{ color: 'var(--amber)' }}>{money(-st.saldo)}</b></>
+                : <>Pendiente <b style={{ color: st.saldo > 0 ? 'var(--red)' : 'var(--green)' }}>{money(st.saldo)}</b></>}
             </div>
             <div className="lav-actions">
               <button className="chip-lavador" onClick={(e) => { e.stopPropagation(); abrirCobro(t) }}>Nueva lavada</button>
               <button className="chip-lavador" onClick={(e) => { e.stopPropagation(); setDetalle(t) }}>Ver detalle</button>
-              {st.pendiente > 0 && <button className="chip-lavador" onClick={(e) => { e.stopPropagation(); abrirPago(t) }}>Pagar</button>}
+              {st.saldo > 0 && <button className="chip-lavador" onClick={(e) => { e.stopPropagation(); abrirPago(t) }}>Pagar</button>}
             </div>
           </div>
         )
@@ -221,7 +255,9 @@ export default function Lavadores({ embedded }) {
           const filas = ventasServHoy.filter((v) => v.trabajadorId === detalle.id).sort((a, b) => b.fecha - a.fecha)
           const comHoy = filas.reduce((s, v) => s + (v.comision || 0), 0)
           const prods = productosDe(filas)
-          const pendiente = statsDe(detalle.id).pendiente
+          const st = statsDe(detalle.id)
+          const pagosDe = (pagos || []).filter((p) => p.trabajadorId === detalle.id && !p.anulada)
+            .sort((a, b) => b.fecha - a.fecha)
           return (
             <>
               <div className="helper" style={{ marginBottom: 8 }}>Servicios que hizo hoy. Cada lavada con su comisión.</div>
@@ -261,13 +297,45 @@ export default function Lavadores({ embedded }) {
                 </>
               )}
               <div className="dato-fuerte" style={{ marginTop: 10 }}>Comisión de hoy: <b>{money(comHoy)}</b></div>
-              {pendiente > 0 && (
+              {st.saldo > 0 && (
                 <>
-                  <div className="dato-fuerte">Pendiente por pagar: <b style={{ color: 'var(--red)' }}>{money(pendiente)}</b></div>
+                  <div className="dato-fuerte">Pendiente por pagar: <b style={{ color: 'var(--red)' }}>{money(st.saldo)}</b></div>
                   <div className="helper">Incluye lo acumulado sin pagar (puede ser de días anteriores).</div>
                   <div style={{ height: 10 }} />
                   <button className="btn" onClick={() => { const t = detalle; setDetalle(null); abrirPago(t) }}>Pagar comisión</button>
                 </>
+              )}
+              {st.saldo < 0 && (
+                <div className="helper" style={{ color: 'var(--amber)', marginTop: 6 }}>
+                  Se le ha pagado <b>{money(-st.saldo)}</b> de más: ganó {money(st.generado)} en comisiones y se le han pagado {money(st.pagado)}.
+                  Por eso no aparece "Pagar". Si hay un pago repetido, anúlalo abajo y el pendiente vuelve a la normalidad.
+                </div>
+              )}
+
+              {/* Pagos de comisión hechos: antes no se veían en ninguna parte, así
+                  que un pago repetido era invisible e imposible de corregir. */}
+              <div className="section-title" style={{ marginTop: 14 }}>Pagos de comisión</div>
+              {pagosDe.length === 0 && <div className="helper">Todavía no se le ha pagado comisión.</div>}
+              {pagosDe.length > 0 && (
+                <table className="tabla compacta">
+                  <tbody>
+                    {pagosDe.map((p) => (
+                      <tr key={p.id}>
+                        <td className="muted-cell" style={{ whiteSpace: 'nowrap' }}>{shortDate(p.fecha)}</td>
+                        <td>{labelMedioGasto(p.medioPago)}{p.pagadoPor ? <div className="muted-cell">{p.pagadoPor}</div> : null}</td>
+                        <td className="num" style={{ fontWeight: 700 }}>{money(p.monto)}</td>
+                        {esDueno && (
+                          <td className="num">
+                            <button className="chip-lavador" onClick={() => setConfirmAnular(p)}>Anular</button>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {esDueno && pagosDe.length > 0 && (
+                <div className="helper">Anular un pago lo devuelve al pendiente y quita su descuento del turno. Úsalo si quedó registrado dos veces.</div>
               )}
             </>
           )
@@ -381,6 +449,14 @@ export default function Lavadores({ embedded }) {
           cobrar('mixto', null, { efectivo: ef, transferencia: totalCobro - ef })
         }}>Cobrar mixto · {money(totalCobro)}</button>
       </Sheet>
+
+      {/* Confirmar anulación de un pago de comisión */}
+      <ConfirmSheet open={!!confirmAnular} title="¿Anular este pago?"
+        message={confirmAnular ? `¿Anular el pago de ${money(confirmAnular.monto)}?` : ''}
+        detail={confirmAnular ? `${confirmAnular.trabajadorNombre || ''} · ${shortDate(confirmAnular.fecha)}. Vuelve al pendiente y se quita del turno.` : ''}
+        confirmLabel="Sí, anular el pago"
+        onConfirm={() => anularPago(confirmAnular)}
+        onClose={() => setConfirmAnular(null)} />
 
       {/* Confirmación antes de cobrar */}
       <ConfirmSheet open={!!confirmarMetodo} title="¿Confirmar cobro?"

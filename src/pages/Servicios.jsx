@@ -45,7 +45,7 @@ export default function Servicios() {
     const mias = ventasServ.filter((v) => v.trabajadorId === tId)
     const generado = mias.reduce((s, v) => s + (v.comision || 0), 0)
     const lavadas = mias.reduce((s, v) => s + (v.cantidad || 1), 0)
-    const pagado = (pagos || []).filter((p) => p.trabajadorId === tId).reduce((s, p) => s + p.monto, 0)
+    const pagado = (pagos || []).filter((p) => p.trabajadorId === tId && !p.anulada).reduce((s, p) => s + p.monto, 0)
     return { generado, pagado, pendiente: generado - pagado, lavadas }
   }
 
@@ -96,8 +96,9 @@ export default function Servicios() {
     try {
       const now = Date.now()
       const medio = medioPagoGasto(pagoMedio, montoPago, pagoEfMixto)
+      const pagoId = uid()
       await db.pagos_comision.add(stamp({
-        id: uid(), trabajadorId: pagoA.id, trabajadorNombre: pagoA.nombre,
+        id: pagoId, trabajadorId: pagoA.id, trabajadorNombre: pagoA.nombre,
         monto: montoPago, medioPago: medio.medioPago, fecha: now, mes: monthKey(now), pagadoPor: user?.nombre || '',
       }))
       // Sale del producido del día: efectivo baja la caja, transferencia baja el
@@ -105,7 +106,7 @@ export default function Servicios() {
       // En el Balance NO se resta otra vez (la comisión ya está descontada del
       // neto de servicios) — por eso la categoría 'comisiones' se excluye allá.
       await db.gastos.add(stamp({
-        id: uid(), concepto: `Pago de comisión a ${pagoA.nombre}`, categoria: 'comisiones',
+        id: uid(), concepto: `Pago de comisión a ${pagoA.nombre}`, categoria: 'comisiones', pagoId,
         monto: montoPago, tipo: 'variable', ...medio, salidaTurno: 1, fecha: now, mes: monthKey(now),
       }))
       setPagoA(null); setMontoPago(0)
