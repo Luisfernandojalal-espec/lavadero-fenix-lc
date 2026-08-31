@@ -141,10 +141,14 @@ export default function Credito() {
   const [prestMedio, setPrestMedio] = useState('caja')
   const [prestEf, setPrestEf] = useState(0)
   const [prestNota, setPrestNota] = useState('')
-  function abrirPrestamo() { setPrestEdit(null); setPrestMonto(0); setPrestMedio('caja'); setPrestEf(0); setPrestNota(''); setPrestSheet(true) }
+  // true = la plata NO es del turno (efectivo/cuenta aparte del dueño): el
+  // préstamo queda registrado y sube la deuda, pero no descuadra el turno.
+  const [prestFuera, setPrestFuera] = useState(false)
+  function abrirPrestamo() { setPrestEdit(null); setPrestMonto(0); setPrestMedio('caja'); setPrestEf(0); setPrestNota(''); setPrestFuera(false); setPrestSheet(true) }
   function abrirEditarPrestamo(g) {
     setPrestEdit(g); setPrestMonto(g.monto); setPrestMedio(g.medioPago || 'caja')
     setPrestEf(g.pagoEfectivo || 0); setPrestNota((g.concepto || '').replace(/^Préstamo a [^·]*·?\s*/, ''))
+    setPrestFuera(g.fueraDeTurno === 1)
     setPrestSheet(true)
   }
   async function guardarPrestamo() {
@@ -154,18 +158,22 @@ export default function Credito() {
     try {
       const concepto = `Préstamo a ${det?.nombre || prestEdit?.clienteNombre || ''}${prestNota.trim() ? ' · ' + prestNota.trim() : ''}`
       const mp = medioPagoGasto(prestMedio, prestMonto, prestEf)
+      // "De otra plata" (fueraDeTurno): la deuda sube igual, pero el préstamo no
+      // toca el cuadre del turno (gastoTocaTurno lo excluye). Se guarda también
+      // al editar, así un préstamo ya hecho se puede corregir de un lado a otro.
+      const origen = { salidaTurno: prestFuera ? 0 : 1, fueraDeTurno: prestFuera ? 1 : 0 }
       if (prestEdit) {
-        await db.gastos.update(prestEdit.id, stamp({ monto: prestMonto, concepto, ...mp }))
+        await db.gastos.update(prestEdit.id, stamp({ monto: prestMonto, concepto, ...mp, ...origen }))
         setPrestSheet(false); setPrestEdit(null); show('Préstamo actualizado')
       } else {
         const now = Date.now()
         await db.gastos.add(stamp({
           id: uid(), concepto, categoria: 'prestamo', monto: prestMonto,
-          tipo: 'variable', ...mp, salidaTurno: 1,
+          tipo: 'variable', ...mp, ...origen,
           clienteId: det.id, clienteNombre: det.nombre,
           responsable: user?.nombre || '', fecha: now, mes: monthKey(now),
         }))
-        setPrestSheet(false); show('Préstamo registrado y descontado del turno')
+        setPrestSheet(false); show(prestFuera ? 'Préstamo registrado (no toca el turno)' : 'Préstamo registrado y descontado del turno')
       }
     } finally { guardandoRef.current = false }
   }
@@ -400,13 +408,23 @@ export default function Credito() {
       <Sheet open={prestSheet} onClose={() => { setPrestSheet(false); setPrestEdit(null) }}
         title={prestEdit ? 'Editar préstamo' : (det ? `Prestar plata a ${det.nombre}` : 'Prestar plata')}>
         <div className="helper" style={{ marginBottom: 8 }}>
-          La plata sale de la caja o de la transferencia del turno en este momento, y queda como deuda del cliente. Cuando abone, vuelve a entrar según cómo pague. No cuenta como gasto del negocio.
+          El préstamo queda como deuda del cliente y cuando abone, la plata vuelve a entrar según cómo pague. No cuenta como gasto del negocio.
         </div>
         <label>Valor del préstamo</label>
         <MoneyInput value={prestMonto} onChange={setPrestMonto} />
-        <label>¿De dónde sale la plata?</label>
+        <label>¿La plata es del turno?</label>
         <div className="pill-row">
-          <button className={`pill ${prestMedio === 'caja' ? 'active' : ''}`} onClick={() => setPrestMedio('caja')}>Efectivo (caja)</button>
+          <button className={`pill ${!prestFuera ? 'active' : ''}`} onClick={() => setPrestFuera(false)}>Sí, del turno (descuenta ya)</button>
+          <button className={`pill ${prestFuera ? 'active' : ''}`} onClick={() => setPrestFuera(true)}>No, de otra plata</button>
+        </div>
+        <div className="helper" style={{ marginBottom: 8 }}>
+          {prestFuera
+            ? 'No toca el cuadre del turno: es plata tuya aparte (ej. efectivo guardado en la casa u otra cuenta). El préstamo queda registrado y la deuda sube igual.'
+            : 'Sale de la caja o de la transferencia del turno en este momento y baja el cuadre.'}
+        </div>
+        <label>{prestFuera ? '¿Cómo se lo prestaste?' : '¿De dónde sale la plata?'}</label>
+        <div className="pill-row">
+          <button className={`pill ${prestMedio === 'caja' ? 'active' : ''}`} onClick={() => setPrestMedio('caja')}>Efectivo{prestFuera ? '' : ' (caja)'}</button>
           <button className={`pill ${prestMedio === 'transferencia' ? 'active' : ''}`} onClick={() => setPrestMedio('transferencia')}>Transferencia</button>
           <button className={`pill ${prestMedio === 'mixto' ? 'active' : ''}`} onClick={() => setPrestMedio('mixto')}>Mixto</button>
         </div>
@@ -420,7 +438,7 @@ export default function Credito() {
         <label>Motivo (opcional)</label>
         <input value={prestNota} placeholder="Ej: calamidad, adelanto…" onChange={(e) => setPrestNota(e.target.value)} />
         <div style={{ height: 14 }} />
-        <button className="btn" onClick={guardarPrestamo}>{prestEdit ? 'Guardar' : 'Prestar y descontar del turno'}</button>
+        <button className="btn" onClick={guardarPrestamo}>{prestEdit ? 'Guardar' : (prestFuera ? 'Prestar (sin tocar el turno)' : 'Prestar y descontar del turno')}</button>
         {prestEdit && <><div style={{ height: 10 }} /><button className="btn danger" onClick={eliminarPrestamo}>Eliminar préstamo</button></>}
       </Sheet>
 
