@@ -76,6 +76,14 @@ export async function descargarCierrePDF(t) {
       ...((r.abonosTransfer || 0) > 0 ? [['Abonos por transferencia', m(r.abonosTransfer)]] : []),
       ...((r.gastosTransfer || 0) > 0 ? [['Pagos por transferencia (Nequi)', '- ' + m(r.gastosTransfer).slice(2)]] : []),
       ['Debe quedar en transferencia', m(r.totalTransfer ?? ((t.baseTransferencia || 0) + (r.transferencias || 0) - (r.gastosTransfer || 0)))],
+      // Cuadre de la transferencia (solo cierres que registraron el conteo)
+      ...(r.contadoTransfer != null ? (() => {
+        const dt = r.diferenciaTransfer ?? (r.contadoTransfer - (r.totalTransfer || 0))
+        return [
+          ['Transferencia contada (Nequi)', m(r.contadoTransfer)],
+          [dt === 0 ? 'TRANSFERENCIA CUADRADA' : dt > 0 ? 'SOBRANTE EN TRANSFERENCIA' : 'FALTANTE EN TRANSFERENCIA', m(Math.abs(dt))],
+        ]
+      })() : []),
       ['Ventas a crédito (fiado)', m(r.credito)],
       ['Número de ventas del turno', String(r.ventasCount ?? '')],
     ],
@@ -85,9 +93,9 @@ export async function descargarCierrePDF(t) {
     didParseCell: (data) => {
       const c = data.row.raw[0]
       if (c === 'EFECTIVO ESPERADO EN CAJA') data.cell.styles.fontStyle = 'bold'
-      if (c === 'CAJA CUADRADA') data.cell.styles.textColor = [22, 163, 74]
-      if (c === 'SOBRANTE') data.cell.styles.textColor = [217, 119, 6]
-      if (c === 'FALTANTE') { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = 'bold' }
+      if (c === 'CAJA CUADRADA' || c === 'TRANSFERENCIA CUADRADA') data.cell.styles.textColor = [22, 163, 74]
+      if (c === 'SOBRANTE' || c === 'SOBRANTE EN TRANSFERENCIA') data.cell.styles.textColor = [217, 119, 6]
+      if (c === 'FALTANTE' || c === 'FALTANTE EN TRANSFERENCIA') { data.cell.styles.textColor = [220, 38, 38]; data.cell.styles.fontStyle = 'bold' }
       if (data.column.index === 0 && !['Apertura', 'Cierre'].includes(c)) data.cell.styles.fontStyle ||= 'bold'
     },
   })

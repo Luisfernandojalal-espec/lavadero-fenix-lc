@@ -141,18 +141,24 @@ export default function Turno() {
   // --- Cerrar turno ---
   const [cerrarOpen, setCerrarOpen] = useState(false)
   const [contadoReal, setContadoReal] = useState(0)
+  // Transferencia contada al cierre (lo que de verdad muestra el Nequi/banco).
+  // Arranca PRE-LLENADA con lo esperado: si el cajero no revisa el Nequi no se
+  // inventa un faltante (la lección del cierre con efectivo $0); si lo revisa y
+  // hay otra cifra, la corrige y queda el descuadre de transferencia registrado.
+  const [contadoTransfer, setContadoTransfer] = useState(0)
   async function cerrarTurno() {
     const diferencia = contadoReal - esperado
+    const diferenciaTransfer = contadoTransfer - totalTransfer
     const cerrado = {
       estado: 'cerrado', cerradoEn: Date.now(), cerradoPor: user?.nombre || '',
       resumen: {
         contado: efectivo, transferencias, credito, abonos: abonosT, abonosTransfer: abonosTransferT, gastos: gastosT,
         gastosTransfer: gastosTransferT, totalTransfer,
-        esperado, contadoReal, diferencia, ventasCount: vTurno.length,
+        esperado, contadoReal, diferencia, contadoTransfer, diferenciaTransfer, ventasCount: vTurno.length,
       },
     }
     await db.turnos.update(abierto.id, stamp(cerrado))
-    setCerrarOpen(false); setContadoReal(0)
+    setCerrarOpen(false); setContadoReal(0); setContadoTransfer(0)
     show(diferencia === 0 ? 'Turno cerrado · caja cuadrada' : 'Turno cerrado')
     // Descarga automática del comprobante
     descargarCierrePDF({ ...abierto, ...cerrado })
@@ -166,14 +172,15 @@ export default function Turno() {
   const [corrigiendo, setCorrigiendo] = useState(false)
   const [confirmDel, setConfirmDel] = useState(false)
   const [contadoEdit, setContadoEdit] = useState(0)
+  const [contadoTransferEdit, setContadoTransferEdit] = useState(0)
   function abrirDetalle(t) { setCorrigiendo(false); setConfirmDel(false); setDet(t) }
   async function guardarCorreccion() {
     if (!det) return
-    const nuevoResumen = { ...(det.resumen || {}), contadoReal: contadoEdit }
+    const nuevoResumen = { ...(det.resumen || {}), contadoReal: contadoEdit, contadoTransfer: contadoTransferEdit }
     await db.turnos.update(det.id, stamp({ resumen: nuevoResumen }))
     setDet({ ...det, resumen: nuevoResumen }) // refresca el sheet abierto
     setCorrigiendo(false)
-    show('Efectivo contado corregido')
+    show('Conteo del cierre corregido')
   }
   async function eliminarCierre() {
     if (!det) return
@@ -207,10 +214,14 @@ export default function Turno() {
     const esperado = (t.base || 0) + efectivo + abonosR - gastosR
     const totalTransfer = (t.baseTransferencia || 0) + transferencias + abonosTransferR - gastosTransferR
     const contadoReal = t.resumen?.contadoReal || 0
+    // La transferencia contada solo existe en cierres nuevos (o corregidos):
+    // en los viejos queda null y no se muestra su cuadre (no inventar faltantes).
+    const contadoTransfer = t.resumen?.contadoTransfer ?? null
     return {
       contado: efectivo, transferencias, credito, abonos: abonosR, abonosTransfer: abonosTransferR, gastos: gastosR,
       gastosTransfer: gastosTransferR, totalTransfer, esperado, contadoReal,
       diferencia: contadoReal - esperado, ventasCount: vs.length,
+      contadoTransfer, diferenciaTransfer: contadoTransfer == null ? null : contadoTransfer - totalTransfer,
     }
   }
 
@@ -292,7 +303,7 @@ export default function Turno() {
               </button>
             )}
 
-            <button className="btn" style={{ marginTop: 10 }} onClick={() => { setContadoReal(0); setCerrarOpen(true) }}>
+            <button className="btn" style={{ marginTop: 10 }} onClick={() => { setContadoReal(0); setContadoTransfer(totalTransfer); setCerrarOpen(true) }}>
               Cerrar turno
             </button>
           </>
@@ -315,6 +326,11 @@ export default function Turno() {
                       {r.diferencia === 0 ? 'Cuadrada' :
                         (r.diferencia > 0 ? `Sobró ${money(r.diferencia)}` : `Faltó ${money(-r.diferencia)}`)}
                     </div>
+                    {r.diferenciaTransfer != null && r.diferenciaTransfer !== 0 && (
+                      <div className="meta" style={{ color: difColor(r.diferenciaTransfer) }}>
+                        {r.diferenciaTransfer > 0 ? `Nequi: sobró ${money(r.diferenciaTransfer)}` : `Nequi: faltó ${money(-r.diferenciaTransfer)}`}
+                      </div>
+                    )}
                   </div>
                 </div>
               )
@@ -398,6 +414,17 @@ export default function Turno() {
                 `Faltante de ${money(esperado - contadoReal)}`}
           </div>
         )}
+        <div className="dato-fuerte" style={{ marginTop: 12 }}>Debe quedar en transferencia: <b>{money(totalTransfer)}</b></div>
+        <label>Transferencia contada (lo que muestra el Nequi / banco)</label>
+        <MoneyInput value={contadoTransfer} onChange={setContadoTransfer} />
+        <div className="helper">Ya viene con lo que debería haber. Si el Nequi muestra otra cifra, corrígela aquí y el descuadre queda registrado.</div>
+        {contadoTransfer !== totalTransfer && (
+          <div className="helper" style={{ marginTop: 4, fontSize: 14, color: difColor(contadoTransfer - totalTransfer) }}>
+            {contadoTransfer - totalTransfer > 0
+              ? `Sobrante en transferencia de ${money(contadoTransfer - totalTransfer)}`
+              : `Faltante en transferencia de ${money(totalTransfer - contadoTransfer)}`}
+          </div>
+        )}
         {mesasAbiertas.length > 0 && (
           <div className="helper" style={{ color: 'var(--amber)', marginTop: 8 }}>
             Hay {mesasAbiertas.length} {mesasAbiertas.length === 1 ? 'mesa abierta' : 'mesas abiertas'}. Se recomienda cobrarlas antes de cerrar.
@@ -424,6 +451,19 @@ export default function Turno() {
                   <tr><td>Ventas por transferencia</td><td className="num">{money(r.transferencias)}</td></tr>
                   {r.gastosTransfer > 0 && <tr><td>Pagos por transferencia (Nequi)</td><td className="num" style={{ color: 'var(--red)' }}>−{money(r.gastosTransfer)}</td></tr>}
                   <tr><td>Debe quedar en transferencia</td><td className="num">{money(r.totalTransfer)}</td></tr>
+                  {r.contadoTransfer != null && (
+                    <>
+                      <tr><td>Transferencia contada (Nequi)</td><td className="num">{money(r.contadoTransfer)}</td></tr>
+                      <tr>
+                        <td style={{ color: difColor(r.diferenciaTransfer), fontWeight: 700 }}>
+                          {r.diferenciaTransfer === 0 ? 'Transferencia cuadrada' : r.diferenciaTransfer > 0 ? 'Sobrante en transferencia' : 'Faltante en transferencia'}
+                        </td>
+                        <td className="num" style={{ color: difColor(r.diferenciaTransfer), fontWeight: 700 }}>
+                          {money(Math.abs(r.diferenciaTransfer))}
+                        </td>
+                      </tr>
+                    </>
+                  )}
                   {(r.abonosTransfer || 0) > 0 && <tr><td>Abonos por transferencia</td><td className="num">{money(r.abonosTransfer)}</td></tr>}
                   <tr><td>Abonos recibidos (efectivo)</td><td className="num">{money(r.abonos)}</td></tr>
                   <tr><td>Gastos pagados</td><td className="num">−{money(r.gastos)}</td></tr>
@@ -446,8 +486,8 @@ export default function Turno() {
               {esDueno && (
                 <div style={{ marginTop: 16, borderTop: '1px solid var(--line)', paddingTop: 14 }}>
                   {!corrigiendo ? (
-                    <button className="btn secondary" onClick={() => { setContadoEdit(r.contadoReal); setCorrigiendo(true) }}>
-                      Corregir efectivo contado
+                    <button className="btn secondary" onClick={() => { setContadoEdit(r.contadoReal); setContadoTransferEdit(r.contadoTransfer ?? r.totalTransfer); setCorrigiendo(true) }}>
+                      Corregir el conteo (efectivo / transferencia)
                     </button>
                   ) : (
                     <>
@@ -457,6 +497,13 @@ export default function Turno() {
                         {contadoEdit - r.esperado === 0 ? 'Quedaría cuadrada.' :
                           contadoEdit - r.esperado > 0 ? `Sobraría ${money(contadoEdit - r.esperado)}` :
                             `Faltaría ${money(r.esperado - contadoEdit)}`}
+                      </div>
+                      <label>Transferencia contada real (lo que mostraba el Nequi / banco)</label>
+                      <MoneyInput value={contadoTransferEdit} onChange={setContadoTransferEdit} />
+                      <div className="helper" style={{ marginTop: 6, color: difColor(contadoTransferEdit - r.totalTransfer) }}>
+                        {contadoTransferEdit - r.totalTransfer === 0 ? 'Transferencia cuadrada.' :
+                          contadoTransferEdit - r.totalTransfer > 0 ? `Sobraría ${money(contadoTransferEdit - r.totalTransfer)}` :
+                            `Faltaría ${money(r.totalTransfer - contadoTransferEdit)}`}
                       </div>
                       <div className="helper">Úsalo si al cerrar no tecleaste la plata que recibiste. Corrige solo el conteo; no cambia las ventas.</div>
                       <div style={{ height: 10 }} />
