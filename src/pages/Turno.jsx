@@ -229,6 +229,9 @@ export default function Turno() {
       gastosTransfer: gastosTransferR, totalTransfer, esperado, contadoReal,
       diferencia: contadoReal - esperado, ventasCount: vs.length,
       contadoTransfer, diferenciaTransfer: contadoTransfer == null ? null : contadoTransfer - totalTransfer,
+      // Listas para ver de QUÉ se compone cada total (auditar un descuadre).
+      salidasLista: salidas.slice().sort((a, b) => b.fecha - a.fecha),
+      abonosLista: abonosRango.slice().sort((a, b) => b.fecha - a.fecha),
     }
   }
 
@@ -512,6 +515,60 @@ export default function Turno() {
                   <tr><td className="muted-cell">Ventas a crédito</td><td className="num muted-cell">{money(r.credito)}</td></tr>
                 </tbody>
               </table>
+              {/* Desglose: de qué se compone "Gastos pagados" y los abonos.
+                  Sin esto solo se veían totales y era imposible auditar un
+                  descuadre (ej. buscar de dónde salen $4.000 de un lavador). */}
+              {r.salidasLista.length > 0 && (
+                <>
+                  <div className="section-title" style={{ marginTop: 14 }}>Salidas y pagos del turno</div>
+                  <table className="tabla compacta">
+                    <tbody>
+                      {r.salidasLista.map((g) => {
+                        const medioTxt = g.medioPago === 'mixto'
+                          ? `Mixto (ef ${money(gastoMontoCaja(g))} · tr ${money(gastoMontoTransfer(g))})`
+                          : labelMedioGasto(g.medioPago)
+                        const etiqueta = g.categoria === 'comisiones' ? 'Comisión'
+                          : g.categoria === 'inventario' ? 'Inventario'
+                            : g.categoria === 'prestamo' ? 'Préstamo'
+                              : g.categoria === 'retiro' ? 'Retiro' : null
+                        return (
+                          <tr key={g.id}>
+                            <td className="muted-cell" style={{ whiteSpace: 'nowrap' }}>{shortDate(g.fecha)}</td>
+                            <td>
+                              {g.concepto || 'Salida'}
+                              {etiqueta && <span className="badge" style={{ marginLeft: 6 }}>{etiqueta}</span>}
+                              <div className="muted-cell">{medioTxt}{g.responsable ? ' · ' + g.responsable : ''}</div>
+                            </td>
+                            <td className="num" style={{ color: 'var(--red)', fontWeight: 700, whiteSpace: 'nowrap' }}>−{money(g.monto)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                  <div className="helper">Suma en efectivo {money(r.gastos)} · en transferencia {money(r.gastosTransfer)}.</div>
+                </>
+              )}
+
+              {r.abonosLista.length > 0 && (
+                <>
+                  <div className="section-title" style={{ marginTop: 14 }}>Abonos recibidos en el turno</div>
+                  <table className="tabla compacta">
+                    <tbody>
+                      {r.abonosLista.map((a) => (
+                        <tr key={a.id}>
+                          <td className="muted-cell" style={{ whiteSpace: 'nowrap' }}>{shortDate(a.fecha)}</td>
+                          <td>{a.clienteNombre || 'Abono'}<div className="muted-cell">{a.medioPago === 'mixto'
+                            ? `Mixto (ef ${money(gastoMontoCaja(a))} · tr ${money(gastoMontoTransfer(a))})`
+                            : labelMedioGasto(a.medioPago)}</div></td>
+                          <td className="num" style={{ color: 'var(--green)', fontWeight: 700, whiteSpace: 'nowrap' }}>{money(a.monto)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="helper">Suma en efectivo {money(r.abonos)} · en transferencia {money(r.abonosTransfer)}.</div>
+                </>
+              )}
+
               <div style={{ height: 12 }} />
               <button className="btn" onClick={() => descargarCierrePDF({ ...det, resumen: r })}>Descargar comprobante (PDF)</button>
 

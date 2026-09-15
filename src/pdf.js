@@ -100,6 +100,31 @@ export async function descargarCierrePDF(t) {
     },
   })
 
+  // Desglose de las salidas del turno (comisiones, gastos, préstamos…), para
+  // poder auditar de qué se compone el total de "Gastos pagados".
+  const salidas = r.salidasLista || []
+  if (salidas.length > 0) {
+    const etiqueta = (c) => c === 'comisiones' ? 'Comisión' : c === 'inventario' ? 'Inventario'
+      : c === 'prestamo' ? 'Préstamo' : c === 'retiro' ? 'Retiro' : 'Gasto'
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 18,
+      head: [['Fecha', 'Concepto', 'Tipo', 'Medio', 'Valor']],
+      body: salidas.map((g) => [
+        fh(g.fecha), g.concepto || 'Salida', etiqueta(g.categoria),
+        g.medioPago === 'mixto' ? 'Mixto' : (g.medioPago === 'transferencia' ? 'Transferencia' : g.medioPago === 'banco' ? 'Banco' : 'Efectivo'),
+        '- ' + m(g.monto).slice(2),
+      ]),
+      styles: { fontSize: 9, cellPadding: 5 },
+      headStyles: { fillColor: AZUL, halign: 'left' },
+      columnStyles: { 4: { halign: 'right' } },
+      didDrawPage: () => {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(...OSCURO)
+      },
+    })
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GRIS)
+    doc.text(`Suma en efectivo ${m(r.gastos)} · en transferencia ${m(r.gastosTransfer || 0)}`, margin, doc.lastAutoTable.finalY + 14)
+  }
+
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...GRIS)
   doc.text('Generado por Lavadero Fénix LC · Sistema POS', margin, doc.internal.pageSize.getHeight() - 24)
 
