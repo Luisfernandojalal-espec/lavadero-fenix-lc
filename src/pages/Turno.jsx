@@ -20,6 +20,8 @@ export default function Turno() {
 
   const abierto = (turnos || []).find((t) => t.estado === 'abierto' && !t.anulada)
   const cerrados = (turnos || []).filter((t) => t.estado === 'cerrado' && !t.anulada).sort((a, b) => b.cerradoEn - a.cerradoEn)
+  // Cierres borrados (borrado suave): se pueden restaurar si fue por error.
+  const eliminados = (turnos || []).filter((t) => t.estado === 'cerrado' && t.anulada).sort((a, b) => b.cerradoEn - a.cerradoEn)
   const mesasAbiertas = (mesas || []).filter((m) => m.estado === 'ocupada')
 
   // Resumen en vivo del turno abierto
@@ -186,7 +188,12 @@ export default function Turno() {
     if (!det) return
     await db.turnos.update(det.id, stamp({ anulada: 1 })) // borrado suave (se propaga por sync)
     setConfirmDel(false); setDet(null)
-    show('Cierre eliminado')
+    show('Cierre eliminado · puedes restaurarlo abajo')
+  }
+  // Devuelve a la lista un cierre borrado por error (quita la marca de anulado).
+  async function restaurarCierre(t) {
+    await db.turnos.update(t.id, stamp({ anulada: 0 }))
+    show('Cierre restaurado')
   }
 
   const difColor = (d) => (d === 0 ? 'var(--green)' : d > 0 ? 'var(--amber)' : 'var(--red)')
@@ -331,6 +338,31 @@ export default function Turno() {
                         {r.diferenciaTransfer > 0 ? `Nequi: sobró ${money(r.diferenciaTransfer)}` : `Nequi: faltó ${money(-r.diferenciaTransfer)}`}
                       </div>
                     )}
+                  </div>
+                </div>
+              )
+            })}
+          </>
+        )}
+
+        {/* Cierres eliminados: el borrado es SUAVE (anulada:1), así que un
+            cierre borrado por error se puede devolver tal cual estaba. */}
+        {esDueno && eliminados.length > 0 && (
+          <>
+            <div className="section-title">Cierres eliminados</div>
+            <div className="helper" style={{ marginTop: -4, marginBottom: 6 }}>
+              Los cierres que borraste quedan aquí por si fue por error. Restaurar lo devuelve a la lista con sus mismos datos.
+            </div>
+            {eliminados.slice(0, 10).map((t) => {
+              const r = cuadreCerrado(t)
+              return (
+                <div className="row" key={t.id}>
+                  <div className="main">
+                    <div className="title">{shortDate(t.cerradoEn)}</div>
+                    <div className="meta">{t.abiertoPor} → {t.cerradoPor} · {r.ventasCount} ventas · {money(r.contadoReal)}</div>
+                  </div>
+                  <div className="right">
+                    <button className="chip-lavador" onClick={() => restaurarCierre(t)}>Restaurar</button>
                   </div>
                 </div>
               )
