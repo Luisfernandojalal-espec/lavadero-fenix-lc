@@ -63,12 +63,30 @@ async function push() {
   if (otroErr) throw otroErr
 }
 
-// Aplica una fila bajada de la nube al almacén local, resolviendo conflictos
-// por "el más reciente gana" (por updatedAt del cliente, best-effort).
+// Aplica una fila bajada de la nube al almacén local.
+//
+// Regla: si aquí NO hay cambios propios sin subir, gana SIEMPRE la nube. La
+// fila llegó con `synced_at` mayor que nuestro cursor, o sea que el SERVIDOR la
+// vio después de lo último que teníamos: es la versión buena.
+//
+// Antes se decidía comparando `updatedAt` (el reloj de CADA dispositivo). Si el
+// reloj de este equipo estaba adelantado, un cambio hecho en otro se descartaba
+// en silencio Y el cursor avanzaba igual (pull() lo adelanta por `synced_at` sin
+// mirar si se aplicó) → ese registro NO volvía a bajar nunca: divergencia
+// permanente que ni "Volver a bajar todo de la nube" arreglaba. Ese era el bug
+// del cierre restaurado que no reaparecía y, muy probablemente, el de la
+// comisión pagada que "no se reflejaba" (y que llevó a pagarla dos veces).
 async function aplicarFila(fila) {
   if (!TABLAS.includes(fila.tabla)) return
   const local = await db[fila.tabla].get(fila.id)
-  if (!local || (fila.updated_at || 0) >= (local.updatedAt || 0)) {
+  if (!local || local.synced !== 0) {
+    await db[fila.tabla].put({ ...fila.data, synced: 1 })
+    return
+  }
+  // Aquí hay una edición local que todavía no ha subido: no la pisamos salvo
+  // que la nube sea más nueva (best-effort por reloj de cliente). Si no, se
+  // conserva y el próximo push la sube, quedando ella como la versión buena.
+  if ((fila.updated_at || 0) >= (local.updatedAt || 0)) {
     await db[fila.tabla].put({ ...fila.data, synced: 1 })
   }
 }
