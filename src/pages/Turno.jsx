@@ -196,6 +196,25 @@ export default function Turno() {
     show('Cierre restaurado')
   }
 
+  // --- Reabrir un turno ya cerrado ---
+  // Caso real: se cierra el turno y después aparecen pagos mal registrados. Antes
+  // no había forma de volver atrás: el único botón era "Eliminar este cierre", y
+  // el dueño lo usó pensando que así se reabría (y perdió el cuadre).
+  // OJO con el rango: un turno abierto cuenta TODO lo que pase desde `abiertoEn`
+  // sin tope, así que reabrir uno viejo se tragaría las ventas de los días
+  // siguientes. Por eso solo se permite reabrir el ÚLTIMO cierre y se avisa si no
+  // es de hoy.
+  const [confirmReabrir, setConfirmReabrir] = useState(false)
+  async function reabrirTurno() {
+    if (!det) return
+    // No pueden existir dos turnos abiertos: el resumen en vivo toma el primero.
+    const yaAbierto = (await db.turnos.toArray()).some((t) => t.estado === 'abierto' && !t.anulada)
+    if (yaAbierto) { setConfirmReabrir(false); return show('Ya hay un turno abierto. Ciérralo antes de reabrir este.') }
+    await db.turnos.update(det.id, stamp({ estado: 'abierto', cerradoEn: null, cerradoPor: null }))
+    setConfirmReabrir(false); setDet(null)
+    show('Turno reabierto · corrige lo que falte y ciérralo otra vez')
+  }
+
   const difColor = (d) => (d === 0 ? 'var(--green)' : d > 0 ? 'var(--amber)' : 'var(--red)')
 
   // Recalcula el cuadre de un turno YA cerrado con los DATOS ACTUALES (mismas
@@ -574,6 +593,40 @@ export default function Turno() {
 
               {esDueno && (
                 <div style={{ marginTop: 16, borderTop: '1px solid var(--line)', paddingTop: 14 }}>
+                  {/* Reabrir: solo el ÚLTIMO cierre y solo si no hay otro abierto.
+                      Un turno abierto cuenta todo desde `abiertoEn` sin tope, así
+                      que reabrir uno viejo se tragaría las ventas posteriores. */}
+                  {cerrados[0]?.id === det.id && !abierto && (
+                    <>
+                      {!confirmReabrir ? (
+                        <button className="btn secondary" style={{ marginBottom: 10 }} onClick={() => setConfirmReabrir(true)}>
+                          Reabrir turno
+                        </button>
+                      ) : (
+                        <>
+                          <div className="helper">
+                            Vuelve a dejar el turno abierto para corregir pagos, registrar lo que faltó y cerrarlo otra vez. Las ventas y gastos no se tocan.
+                          </div>
+                          {new Date(det.cerradoEn).toDateString() !== new Date().toDateString() && (
+                            <div className="helper" style={{ color: 'var(--amber)', marginTop: 4 }}>
+                              OJO: este cierre es del {shortDate(det.cerradoEn)}, no de hoy. Al reabrirlo, todo lo que se haya vendido o gastado DESPUÉS va a entrar en este turno y el cuadre te va a dar distinto. Si solo necesitas corregir un pago, es mejor arreglarlo en Gastos, Créditos o Historial: el cierre se recalcula solo.
+                            </div>
+                          )}
+                          <div style={{ height: 8 }} />
+                          <button className="btn" onClick={reabrirTurno}>Sí, reabrir el turno</button>
+                          <div style={{ height: 6 }} />
+                          <button className="btn secondary" onClick={() => setConfirmReabrir(false)}>Cancelar</button>
+                          <div style={{ height: 10 }} />
+                        </>
+                      )}
+                    </>
+                  )}
+                  {cerrados[0]?.id === det.id && abierto && (
+                    <div className="helper" style={{ marginBottom: 10 }}>
+                      Para reabrir este turno primero tienes que cerrar el que está abierto.
+                    </div>
+                  )}
+
                   {!corrigiendo ? (
                     <button className="btn secondary" onClick={() => { setContadoEdit(r.contadoReal); setContadoTransferEdit(r.contadoTransfer ?? r.totalTransfer); setCorrigiendo(true) }}>
                       Corregir el conteo (efectivo / transferencia)
