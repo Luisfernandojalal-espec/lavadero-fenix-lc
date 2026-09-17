@@ -317,18 +317,16 @@ export default function Credito() {
       <Sheet open={!!det} onClose={() => setDetId(null)} title={det ? det.nombre : ''}>
         {det && (
           <>
-            <div className="dato-fuerte">Saldo: <b style={{ color: det.saldo > 0 ? 'var(--red)' : 'var(--green)' }}>{money(det.saldo)}</b></div>
-            <button className="btn" style={{ marginBottom: 6 }} onClick={abrirProductos}>Agregar productos al fiado</button>
-            {esDueno && (
-              <button className="btn secondary" style={{ marginBottom: 6 }} onClick={abrirPrestamo}>Prestar plata (efectivo o transferencia)</button>
-            )}
-            <button className="btn ghost" style={{ marginBottom: 6 }} onClick={() => editarCliente(det)}>Editar datos del cliente</button>
-            {/* Eliminar el cliente a UN toque desde su ficha (solo dueño y si no debe) */}
-            {esDueno && det.saldo <= 0 && (
-              <button className="btn danger" style={{ marginBottom: 6 }} onClick={() => borrarCliente(det.id, det.saldo)}>
-                Eliminar cliente
-              </button>
-            )}
+            {/* Orden: primero cuánto debe, y enseguida el abono, que es lo que
+                más se hace en esta ficha. Antes había tres botones a lo ancho
+                (fiar / prestar / editar) empujando el abono fuera de pantalla;
+                esas acciones son ocasionales y ahora van agrupadas al final. */}
+            <div className="saldo-cliente">
+              <span className="bolsillo-tag">Debe</span>
+              <div className="saldo-cifra" style={{ color: det.saldo > 0 ? 'var(--red)' : 'var(--green)' }}>
+                {money(det.saldo)}
+              </div>
+            </div>
 
             <div className="section-title">Registrar abono</div>
             <MoneyInput value={abono} onChange={setAbono} placeholder="Valor del abono" />
@@ -347,6 +345,16 @@ export default function Credito() {
             )}
             <div style={{ height: 10 }} />
             <button className="btn" onClick={registrarAbono}>Abonar</button>
+
+            <div className="section-title">Otras acciones</div>
+            <div className="acciones-turno" style={{ marginTop: 0 }}>
+              <button className="btn secondary" onClick={abrirProductos}>Fiar productos</button>
+              {esDueno && <button className="btn secondary" onClick={abrirPrestamo}>Prestar plata</button>}
+              <button className="btn ghost" onClick={() => editarCliente(det)}>Editar cliente</button>
+              {esDueno && det.saldo <= 0 && (
+                <button className="btn danger" onClick={() => borrarCliente(det.id, det.saldo)}>Eliminar cliente</button>
+              )}
+            </div>
 
             <div className="section-title">Movimientos</div>
             <div className="helper" style={{ marginBottom: 6 }}>

@@ -404,11 +404,11 @@ export default function Lavadores({ embedded }) {
                 </table>
                 <div className="dato-fuerte">Total: <b>{money(totalCobro)}</b></div>
                 <div style={{ height: 10 }} />
-                <div className="btn-row">
-                  <button className="btn" onClick={() => setConfirmarMetodo('efectivo')}>Efectivo · {money(totalCobro)}</button>
-                  <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setConfirmarMetodo('transferencia')}>Transferencia</button>
-                  <button className="btn ghost" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => { setMixtoEfectivo(0); setMixtoOpen(true) }}>Mixto</button>
-                  <button className="btn ghost" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setCreditoOpen(true)}>Crédito</button>
+                <div className="cobro-row">
+                  <button className="btn principal" onClick={() => setConfirmarMetodo('efectivo')}>Efectivo · {money(totalCobro)}</button>
+                  <button className="btn secondary" onClick={() => setConfirmarMetodo('transferencia')}>Transferencia</button>
+                  <button className="btn secondary" onClick={() => { setMixtoEfectivo(0); setMixtoOpen(true) }}>Mixto</button>
+                  <button className="btn ghost ancho" onClick={() => setCreditoOpen(true)}>Crédito (fiado)</button>
                 </div>
               </>
             )}

@@ -323,9 +323,9 @@ export default function Mesas() {
                 <div className="meta">Total de la mesa</div>
                 <div style={{ fontSize: 22, fontWeight: 700 }}>{money(total)}</div>
               </div>
-              <div className="btn-row">
-                <button className="btn" onClick={() => setCobroOpen(true)}>Cobrar {money(total)}</button>
-                <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }}
+              <div className="cobro-row">
+                <button className="btn principal" onClick={() => setCobroOpen(true)}>Cobrar {money(total)}</button>
+                <button className="btn secondary ancho"
                   onClick={() => { setTransfer({ todo: true }); setDestinoId('') }}>Transferir mesa</button>
               </div>
             </>

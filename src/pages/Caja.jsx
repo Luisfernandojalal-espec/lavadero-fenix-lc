@@ -215,14 +215,14 @@ export default function Caja() {
               </tbody>
             </table>
 
-            <div className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="total-cobro">
               <div>
-                <div className="meta">Total</div>
-                <div style={{ fontSize: 22, fontWeight: 700 }}>{money(total)}</div>
+                <span className="bolsillo-tag">Total a cobrar</span>
+                <div className="total-cobro-cifra">{money(total)}</div>
               </div>
-              <div style={{ textAlign: 'right' }}>
-                <div className="meta">Ganancia</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--green)' }}>+{money(ganancia)}</div>
+              <div className="total-cobro-gan">
+                <span className="bolsillo-tag">Ganancia</span>
+                <b>+{money(ganancia)}</b>
               </div>
             </div>
 
@@ -232,11 +232,11 @@ export default function Caja() {
               </div>
             )}
 
-            <div className="btn-row">
-              <button className="btn" onClick={() => setConfirmarMetodo('efectivo')}>Efectivo · {money(total)}</button>
-              <button className="btn secondary" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setConfirmarMetodo('transferencia')}>Transferencia</button>
-              <button className="btn ghost" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => { setMixtoEfectivo(0); setMixtoOpen(true) }}>Mixto</button>
-              <button className="btn ghost" style={{ width: 'auto', whiteSpace: 'nowrap' }} onClick={() => setCreditoOpen(true)}>Crédito</button>
+            <div className="cobro-row">
+              <button className="btn principal" onClick={() => setConfirmarMetodo('efectivo')}>Efectivo · {money(total)}</button>
+              <button className="btn secondary" onClick={() => setConfirmarMetodo('transferencia')}>Transferencia</button>
+              <button className="btn secondary" onClick={() => { setMixtoEfectivo(0); setMixtoOpen(true) }}>Mixto</button>
+              <button className="btn ghost ancho" onClick={() => setCreditoOpen(true)}>Crédito (fiado)</button>
             </div>
           </>
         )}

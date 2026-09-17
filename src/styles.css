@@ -1015,3 +1015,47 @@ input:focus, select:focus { outline: 2px solid var(--primary); border-color: tra
   .topbar { padding-left: 12px; padding-right: 12px; gap: 8px; }
   .bolsillo-cifra { font-size: 28px; }
 }
+
+/* ===== Cobro: total y formas de pago =====
+   Antes los 4 botones iban en una sola fila flex y en 375px quedaban
+   estrujados. Ahora: efectivo (lo más usado) a lo ancho, y el resto en
+   rejilla, todos con área cómoda para el dedo. */
+.total-cobro {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 14px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--primary); border-radius: var(--radius);
+  padding: 12px 14px; margin: 10px 0;
+}
+.total-cobro-cifra {
+  font-size: 28px; font-weight: 700; letter-spacing: -.03em;
+  line-height: 1.1; margin-top: 3px; font-variant-numeric: tabular-nums;
+}
+.total-cobro-gan { text-align: right; }
+.total-cobro-gan b {
+  display: block; margin-top: 3px; font-size: 16px;
+  color: var(--green); font-variant-numeric: tabular-nums;
+}
+
+.cobro-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.cobro-row .btn { width: 100%; padding: 13px 10px; font-size: 14px; }
+.cobro-row .btn.principal { grid-column: 1 / -1; padding: 15px 14px; font-size: 15.5px; }
+.cobro-row .btn.ancho { grid-column: 1 / -1; }
+
+/* Selector de meses: una sola línea que se desliza, no dos filas de pastillas */
+.meses-row {
+  display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+}
+.meses-row::-webkit-scrollbar { display: none; }
+.meses-row .pill { white-space: nowrap; flex-shrink: 0; }
+
+/* Ficha de cliente: cuánto debe, en grande y de una */
+.saldo-cliente {
+  background: var(--surface-3); border: 1px solid var(--border);
+  border-left: 3px solid var(--primary); border-radius: var(--radius-sm);
+  padding: 11px 14px; margin-bottom: 4px;
+}
+.saldo-cifra {
+  font-size: 30px; font-weight: 700; letter-spacing: -.03em;
+  line-height: 1.1; margin-top: 3px; font-variant-numeric: tabular-nums;
+}

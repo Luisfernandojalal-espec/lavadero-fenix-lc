@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, tipoGasto, esGastoPnL } from '../db'
-import { LOGO_URL, money, dayKey, shortDate, currentMonthKey, monthLabel } from '../format'
+import { money, dayKey, shortDate, currentMonthKey, monthLabel, fechaLarga } from '../format'
 import { labelMedio } from '../ventas'
 import { useAuth } from '../auth'
 import Lavadores from './Lavadores'
@@ -79,56 +79,53 @@ export default function Inicio() {
 
   return (
     <div className="content">
-      <div className="dash-logo">
-        <img src={LOGO_URL} alt="Lavadero Fénix" />
-        <div>
-          <div className="dash-title">Lavadero Fénix LC</div>
-          <div className="dash-sub">Villa Caribe · Sistema POS</div>
-        </div>
-      </div>
-
+      {/* Orden: primero la plata. Antes esta pantalla abría con el logo y el
+          nombre del negocio repetidos de la barra superior, y había que bajar
+          para ver la primera cifra. Los KPI van de más a menos importante. */}
       {esDueno && (
-        <div className="kpi-row">
-          <div className="kpi">
-            <div className="kpi-label">ABIERTAS</div>
-            <div className="kpi-value">{abiertas.length}</div>
+        <>
+          <div className="section-title">Hoy · {fechaLarga()}</div>
+          <div className="kpi-row">
+            <div className="kpi">
+              <div className="kpi-label">Vendido</div>
+              <div className="kpi-value green">{money(totalHoy)}</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">Ganancia</div>
+              <div className="kpi-value">{money(gananciaHoy)}</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">Por cobrar</div>
+              <div className="kpi-value red">{money(porCobrar)}</div>
+            </div>
+            <div className="kpi">
+              <div className="kpi-label">Mesas abiertas</div>
+              <div className="kpi-value">{abiertas.length}</div>
+            </div>
           </div>
-          <div className="kpi">
-            <div className="kpi-label">VENTAS DE HOY</div>
-            <div className="kpi-value green">{money(totalHoy)}</div>
-          </div>
-          <div className="kpi">
-            <div className="kpi-label">GANANCIA DE HOY</div>
-            <div className="kpi-value">{money(gananciaHoy)}</div>
-          </div>
-          <div className="kpi">
-            <div className="kpi-label">POR COBRAR</div>
-            <div className="kpi-value red">{money(porCobrar)}</div>
-          </div>
-        </div>
+        </>
       )}
 
       {esDueno && (
-        <div className="card stat-card">
-          <div className="label">Ganancia real de hoy</div>
-          <div className="value" style={{ fontSize: 30, fontWeight: 800, marginTop: 2, color: gananciaReal >= 0 ? 'var(--green)' : 'var(--red)' }}>
+        <section className="bolsillo" style={{ marginTop: 12 }}>
+          <div className="bolsillo-head"><span className="bolsillo-tag">Ganancia real de hoy</span></div>
+          <div className="bolsillo-cifra" style={{ color: gananciaReal >= 0 ? 'var(--green)' : 'var(--red)' }}>
             {gananciaReal < 0 ? '−' : ''}{money(Math.abs(gananciaReal))}
           </div>
-          <table className="tabla" style={{ marginTop: 8 }}>
-            <tbody>
-              <tr><td>Ganancia (ventas)</td><td className="num" style={{ color: 'var(--green)', fontWeight: 700 }}>+{money(gananciaHoy)}</td></tr>
-              <tr><td>Gastos fijos (mes ÷ 30)</td><td className="num" style={{ color: 'var(--red)' }}>−{money(fijoDiario)}</td></tr>
-              <tr><td>Gastos variables (mes ÷ 30)</td><td className="num" style={{ color: 'var(--red)' }}>−{money(variableDiario)}</td></tr>
-            </tbody>
-          </table>
-          <div className="meta" style={{ fontSize: 12, marginTop: 8 }}>
-            Los fijos y los variables del mes se reparten entre 30 días, así un gasto grande de un solo día (compra de inventario, mantenimiento) no hunde el día. Hoy gastaste {money(gastosVarHoy)} en variables (se reparte en el mes).
+          <div className="bolsillo-pie">ya con la parte de los gastos del mes</div>
+          <dl className="desglose">
+            <div><dt>Ganancia de las ventas</dt><dd className="mas">+{money(gananciaHoy)}</dd></div>
+            <div><dt>Gastos fijos <em>(mes ÷ 30)</em></dt><dd className="menos">−{money(fijoDiario)}</dd></div>
+            <div><dt>Gastos variables <em>(mes ÷ 30)</em></dt><dd className="menos">−{money(variableDiario)}</dd></div>
+          </dl>
+          <div className="helper" style={{ padding: '0 0 10px' }}>
+            Los gastos del mes se reparten entre 30 días para que una compra grande no hunda un solo día. Hoy se gastó {money(gastosVarHoy)} en variables.
           </div>
-        </div>
+        </section>
       )}
 
       {esDueno && (
-        <button className="btn ghost" style={{ marginTop: 4 }} onClick={exportarCSV}>Exportar resumen del mes (.csv)</button>
+        <button className="btn ghost" style={{ marginTop: 12 }} onClick={exportarCSV}>Exportar resumen del mes (.csv)</button>
       )}
 
       {veLavadores && <Lavadores embedded />}
