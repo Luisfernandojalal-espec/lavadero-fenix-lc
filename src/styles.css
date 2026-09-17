@@ -1059,3 +1059,11 @@ input:focus, select:focus { outline: 2px solid var(--primary); border-color: tra
   font-size: 30px; font-weight: 700; letter-spacing: -.03em;
   line-height: 1.1; margin-top: 3px; font-variant-numeric: tabular-nums;
 }
+
+/* Línea de TOTAL dentro del desglose: cierra la cuenta con el mismo nombre que
+   el rótulo de arriba, para que se pueda seguir el cálculo de principio a fin. */
+.desglose .total { border-top: 1px solid var(--border-strong) !important; margin-top: 2px; padding-top: 9px; }
+.desglose .total dt { color: var(--text); font-weight: 700; font-size: 13.5px; }
+.desglose .total dd { font-size: 16px; font-weight: 700; }
+/* El rótulo puede ser una frase larga: que respire y no se corte */
+.bolsillo-tag { display: block; line-height: 1.35; }

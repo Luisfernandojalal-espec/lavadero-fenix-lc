@@ -278,31 +278,39 @@ export default function Turno() {
                 grande (lo que tiene que haber) y debajo, en letra chica, de
                 dónde sale. En el celular se lee de un vistazo. */}
             <div className="arqueo">
+              {/* El rótulo va COMPLETO ("Efectivo esperado en caja"): al resumirlo
+                  a "Efectivo · caja" el dueño dejó de reconocer la cifra que
+                  llevaba años buscando y creyó que se había quitado.
+                  Y el desglose muestra TODAS las líneas aunque vayan en cero,
+                  para poder seguir la cuenta completa: base + ventas + abonos
+                  − gastos = lo esperado. */}
               <section className="bolsillo">
                 <div className="bolsillo-head">
-                  <span className="bolsillo-tag">Efectivo · caja</span>
+                  <span className="bolsillo-tag">Efectivo esperado en caja</span>
                 </div>
                 <div className="bolsillo-cifra">{money(esperado)}</div>
-                <div className="bolsillo-pie">debe haber en el cajón</div>
+                <div className="bolsillo-pie">lo que debe haber en el cajón ahora mismo</div>
                 <dl className="desglose">
-                  <div><dt>Base de apertura</dt><dd>{money(abierto.base)}</dd></div>
+                  <div><dt>Base efectivo (apertura)</dt><dd>{money(abierto.base)}</dd></div>
                   <div><dt>Ventas en efectivo <em>({efectivoV.length})</em></dt><dd className="mas">+{money(efectivo)}</dd></div>
-                  {abonosT > 0 && <div><dt>Abonos recibidos</dt><dd className="mas">+{money(abonosT)}</dd></div>}
+                  <div><dt>Abonos recibidos (efectivo)</dt><dd className="mas">+{money(abonosT)}</dd></div>
                   <div><dt>Gastos pagados de caja</dt><dd className="menos">−{money(gastosT)}</dd></div>
+                  <div className="total"><dt>Efectivo esperado en caja</dt><dd>{money(esperado)}</dd></div>
                 </dl>
               </section>
 
               <section className="bolsillo">
                 <div className="bolsillo-head">
-                  <span className="bolsillo-tag">Transferencia · Nequi</span>
+                  <span className="bolsillo-tag">Debe quedar en transferencia</span>
                 </div>
                 <div className="bolsillo-cifra">{money(totalTransfer)}</div>
-                <div className="bolsillo-pie">debe haber en el banco</div>
+                <div className="bolsillo-pie">lo que debe haber en el Nequi / banco</div>
                 <dl className="desglose">
-                  <div><dt>Base de apertura</dt><dd>{money(baseTransferAbierto)}</dd></div>
+                  <div><dt>Base transferencia (apertura)</dt><dd>{money(baseTransferAbierto)}</dd></div>
                   <div><dt>Ventas por transferencia</dt><dd className="mas">+{money(transferencias)}</dd></div>
-                  {abonosTransferT > 0 && <div><dt>Abonos por transferencia</dt><dd className="mas">+{money(abonosTransferT)}</dd></div>}
-                  <div><dt>Pagos por Nequi</dt><dd className="menos">−{money(gastosTransferT)}</dd></div>
+                  <div><dt>Abonos por transferencia</dt><dd className="mas">+{money(abonosTransferT)}</dd></div>
+                  <div><dt>Pagos por transferencia (Nequi)</dt><dd className="menos">−{money(gastosTransferT)}</dd></div>
+                  <div className="total"><dt>Debe quedar en transferencia</dt><dd>{money(totalTransfer)}</dd></div>
                 </dl>
               </section>
             </div>
@@ -536,13 +544,13 @@ export default function Turno() {
                       : (r.diferencia > 0 ? `Sobró ${money(r.diferencia)}` : `Faltó ${money(-r.diferencia)}`)}
                   </div>
                   <dl className="desglose destacado">
-                    <div><dt>Esperado</dt><dd>{money(r.esperado)}</dd></div>
-                    <div><dt>Contado</dt><dd>{money(r.contadoReal)}</dd></div>
+                    <div><dt>Efectivo esperado en caja</dt><dd>{money(r.esperado)}</dd></div>
+                    <div><dt>Efectivo contado</dt><dd>{money(r.contadoReal)}</dd></div>
                   </dl>
                   <dl className="desglose">
                     <div><dt>Base de apertura</dt><dd>{money(det.base)}</dd></div>
                     <div><dt>Ventas en efectivo</dt><dd className="mas">+{money(r.contado)}</dd></div>
-                    {r.abonos > 0 && <div><dt>Abonos recibidos</dt><dd className="mas">+{money(r.abonos)}</dd></div>}
+                    <div><dt>Abonos recibidos (efectivo)</dt><dd className="mas">+{money(r.abonos)}</dd></div>
                     <div><dt>Gastos pagados</dt><dd className="menos">−{money(r.gastos)}</dd></div>
                   </dl>
                 </section>
@@ -556,8 +564,8 @@ export default function Turno() {
                           : (r.diferenciaTransfer > 0 ? `Sobró ${money(r.diferenciaTransfer)}` : `Faltó ${money(-r.diferenciaTransfer)}`)}
                       </div>
                       <dl className="desglose destacado">
-                        <div><dt>Debe quedar</dt><dd>{money(r.totalTransfer)}</dd></div>
-                        <div><dt>Contado</dt><dd>{money(r.contadoTransfer)}</dd></div>
+                        <div><dt>Debe quedar en transferencia</dt><dd>{money(r.totalTransfer)}</dd></div>
+                        <div><dt>Transferencia contada</dt><dd>{money(r.contadoTransfer)}</dd></div>
                       </dl>
                     </>
                   ) : (
