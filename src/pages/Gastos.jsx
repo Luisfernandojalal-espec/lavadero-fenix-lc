@@ -64,7 +64,10 @@ export default function Gastos() {
   // Registrar un gasto fijo del mes (prellenado con el estimado)
   function abrirDesdeFijo(f) {
     setEditId(null); setEditOrig(null); setModoVariable(false)
-    setForm({ ...emptyForm, concepto: f.nombre, categoria: f.categoria, monto: f.montoEstimado, tipo: 'fijo', fijoId: f.id, responsable: user?.nombre || '' })
+    // `fueraDeTurno: true` por defecto en los fijos: la regla de siempre es que
+    // un fijo del mes NO descuadra el turno (se paga del banco del dueño). Si de
+    // verdad salió del cajón, el operador lo cambia y ahí sí descuenta.
+    setForm({ ...emptyForm, concepto: f.nombre, categoria: f.categoria, monto: f.montoEstimado, tipo: 'fijo', fijoId: f.id, fueraDeTurno: true, responsable: user?.nombre || '' })
     setSheetOpen(true)
   }
 
@@ -82,9 +85,10 @@ export default function Gastos() {
       // Un gasto por transferencia/banco solo descuadra el turno si el operador
       // dice que salió de la plata DEL turno (Nequi del día).
       salidaTurno: form.tipo === 'variable' && form.salidaTurno ? 1 : 0,
-      // El efectivo cuenta SIEMPRE, salvo que digan que salió de otra plata
-      // (no del cajón del turno). Solo aplica a variables pagados en caja.
-      fueraDeTurno: form.tipo === 'variable' && form.medioPago === 'caja' && form.fueraDeTurno ? 1 : 0,
+      // El efectivo cuenta SIEMPRE, salvo que digan que salió de otra plata (no
+      // del cajón). Aplica a fijos y variables: un fijo pagado del cajón también
+      // descuadra la caja si el operador dice que salió de ahí.
+      fueraDeTurno: form.medioPago === 'caja' && form.fueraDeTurno ? 1 : 0,
       responsable: form.responsable.trim(),
       comprobante: form.comprobante.trim(),
     }
@@ -94,9 +98,23 @@ export default function Gastos() {
     // se recalculaba, el turno de ese día aparecía con un faltante falso).
     // Para sacarlo del turno a propósito está el selector "¿De cuál efectivo
     // salió?" → "De otra plata" (fueraDeTurno), que manda sobre esta marca.
-    extra.tocaTurno = editId
-      ? (gastoTocaTurno({ ...editOrig, fueraDeTurno: extra.fueraDeTurno }) ? 1 : 0)
-      : (gastoTocaTurno({ ...extra, tipo: form.tipo }) ? 1 : 0)
+    // Lo que dice el operador con los selectores de origen: si salió del cajón
+    // (caja y no "de otra plata") toca el turno; si fue por transferencia, solo
+    // si marcó que salió del Nequi del turno.
+    const elegido = extra.fueraDeTurno === 1 ? 0
+      : (form.medioPago === 'caja' ? 1 : (extra.salidaTurno === 1 ? 1 : 0))
+    if (!editId) {
+      extra.tocaTurno = elegido
+    } else {
+      // Al EDITAR se CONGELA lo que el gasto ya hacía, para que reclasificar
+      // fijo/variable no mueva un cierre pasado... salvo que el operador cambie
+      // a propósito de dónde salió la plata (medio de pago o los selectores de
+      // origen). En ese caso manda lo que acaba de elegir.
+      const cambioOrigen = (editOrig?.medioPago || 'caja') !== extra.medioPago
+        || (editOrig?.fueraDeTurno === 1) !== (extra.fueraDeTurno === 1)
+        || (editOrig?.salidaTurno === 1) !== (extra.salidaTurno === 1)
+      extra.tocaTurno = cambioOrigen ? elegido : (gastoTocaTurno(editOrig) ? 1 : 0)
+    }
     if (editId) {
       await db.gastos.update(editId, stamp({ concepto, categoria: form.categoria, monto: form.monto, tipo: form.tipo, ...extra }))
       show('Gasto actualizado')
@@ -258,7 +276,12 @@ export default function Gastos() {
               onClick={() => setForm({ ...form, medioPago: m.id })}>{m.label}</button>
           ))}
         </div>
-        {form.medioPago === 'caja' && form.tipo === 'variable' && (
+        {/* Faltaba el caso FIJO pagado en efectivo: no salía ningún control ni
+            aviso, y la app NO lo descontaba del turno aunque la plata sí hubiera
+            salido del cajón -> faltante inexplicable al cerrar. Ahora el
+            selector aparece siempre que el medio sea caja; para los fijos viene
+            en "De otra plata" (la regla de siempre) pero se puede corregir. */}
+        {form.medioPago === 'caja' && (
           <>
             <label>¿De cuál efectivo salió?</label>
             <div className="pill-row">
@@ -269,6 +292,7 @@ export default function Gastos() {
               {form.fueraDeTurno
                 ? 'No descuadra el turno: la plata no salió del cajón (ej. efectivo que estaba en la casa). Sí cuenta como gasto del mes.'
                 : 'Baja de una vez el "Efectivo esperado en caja" del turno abierto.'}
+              {form.tipo === 'fijo' ? ' Los gastos fijos normalmente se pagan de otra cuenta; marca "De la caja del turno" solo si de verdad sacaste la plata del cajón.' : ''}
             </div>
           </>
         )}
@@ -302,8 +326,8 @@ export default function Gastos() {
           <>
             <label>Tipo (fijo o variable)</label>
             <div className="pill-row">
-              <button className={`pill ${form.tipo === 'fijo' ? 'active' : ''}`} onClick={() => setForm({ ...form, tipo: 'fijo' })}>Fijo</button>
-              <button className={`pill ${form.tipo === 'variable' ? 'active' : ''}`} onClick={() => setForm({ ...form, tipo: 'variable' })}>Variable</button>
+              <button className={`pill ${form.tipo === 'fijo' ? 'active' : ''}`} onClick={() => setForm({ ...form, tipo: 'fijo', fueraDeTurno: true })}>Fijo</button>
+              <button className={`pill ${form.tipo === 'variable' ? 'active' : ''}`} onClick={() => setForm({ ...form, tipo: 'variable', fueraDeTurno: false })}>Variable</button>
             </div>
             <div className="helper">Fijo = se repite cada mes (arriendo, nómina, sistema…). Variable = insumos y gastos del día.</div>
           </>
