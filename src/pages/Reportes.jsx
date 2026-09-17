@@ -276,6 +276,73 @@ export default function Reportes() {
           <button className="btn secondary" onClick={descargarPDF}>Reporte PDF</button>
         </div>
 
+        <div className="section-title">Balance de un día</div>
+        <div className="card stat-card">
+          <div className="label" style={{ marginBottom: 8 }}>Balance de ventas por día y por rango</div>
+          <div className="pill-row" style={{ marginBottom: 8 }}>
+            <button className={`pill ${modo === 'dia' ? 'active' : ''}`} onClick={() => setModo('dia')}>Un día</button>
+            <button className={`pill ${modo === 'rango' ? 'active' : ''}`} onClick={() => setModo('rango')}>Rango de fechas</button>
+          </div>
+          <div className="grid-2" style={{ marginBottom: 4 }}>
+            <label style={{ fontSize: 12, color: 'var(--muted)' }}>
+              {modo === 'dia' ? 'Día' : 'Desde'}
+              <input type="date" value={desde} max={hoyKey} onChange={(e) => setDesde(e.target.value)} style={{ marginTop: 4, width: '100%' }} />
+            </label>
+            {modo === 'rango' && (
+              <label style={{ fontSize: 12, color: 'var(--muted)' }}>
+                Hasta
+                <input type="date" value={hasta} max={hoyKey} onChange={(e) => setHasta(e.target.value)} style={{ marginTop: 4, width: '100%' }} />
+              </label>
+            )}
+          </div>
+          <div className="meta" style={{ fontSize: 12, marginBottom: 4 }}>
+            {modo === 'dia' ? fechaLarga(localTs(ini)) : `${fechaLarga(localTs(ini))} → ${fechaLarga(localTs(fin))} · ${diasRango} día${diasRango === 1 ? '' : 's'}`}
+          </div>
+          <table className="tabla">
+            <tbody>
+              <tr>
+                <td>Lavadas (servicios)<div className="muted-cell">{numLavadasR} {numLavadasR === 1 ? 'lavada' : 'lavadas'} · comisión {money(comisionesR)}</div></td>
+                <td className="num" style={{ fontWeight: 700, color: 'var(--green)' }}>{money(ingresoServR)}</td>
+              </tr>
+              <tr>
+                <td>Nevera y mecatos (productos)<div className="muted-cell">costaron {money(costoProdR)}</div></td>
+                <td className="num" style={{ fontWeight: 700 }}>{money(ingresoProdR)}</td>
+              </tr>
+              <tr>
+                <td><b>Total vendido</b></td>
+                <td className="num"><b>{money(totalVendidoR)}</b></td>
+              </tr>
+              <tr>
+                <td>Gastos variables del periodo<div className="muted-cell">sin fijos del mes ni comisiones</div></td>
+                <td className="num" style={{ color: 'var(--red)' }}>{money(totalGastosR)}</td>
+              </tr>
+              <tr>
+                <td><b>Utilidad</b><div className="muted-cell">gana lavadero + gana nevera − gastos</div></td>
+                <td className="num"><b style={{ color: utilidadR >= 0 ? 'var(--green)' : 'var(--red)' }}>{money(utilidadR)}</b></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* Ganancia por área destacada: cuánto gana el lavadero vs la nevera */}
+        <div className="grid-2">
+          <div className="card stat-card" style={{ borderColor: 'var(--green)' }}>
+            <div className="label">Gana el lavadero</div>
+            <div className="value green">{money(gananciaServR)}</div>
+            <div className="meta" style={{ color: 'var(--muted)', fontSize: 12 }}>
+              Vendió {money(ingresoServR)} · comisión {money(comisionesR)}
+            </div>
+          </div>
+          <div className="card stat-card" style={{ borderColor: 'var(--green)' }}>
+            <div className="label">Gana la nevera</div>
+            <div className="value green">{money(gananciaProdR)}</div>
+            <div className="meta" style={{ color: 'var(--muted)', fontSize: 12 }}>
+              Vendió {money(ingresoProdR)} · costó {money(costoProdR)}
+            </div>
+          </div>
+        </div>
+
+
         {/* Ventas por tipo: lavadas (servicios) vs nevera (productos) */}
         <div className="card stat-card">
           <div className="label">Ventas del mes por tipo</div>
@@ -369,73 +436,6 @@ export default function Reportes() {
             Ventas por {periodo === 'dia' ? 'día (últimos 7)' : periodo === 'semana' ? 'semana (últimas 8)' : 'mes (últimos 6)'}
           </div>
         </div>
-
-        <div className="section-title">Consultar un día o un rango</div>
-        <div className="card stat-card">
-          <div className="label" style={{ marginBottom: 8 }}>Balance de ventas por día y por rango</div>
-          <div className="pill-row" style={{ marginBottom: 8 }}>
-            <button className={`pill ${modo === 'dia' ? 'active' : ''}`} onClick={() => setModo('dia')}>Un día</button>
-            <button className={`pill ${modo === 'rango' ? 'active' : ''}`} onClick={() => setModo('rango')}>Rango de fechas</button>
-          </div>
-          <div className="grid-2" style={{ marginBottom: 4 }}>
-            <label style={{ fontSize: 12, color: 'var(--muted)' }}>
-              {modo === 'dia' ? 'Día' : 'Desde'}
-              <input type="date" value={desde} max={hoyKey} onChange={(e) => setDesde(e.target.value)} style={{ marginTop: 4, width: '100%' }} />
-            </label>
-            {modo === 'rango' && (
-              <label style={{ fontSize: 12, color: 'var(--muted)' }}>
-                Hasta
-                <input type="date" value={hasta} max={hoyKey} onChange={(e) => setHasta(e.target.value)} style={{ marginTop: 4, width: '100%' }} />
-              </label>
-            )}
-          </div>
-          <div className="meta" style={{ fontSize: 12, marginBottom: 4 }}>
-            {modo === 'dia' ? fechaLarga(localTs(ini)) : `${fechaLarga(localTs(ini))} → ${fechaLarga(localTs(fin))} · ${diasRango} día${diasRango === 1 ? '' : 's'}`}
-          </div>
-          <table className="tabla">
-            <tbody>
-              <tr>
-                <td>Lavadas (servicios)<div className="muted-cell">{numLavadasR} {numLavadasR === 1 ? 'lavada' : 'lavadas'} · comisión {money(comisionesR)}</div></td>
-                <td className="num" style={{ fontWeight: 700, color: 'var(--green)' }}>{money(ingresoServR)}</td>
-              </tr>
-              <tr>
-                <td>Nevera y mecatos (productos)<div className="muted-cell">costaron {money(costoProdR)}</div></td>
-                <td className="num" style={{ fontWeight: 700 }}>{money(ingresoProdR)}</td>
-              </tr>
-              <tr>
-                <td><b>Total vendido</b></td>
-                <td className="num"><b>{money(totalVendidoR)}</b></td>
-              </tr>
-              <tr>
-                <td>Gastos variables del periodo<div className="muted-cell">sin fijos del mes ni comisiones</div></td>
-                <td className="num" style={{ color: 'var(--red)' }}>{money(totalGastosR)}</td>
-              </tr>
-              <tr>
-                <td><b>Utilidad</b><div className="muted-cell">gana lavadero + gana nevera − gastos</div></td>
-                <td className="num"><b style={{ color: utilidadR >= 0 ? 'var(--green)' : 'var(--red)' }}>{money(utilidadR)}</b></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        {/* Ganancia por área destacada: cuánto gana el lavadero vs la nevera */}
-        <div className="grid-2">
-          <div className="card stat-card" style={{ borderColor: 'var(--green)' }}>
-            <div className="label">Gana el lavadero</div>
-            <div className="value green">{money(gananciaServR)}</div>
-            <div className="meta" style={{ color: 'var(--muted)', fontSize: 12 }}>
-              Vendió {money(ingresoServR)} · comisión {money(comisionesR)}
-            </div>
-          </div>
-          <div className="card stat-card" style={{ borderColor: 'var(--green)' }}>
-            <div className="label">Gana la nevera</div>
-            <div className="value green">{money(gananciaProdR)}</div>
-            <div className="meta" style={{ color: 'var(--muted)', fontSize: 12 }}>
-              Vendió {money(ingresoProdR)} · costó {money(costoProdR)}
-            </div>
-          </div>
-        </div>
-
 
         {/* Estado actual (independiente del mes) */}
         <div className="section-title">Estado actual del negocio</div>
