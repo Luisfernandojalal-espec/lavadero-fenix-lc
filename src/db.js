@@ -270,8 +270,17 @@ export function gastoDeCaja(g) {
 //  - Transferencia / banco: solo si se registró como salida DEL turno.
 // Ojo: esto NO cambia el P&L — el gasto sigue contando en el mes (esGastoPnL).
 export function gastoTocaTurno(g) {
-  if (g.fueraDeTurno === 1) return false
-  return gastoDeCaja(g) || g.salidaTurno === 1
+  if (g.fueraDeTurno === 1) return false        // marcado "de otra plata": nunca toca el turno
+  // Marca CONGELADA: se guarda cuando se registra el gasto y NO se recalcula al
+  // editarlo. Sin esto, reclasificar un gasto de variable a fijo lo sacaba del
+  // turno de forma retroactiva y aparecía un faltante en un cierre ya hecho: la
+  // plata sí había salido del cajón ese día, lo que cambió fue solo su
+  // clasificación contable (fijo/variable es del P&L, no del arqueo de caja).
+  if (g.tocaTurno === 1) return true
+  if (g.tocaTurno === 0) return false
+  // Gastos viejos (sin la marca): se deduce como siempre. Los FIJOS del mes
+  // nunca tocaron el turno; los variables, según de dónde salió la plata.
+  return tipoGasto(g) === 'variable' && (gastoDeCaja(g) || g.salidaTurno === 1)
 }
 // Parte de un gasto que sale de la CAJA física / de TRANSFERENCIA (soporta
 // mixto: guarda pagoEfectivo/pagoTransferencia como las ventas mixtas).

@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, CATEGORIAS_GASTO, MEDIOS_PAGO_GASTO, labelMedioGasto, tipoGasto, tipoPorCategoria, esGastoPnL } from '../db'
+import { db, uid, stamp, CATEGORIAS_GASTO, MEDIOS_PAGO_GASTO, labelMedioGasto, tipoGasto, tipoPorCategoria, esGastoPnL, gastoTocaTurno } from '../db'
 import { money, monthKey, currentMonthKey, monthLabel, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 import { useAuth } from '../auth'
@@ -21,6 +21,7 @@ export default function Gastos() {
   const mesActual = currentMonthKey()
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editId, setEditId] = useState(null)
+  const [editOrig, setEditOrig] = useState(null) // gasto tal como estaba antes de editarlo
   const [modoVariable, setModoVariable] = useState(false) // formulario simple (solo concepto + valor)
   const [form, setForm] = useState(emptyForm)
 
@@ -46,12 +47,12 @@ export default function Gastos() {
   // --- Registrar / editar un gasto ---
   // Gasto variable: formulario simple (concepto + valor).
   function abrirVariable() {
-    setEditId(null); setModoVariable(true)
+    setEditId(null); setEditOrig(null); setModoVariable(true)
     setForm({ ...emptyForm, categoria: 'otro', tipo: 'variable', concepto: '', responsable: user?.nombre || '', medioPago: 'caja' })
     setSheetOpen(true)
   }
   function abrirEditar(g) {
-    setEditId(g.id)
+    setEditId(g.id); setEditOrig(g)
     setModoVariable(tipoGasto(g) === 'variable' && !g.fijoId)
     setForm({
       concepto: g.concepto, categoria: g.categoria, monto: g.monto, tipo: tipoGasto(g), fijoId: g.fijoId || null,
@@ -62,7 +63,7 @@ export default function Gastos() {
   }
   // Registrar un gasto fijo del mes (prellenado con el estimado)
   function abrirDesdeFijo(f) {
-    setEditId(null); setModoVariable(false)
+    setEditId(null); setEditOrig(null); setModoVariable(false)
     setForm({ ...emptyForm, concepto: f.nombre, categoria: f.categoria, monto: f.montoEstimado, tipo: 'fijo', fijoId: f.id, responsable: user?.nombre || '' })
     setSheetOpen(true)
   }
@@ -87,6 +88,15 @@ export default function Gastos() {
       responsable: form.responsable.trim(),
       comprobante: form.comprobante.trim(),
     }
+    // `tocaTurno` se CONGELA: dice si esta plata salió del turno el día que se
+    // registró. Al editar NO se recalcula, porque reclasificar fijo/variable es
+    // un cambio contable y no puede mover un cierre de caja que ya se hizo (si
+    // se recalculaba, el turno de ese día aparecía con un faltante falso).
+    // Para sacarlo del turno a propósito está el selector "¿De cuál efectivo
+    // salió?" → "De otra plata" (fueraDeTurno), que manda sobre esta marca.
+    extra.tocaTurno = editId
+      ? (gastoTocaTurno({ ...editOrig, fueraDeTurno: extra.fueraDeTurno }) ? 1 : 0)
+      : (gastoTocaTurno({ ...extra, tipo: form.tipo }) ? 1 : 0)
     if (editId) {
       await db.gastos.update(editId, stamp({ concepto, categoria: form.categoria, monto: form.monto, tipo: form.tipo, ...extra }))
       show('Gasto actualizado')

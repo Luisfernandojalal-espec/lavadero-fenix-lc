@@ -48,7 +48,7 @@ export default function Turno() {
   //    Los pagos por transferencia de la pestaña Gastos son contabilidad del mes
   //    (el dueño paga proveedores desde el banco) y NO tocan el cuadre del turno.
   const salidasT = (gastos || [])
-    .filter((g) => !g.anulada && g.fecha >= desde && tipoGasto(g) === 'variable' && gastoTocaTurno(g))
+    .filter((g) => !g.anulada && g.fecha >= desde && gastoTocaTurno(g))
     .sort((a, b) => b.fecha - a.fecha)
   // Los gastos pagados DE CAJA descuadran el efectivo; los de transferencia/banco (Nequi)
   // bajan el saldo digital. Un pago mixto (ej. comisión) reparte su parte a cada lado.
@@ -234,7 +234,7 @@ export default function Turno() {
     const abonosRango = (abonos || []).filter((a) => enRango(a.fecha) && !a.anulada)
     const abonosR = abonosRango.reduce((s, a) => s + gastoMontoCaja(a), 0)          // los que entraron en efectivo
     const abonosTransferR = abonosRango.reduce((s, a) => s + gastoMontoTransfer(a), 0) // los que entraron por transferencia
-    const salidas = (gastos || []).filter((g) => !g.anulada && enRango(g.fecha) && tipoGasto(g) === 'variable' && gastoTocaTurno(g))
+    const salidas = (gastos || []).filter((g) => !g.anulada && enRango(g.fecha) && gastoTocaTurno(g))
     const gastosR = salidas.reduce((s, g) => s + gastoMontoCaja(g), 0)
     const gastosTransferR = salidas.reduce((s, g) => s + gastoMontoTransfer(g), 0)
     const esperado = (t.base || 0) + efectivo + abonosR - gastosR
