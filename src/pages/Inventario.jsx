@@ -740,34 +740,48 @@ function Compras() {
           </table>
         </div>
 
+        {/* Forma de pago y origen de la plata van SIEMPRE visibles, nunca dentro
+            de "Opciones avanzadas": el valor por defecto (Contado = efectivo)
+            decide de qué bolsillo del turno se descuenta. El dueño registró una
+            compra por transferencia sin abrir avanzadas y se le descontó de la
+            caja, porque nunca vio el selector. Un campo que mueve plata no puede
+            estar escondido detrás de un botón. */}
+        <div className="section-title">¿Cómo se pagó?</div>
+        <div className="pill-row">
+          {FORMAS_PAGO_COMPRA.map((f) => (
+            <button key={f.id} className={`pill ${enc.formaPago === f.id ? 'active' : ''}`}
+              onClick={() => setEnc({ ...enc, formaPago: f.id })}>{f.label}</button>
+          ))}
+        </div>
+        {enc.formaPago === 'mixto' && (
+          <>
+            <label>¿Cuánto se pagó en efectivo?</label>
+            <MoneyInput value={enc.pagoEfectivo} onChange={(v) => setEnc({ ...enc, pagoEfectivo: v })} />
+            <div className="helper">El resto va por transferencia.</div>
+          </>
+        )}
+        {enc.formaPago !== 'credito' && (
+          <>
+            <label>¿De dónde salió la plata?</label>
+            <div className="pill-row">
+              <button className={`pill ${enc.afectaTurno !== false ? 'active' : ''}`} onClick={() => setEnc({ ...enc, afectaTurno: true })}>De la caja del turno</button>
+              <button className={`pill ${enc.afectaTurno === false ? 'active' : ''}`} onClick={() => setEnc({ ...enc, afectaTurno: false })}>De otra cuenta (solo registro)</button>
+            </div>
+            <div className="helper">{enc.afectaTurno !== false
+              ? (enc.formaPago === 'transferencia'
+                ? 'Se descuenta del saldo en transferencia (Nequi) del turno.'
+                : enc.formaPago === 'mixto'
+                  ? 'Se reparte: la parte en efectivo sale de la caja y el resto del Nequi del turno.'
+                  : 'Se descuenta del efectivo de la caja del turno.')
+              : 'No afecta el cuadre del turno; la compra queda solo registrada (su costo entra al vender).'}</div>
+          </>
+        )}
+        {enc.formaPago === 'credito' && (
+          <div className="helper">A crédito no sale plata todavía: no toca el turno hasta que le pagues al proveedor.</div>
+        )}
+
         {avanzado && (
           <>
-            <label>Forma de pago</label>
-            <div className="pill-row">
-              {FORMAS_PAGO_COMPRA.map((f) => (
-                <button key={f.id} className={`pill ${enc.formaPago === f.id ? 'active' : ''}`}
-                  onClick={() => setEnc({ ...enc, formaPago: f.id })}>{f.label}</button>
-              ))}
-            </div>
-            {enc.formaPago === 'mixto' && (
-              <>
-                <label>¿Cuánto se pagó en efectivo?</label>
-                <MoneyInput value={enc.pagoEfectivo} onChange={(v) => setEnc({ ...enc, pagoEfectivo: v })} />
-                <div className="helper">El resto va por transferencia.</div>
-              </>
-            )}
-            {enc.formaPago !== 'credito' && (
-              <>
-                <label>¿De dónde salió la plata?</label>
-                <div className="pill-row">
-                  <button className={`pill ${enc.afectaTurno !== false ? 'active' : ''}`} onClick={() => setEnc({ ...enc, afectaTurno: true })}>De la caja del turno</button>
-                  <button className={`pill ${enc.afectaTurno === false ? 'active' : ''}`} onClick={() => setEnc({ ...enc, afectaTurno: false })}>De otra cuenta (solo registro)</button>
-                </div>
-                <div className="helper">{enc.afectaTurno !== false
-                  ? 'Descuenta del turno: el efectivo sale de la caja y la transferencia del saldo en transferencia.'
-                  : 'No afecta el cuadre del turno; la compra queda solo registrada (su costo entra al vender).'}</div>
-              </>
-            )}
             <label>Observaciones (opcional)</label>
             <input value={enc.observaciones} placeholder="Notas de la compra"
               onChange={(e) => setEnc({ ...enc, observaciones: e.target.value })} />
