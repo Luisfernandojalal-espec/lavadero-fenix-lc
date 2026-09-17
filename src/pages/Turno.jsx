@@ -272,21 +272,48 @@ export default function Turno() {
               Turno abierto por <b>{abierto.abiertoPor}</b> · {shortDate(abierto.abiertoEn)}
             </div>
 
-            <table className="tabla">
-              <tbody>
-                <tr><td>Base efectivo (apertura)</td><td className="num">{money(abierto.base)}</td></tr>
-                <tr><td>Ventas en efectivo ({efectivoV.length})</td><td className="num" style={{ color: 'var(--green)', fontWeight: 700 }}>{money(efectivo)}</td></tr>
-                <tr><td>Abonos recibidos (efectivo)</td><td className="num" style={{ color: 'var(--green)' }}>{money(abonosT)}</td></tr>
-                <tr><td>Gastos pagados de caja</td><td className="num" style={{ color: 'var(--red)' }}>−{money(gastosT)}</td></tr>
-                <tr><td><b>Efectivo esperado en caja</b></td><td className="num"><b>{money(esperado)}</b></td></tr>
-                <tr><td className="muted-cell">Base transferencia (apertura)</td><td className="num muted-cell">{money(baseTransferAbierto)}</td></tr>
-                <tr><td className="muted-cell">Ventas por transferencia (al banco)</td><td className="num muted-cell">{money(transferencias)}</td></tr>
-                {abonosTransferT > 0 && <tr><td className="muted-cell">Abonos por transferencia</td><td className="num muted-cell" style={{ color: 'var(--green)' }}>{money(abonosTransferT)}</td></tr>}
-                <tr><td className="muted-cell">Pagos por transferencia (Nequi)</td><td className="num muted-cell" style={{ color: 'var(--red)' }}>−{money(gastosTransferT)}</td></tr>
-                <tr><td><b>Debe quedar en transferencia</b></td><td className="num"><b>{money(totalTransfer)}</b></td></tr>
-                <tr><td className="muted-cell">Ventas a crédito (fiado)</td><td className="num muted-cell">{money(credito)}</td></tr>
-              </tbody>
-            </table>
+            {/* Antes esto era UNA tabla de 10 filas donde se mezclaban la caja y
+                el Nequi, y los dos números que importan quedaban enterrados en
+                la mitad. Ahora es un bloque por "bolsillo": primero la cifra
+                grande (lo que tiene que haber) y debajo, en letra chica, de
+                dónde sale. En el celular se lee de un vistazo. */}
+            <div className="arqueo">
+              <section className="bolsillo">
+                <div className="bolsillo-head">
+                  <span className="bolsillo-tag">Efectivo · caja</span>
+                </div>
+                <div className="bolsillo-cifra">{money(esperado)}</div>
+                <div className="bolsillo-pie">debe haber en el cajón</div>
+                <dl className="desglose">
+                  <div><dt>Base de apertura</dt><dd>{money(abierto.base)}</dd></div>
+                  <div><dt>Ventas en efectivo <em>({efectivoV.length})</em></dt><dd className="mas">+{money(efectivo)}</dd></div>
+                  {abonosT > 0 && <div><dt>Abonos recibidos</dt><dd className="mas">+{money(abonosT)}</dd></div>}
+                  <div><dt>Gastos pagados de caja</dt><dd className="menos">−{money(gastosT)}</dd></div>
+                </dl>
+              </section>
+
+              <section className="bolsillo">
+                <div className="bolsillo-head">
+                  <span className="bolsillo-tag">Transferencia · Nequi</span>
+                </div>
+                <div className="bolsillo-cifra">{money(totalTransfer)}</div>
+                <div className="bolsillo-pie">debe haber en el banco</div>
+                <dl className="desglose">
+                  <div><dt>Base de apertura</dt><dd>{money(baseTransferAbierto)}</dd></div>
+                  <div><dt>Ventas por transferencia</dt><dd className="mas">+{money(transferencias)}</dd></div>
+                  {abonosTransferT > 0 && <div><dt>Abonos por transferencia</dt><dd className="mas">+{money(abonosTransferT)}</dd></div>}
+                  <div><dt>Pagos por Nequi</dt><dd className="menos">−{money(gastosTransferT)}</dd></div>
+                </dl>
+              </section>
+            </div>
+
+            {credito > 0 && (
+              <div className="nota-credito">
+                <span>Ventas a crédito (fiado)</span>
+                <b>{money(credito)}</b>
+                <small>No entra al arqueo: esa plata no ha llegado.</small>
+              </div>
+            )}
 
             {mesasAbiertas.length > 0 && (
               <div className="helper" style={{ color: 'var(--amber)', margin: '10px 0' }}>
@@ -295,15 +322,18 @@ export default function Turno() {
             )}
 
             {esDueno && (
-              <button className="btn secondary" style={{ marginTop: 12 }} onClick={nuevaSalida}>
-                Registrar salida / pago (Nequi o caja)
-              </button>
+              <div className="acciones-turno">
+                <button className="btn secondary" onClick={nuevaSalida}>Registrar salida o pago</button>
+                <button className="btn secondary" onClick={abrirEditarApertura}>Editar apertura</button>
+              </div>
             )}
 
             {salidasT.length > 0 && (
               <>
                 <div className="section-title">Salidas del turno</div>
-                <div className="helper" style={{ marginTop: -4, marginBottom: 6 }}>Cuenta lo que salió del turno: los gastos en efectivo (de aquí o de la pestaña Gastos), las comisiones pagadas y los pagos por transferencia registrados aquí. Los pagos por transferencia de la pestaña Gastos y los fijos del mes NO cuentan.{esDueno ? ' Toca una salida para corregirla.' : ''}</div>
+                <div className="helper" style={{ marginTop: -4, marginBottom: 8 }}>
+                  Lo que salió de la caja o del Nequi de este turno.{esDueno ? ' Toca una salida para corregirla.' : ''}
+                </div>
                 <table className="tabla">
                   <tbody>
                     {salidasT.slice(0, 20).map((g) => {
@@ -326,13 +356,7 @@ export default function Turno() {
               </>
             )}
 
-            {esDueno && (
-              <button className="btn secondary" style={{ marginTop: 12 }} onClick={abrirEditarApertura}>
-                Editar apertura (efectivo / transferencia)
-              </button>
-            )}
-
-            <button className="btn" style={{ marginTop: 10 }} onClick={() => { setContadoReal(0); setContadoTransfer(totalTransfer); setCerrarOpen(true) }}>
+            <button className="btn btn-cerrar" style={{ marginTop: 16 }} onClick={() => { setContadoReal(0); setContadoTransfer(totalTransfer); setCerrarOpen(true) }}>
               Cerrar turno
             </button>
           </>
@@ -495,45 +519,69 @@ export default function Turno() {
           const r = cuadreCerrado(det)
           return (
             <>
-              <table className="tabla">
-                <tbody>
-                  <tr><td>Apertura</td><td className="num">{shortDate(det.abiertoEn)} · {det.abiertoPor}</td></tr>
-                  <tr><td>Cierre</td><td className="num">{shortDate(det.cerradoEn)} · {det.cerradoPor}</td></tr>
-                  <tr><td>Base efectivo (apertura)</td><td className="num">{money(det.base)}</td></tr>
-                  <tr><td>Ventas en efectivo</td><td className="num">{money(r.contado)}</td></tr>
-                  <tr><td>Base transferencia (apertura)</td><td className="num">{money(det.baseTransferencia || 0)}</td></tr>
-                  <tr><td>Ventas por transferencia</td><td className="num">{money(r.transferencias)}</td></tr>
-                  {r.gastosTransfer > 0 && <tr><td>Pagos por transferencia (Nequi)</td><td className="num" style={{ color: 'var(--red)' }}>−{money(r.gastosTransfer)}</td></tr>}
-                  <tr><td>Debe quedar en transferencia</td><td className="num">{money(r.totalTransfer)}</td></tr>
-                  {r.contadoTransfer != null && (
+              {/* Mismo criterio que el turno abierto: primero el VEREDICTO de cada
+                  bolsillo (que es lo que se busca al abrir un cierre) y debajo,
+                  en chico, de dónde salen las cifras. Antes eran 17 filas con la
+                  caja y el Nequi entreveradas. */}
+              <div className="cierre-meta">
+                <div><span>Apertura</span><b>{shortDate(det.abiertoEn)}</b><em>{det.abiertoPor}</em></div>
+                <div><span>Cierre</span><b>{shortDate(det.cerradoEn)}</b><em>{det.cerradoPor}</em></div>
+              </div>
+
+              <div className="arqueo">
+                <section className="bolsillo">
+                  <div className="bolsillo-head"><span className="bolsillo-tag">Efectivo · caja</span></div>
+                  <div className="veredicto" style={{ color: difColor(r.diferencia) }}>
+                    {r.diferencia === 0 ? 'Caja cuadrada'
+                      : (r.diferencia > 0 ? `Sobró ${money(r.diferencia)}` : `Faltó ${money(-r.diferencia)}`)}
+                  </div>
+                  <dl className="desglose destacado">
+                    <div><dt>Esperado</dt><dd>{money(r.esperado)}</dd></div>
+                    <div><dt>Contado</dt><dd>{money(r.contadoReal)}</dd></div>
+                  </dl>
+                  <dl className="desglose">
+                    <div><dt>Base de apertura</dt><dd>{money(det.base)}</dd></div>
+                    <div><dt>Ventas en efectivo</dt><dd className="mas">+{money(r.contado)}</dd></div>
+                    {r.abonos > 0 && <div><dt>Abonos recibidos</dt><dd className="mas">+{money(r.abonos)}</dd></div>}
+                    <div><dt>Gastos pagados</dt><dd className="menos">−{money(r.gastos)}</dd></div>
+                  </dl>
+                </section>
+
+                <section className="bolsillo">
+                  <div className="bolsillo-head"><span className="bolsillo-tag">Transferencia · Nequi</span></div>
+                  {r.contadoTransfer != null ? (
                     <>
-                      <tr><td>Transferencia contada (Nequi)</td><td className="num">{money(r.contadoTransfer)}</td></tr>
-                      <tr>
-                        <td style={{ color: difColor(r.diferenciaTransfer), fontWeight: 700 }}>
-                          {r.diferenciaTransfer === 0 ? 'Transferencia cuadrada' : r.diferenciaTransfer > 0 ? 'Sobrante en transferencia' : 'Faltante en transferencia'}
-                        </td>
-                        <td className="num" style={{ color: difColor(r.diferenciaTransfer), fontWeight: 700 }}>
-                          {money(Math.abs(r.diferenciaTransfer))}
-                        </td>
-                      </tr>
+                      <div className="veredicto" style={{ color: difColor(r.diferenciaTransfer) }}>
+                        {r.diferenciaTransfer === 0 ? 'Nequi cuadrado'
+                          : (r.diferenciaTransfer > 0 ? `Sobró ${money(r.diferenciaTransfer)}` : `Faltó ${money(-r.diferenciaTransfer)}`)}
+                      </div>
+                      <dl className="desglose destacado">
+                        <div><dt>Debe quedar</dt><dd>{money(r.totalTransfer)}</dd></div>
+                        <div><dt>Contado</dt><dd>{money(r.contadoTransfer)}</dd></div>
+                      </dl>
+                    </>
+                  ) : (
+                    <>
+                      <div className="bolsillo-cifra">{money(r.totalTransfer)}</div>
+                      <div className="bolsillo-pie">debía quedar en el banco · no se contó al cerrar</div>
                     </>
                   )}
-                  {(r.abonosTransfer || 0) > 0 && <tr><td>Abonos por transferencia</td><td className="num">{money(r.abonosTransfer)}</td></tr>}
-                  <tr><td>Abonos recibidos (efectivo)</td><td className="num">{money(r.abonos)}</td></tr>
-                  <tr><td>Gastos pagados</td><td className="num">−{money(r.gastos)}</td></tr>
-                  <tr><td><b>Efectivo esperado</b></td><td className="num"><b>{money(r.esperado)}</b></td></tr>
-                  <tr><td>Efectivo contado</td><td className="num">{money(r.contadoReal)}</td></tr>
-                  <tr>
-                    <td style={{ color: difColor(r.diferencia), fontWeight: 700 }}>
-                      {r.diferencia === 0 ? 'Caja cuadrada' : r.diferencia > 0 ? 'Sobrante' : 'Faltante'}
-                    </td>
-                    <td className="num" style={{ color: difColor(r.diferencia), fontWeight: 700 }}>
-                      {money(Math.abs(r.diferencia))}
-                    </td>
-                  </tr>
-                  <tr><td className="muted-cell">Ventas a crédito</td><td className="num muted-cell">{money(r.credito)}</td></tr>
-                </tbody>
-              </table>
+                  <dl className="desglose">
+                    <div><dt>Base de apertura</dt><dd>{money(det.baseTransferencia || 0)}</dd></div>
+                    <div><dt>Ventas por transferencia</dt><dd className="mas">+{money(r.transferencias)}</dd></div>
+                    {(r.abonosTransfer || 0) > 0 && <div><dt>Abonos por transferencia</dt><dd className="mas">+{money(r.abonosTransfer)}</dd></div>}
+                    {r.gastosTransfer > 0 && <div><dt>Pagos por Nequi</dt><dd className="menos">−{money(r.gastosTransfer)}</dd></div>}
+                  </dl>
+                </section>
+              </div>
+
+              {r.credito > 0 && (
+                <div className="nota-credito">
+                  <span>Ventas a crédito (fiado)</span>
+                  <b>{money(r.credito)}</b>
+                  <small>No entra al arqueo: esa plata no había llegado.</small>
+                </div>
+              )}
               {/* Desglose: de qué se compone "Gastos pagados" y los abonos.
                   Sin esto solo se veían totales y era imposible auditar un
                   descuadre (ej. buscar de dónde salen $4.000 de un lavador). */}
