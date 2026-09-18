@@ -326,8 +326,16 @@ export default function Gastos() {
           <>
             <label>Tipo (fijo o variable)</label>
             <div className="pill-row">
-              <button className={`pill ${form.tipo === 'fijo' ? 'active' : ''}`} onClick={() => setForm({ ...form, tipo: 'fijo', fueraDeTurno: true })}>Fijo</button>
-              <button className={`pill ${form.tipo === 'variable' ? 'active' : ''}`} onClick={() => setForm({ ...form, tipo: 'variable', fueraDeTurno: false })}>Variable</button>
+              {/* OJO: al EDITAR, este interruptor NO puede tocar el origen de la
+                  plata. Cambiar fijo/variable es contable; de dónde salió el
+                  dinero es un hecho que ya ocurrió. Ponerle aquí
+                  `fueraDeTurno` hacía que reclasificar un gasto a fijo lo
+                  sacara del turno en silencio y apareciera un faltante en un
+                  cierre ya hecho. El default solo aplica al CREAR. */}
+              <button className={`pill ${form.tipo === 'fijo' ? 'active' : ''}`}
+                onClick={() => setForm({ ...form, tipo: 'fijo', ...(editId ? {} : { fueraDeTurno: true }) })}>Fijo</button>
+              <button className={`pill ${form.tipo === 'variable' ? 'active' : ''}`}
+                onClick={() => setForm({ ...form, tipo: 'variable', ...(editId ? {} : { fueraDeTurno: false }) })}>Variable</button>
             </div>
             <div className="helper">Fijo = se repite cada mes (arriendo, nómina, sistema…). Variable = insumos y gastos del día.</div>
           </>
