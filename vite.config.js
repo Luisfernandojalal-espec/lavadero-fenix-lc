@@ -6,6 +6,10 @@ import { VitePWA } from 'vite-plugin-pwa'
 // vive en "/lavadero-fenix-lc/". El base se ajusta solo según el comando.
 export default defineConfig(({ command }) => ({
   base: command === 'build' ? '/lavadero-fenix-lc/' : '/',
+  // Las copias de trabajo viven en .claude/worktrees dentro del propio repo;
+  // sin excluirlas, `npm test` corre las mismas pruebas dos veces (y podría
+  // usar una copia vieja).
+  test: { exclude: ['**/node_modules/**', '**/dist/**', '**/.claude/**'] },
   plugins: [
     react(),
     VitePWA({
