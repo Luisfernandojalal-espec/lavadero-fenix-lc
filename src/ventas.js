@@ -2,15 +2,12 @@ import { db, uid, stamp } from './db'
 import { monthKey } from './format'
 
 // 'contado' es el valor histórico (ventas viejas): se trata como efectivo.
-export const esEfectivo = (v) => v.metodoPago === 'efectivo' || v.metodoPago === 'contado' || !v.metodoPago
+// Reglas puras (con pruebas: `npm test`). Se re-exportan para no cambiar imports.
+export { esEfectivo, montoEfectivo, montoTransferencia } from './reglas'
 export const labelMedio = (id) =>
   id === 'transferencia' ? 'Transferencia' : id === 'credito' ? 'Crédito (fiado)' : id === 'mixto' ? 'Mixto' : 'Efectivo'
 
 // Parte de una venta pagada en efectivo / transferencia (soporta el pago mixto).
-export const montoEfectivo = (v) =>
-  v.metodoPago === 'mixto' ? (v.pagoEfectivo || 0) : (esEfectivo(v) ? v.total : 0)
-export const montoTransferencia = (v) =>
-  v.metodoPago === 'mixto' ? (v.pagoTransferencia || 0) : (v.metodoPago === 'transferencia' ? v.total : 0)
 
 // Asigna un lavador a una línea de servicio resolviendo el % de comisión:
 // manda el % propio del trabajador; si no tiene, aplica el % del servicio.

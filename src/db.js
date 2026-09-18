@@ -258,57 +258,13 @@ export const labelMedioGasto = (id) => {
   const m = MEDIOS_PAGO_GASTO.find((x) => x.id === id)
   return m ? m.label : 'Caja (efectivo)'
 }
-// ¿Este gasto sale del efectivo de la caja física? Los registros viejos sin
-// medio de pago se consideran de caja (así el cierre de turno no cambia).
-export function gastoDeCaja(g) {
-  return !g.medioPago || g.medioPago === 'caja'
-}
-// ¿Este gasto toca el cuadre del turno (caja física / saldo en transferencia)?
-//  - Efectivo: cuenta SIEMPRE... salvo que se marque `fueraDeTurno` (la plata
-//    salió de otro efectivo del negocio, no del cajón del turno). Sin la marca
-//    cuenta igual que antes, así que los gastos viejos no cambian.
-//  - Transferencia / banco: solo si se registró como salida DEL turno.
-// Ojo: esto NO cambia el P&L — el gasto sigue contando en el mes (esGastoPnL).
-export function gastoTocaTurno(g) {
-  if (g.fueraDeTurno === 1) return false        // marcado "de otra plata": nunca toca el turno
-  // Marca CONGELADA: se guarda cuando se registra el gasto y NO se recalcula al
-  // editarlo. Sin esto, reclasificar un gasto de variable a fijo lo sacaba del
-  // turno de forma retroactiva y aparecía un faltante en un cierre ya hecho: la
-  // plata sí había salido del cajón ese día, lo que cambió fue solo su
-  // clasificación contable (fijo/variable es del P&L, no del arqueo de caja).
-  if (g.tocaTurno === 1) return true
-  if (g.tocaTurno === 0) return false
-  // Gastos viejos (sin la marca): se deduce como siempre. Los FIJOS del mes
-  // nunca tocaron el turno; los variables, según de dónde salió la plata.
-  return tipoGasto(g) === 'variable' && (gastoDeCaja(g) || g.salidaTurno === 1)
-}
-// Parte de un gasto que sale de la CAJA física / de TRANSFERENCIA (soporta
-// mixto: guarda pagoEfectivo/pagoTransferencia como las ventas mixtas).
-export const gastoMontoCaja = (g) =>
-  g.medioPago === 'mixto' ? (g.pagoEfectivo || 0) : (gastoDeCaja(g) ? g.monto : 0)
-export const gastoMontoTransfer = (g) =>
-  g.medioPago === 'mixto' ? (g.pagoTransferencia || 0) : (gastoDeCaja(g) ? 0 : g.monto)
-// Construye los campos de medio de pago de un gasto pagado en
-// efectivo / transferencia / mixto. Para mixto, `efectivo` = parte en caja.
-export function medioPagoGasto(medio, monto, efectivo = 0) {
-  if (medio === 'transferencia') return { medioPago: 'transferencia' }
-  if (medio === 'mixto') {
-    const ef = Math.max(0, Math.min(efectivo || 0, monto))
-    return { medioPago: 'mixto', pagoEfectivo: ef, pagoTransferencia: monto - ef }
-  }
-  return { medioPago: 'caja' }
-}
-
-// Clasificación fijo/variable de un gasto. Si el gasto no la trae guardada
-// (registros viejos), se deduce por la categoría.
-const CATEGORIAS_FIJAS = ['arriendo', 'luz', 'agua', 'nomina']
-export function tipoGasto(g) {
-  if (g.tipo === 'fijo' || g.tipo === 'variable') return g.tipo
-  return CATEGORIAS_FIJAS.includes(g.categoria) ? 'fijo' : 'variable'
-}
-export function tipoPorCategoria(catId) {
-  return CATEGORIAS_FIJAS.includes(catId) ? 'fijo' : 'variable'
-}
+// Las reglas de plata viven en ./reglas (puras y con pruebas: `npm test`).
+// Se re-exportan aquí para no cambiar los imports del resto de la app.
+export {
+  gastoDeCaja, gastoTocaTurno, gastoMontoCaja, gastoMontoTransfer, medioPagoGasto,
+  decidirTocaTurno, cuadreTurno, tipoGasto, tipoPorCategoria, CATEGORIAS_FIJAS,
+} from './reglas'
+import { tipoGasto } from './reglas'
 
 // Categorías que SÍ tocan la caja/turno pero NO son gasto del P&L:
 //  - comisiones: ya descontadas en el neto de servicios.
@@ -316,9 +272,7 @@ export function tipoPorCategoria(catId) {
 //  - retiro: plata que el dueño saca para sí.
 //  - prestamo: plata prestada a un cliente (es cartera, no gasto).
 // Un solo sitio para no olvidar ninguna al excluirlas del Balance/Gastos/Inicio.
-export const CATEGORIAS_NO_PNL = ['comisiones', 'inventario', 'retiro', 'prestamo']
-// ¿Este gasto cuenta como gasto operativo del mes (P&L)? (no anulado y no de las de arriba)
-export const esGastoPnL = (g) => !g.anulada && !CATEGORIAS_NO_PNL.includes(g.categoria)
+export { CATEGORIAS_NO_PNL, esGastoPnL } from './reglas'
 
 export function labelCategoria(catId) {
   const c = CATEGORIAS_PRODUCTO.find((x) => x.id === catId)

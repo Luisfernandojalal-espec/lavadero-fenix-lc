@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, gastoDeCaja, gastoTocaTurno, gastoMontoCaja, gastoMontoTransfer, tipoGasto, labelMedioGasto, medioPagoGasto } from '../db'
+import { db, uid, stamp, gastoMontoCaja, gastoMontoTransfer, labelMedioGasto, medioPagoGasto, cuadreTurno } from '../db'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
 import { descargarCierrePDF } from '../pdf'
@@ -24,42 +24,22 @@ export default function Turno() {
   const eliminados = (turnos || []).filter((t) => t.estado === 'cerrado' && t.anulada).sort((a, b) => b.cerradoEn - a.cerradoEn)
   const mesasAbiertas = (mesas || []).filter((m) => m.estado === 'ocupada')
 
-  // Resumen en vivo del turno abierto
-  const desde = abierto?.abiertoEn || 0
-  const vTurno = (ventas || []).filter((v) => !v.anulada && v.fecha >= desde)
-  // Efectivo y transferencia consideran la parte de cada uno en los pagos mixtos.
-  const efectivoV = vTurno.filter((v) => montoEfectivo(v) > 0)
-  const efectivo = vTurno.reduce((s, v) => s + montoEfectivo(v), 0)
-  const transferencias = vTurno.reduce((s, v) => s + montoTransferencia(v), 0)
-  const credito = vTurno.filter((v) => v.metodoPago === 'credito').reduce((s, v) => s + v.total, 0)
-  // Abonos del turno repartidos por cómo pagó el cliente: el efectivo entra a la
-  // caja y la transferencia al banco. (gastoMontoCaja/Transfer sirven para
-  // cualquier movimiento con medioPago; un abono viejo sin medioPago = efectivo.)
-  const abonosDelTurno = (abonos || []).filter((a) => a.fecha >= desde && !a.anulada)
-  const abonosT = abonosDelTurno.reduce((s, a) => s + gastoMontoCaja(a), 0)
-  const abonosTransferT = abonosDelTurno.reduce((s, a) => s + gastoMontoTransfer(a), 0)
-  // Salidas/pagos del turno (gastos VARIABLES; los FIJOS del mes nunca cuentan):
-  //  - EFECTIVO (caja): SIEMPRE cuenta. La plata física salió de la caja, sin
-  //    importar si se registró aquí o en la pestaña Gastos → baja el efectivo.
-  //    Excepción: si se marcó "de otra plata" (`fueraDeTurno`), no salió de este
-  //    cajón y no descuadra (ej. se pagó con efectivo que estaba en la casa).
-  //  - TRANSFERENCIA: solo cuenta si se registró como salida DEL turno
-  //    (`salidaTurno`, botón "Registrar salida / pago") o es una comisión pagada.
-  //    Los pagos por transferencia de la pestaña Gastos son contabilidad del mes
-  //    (el dueño paga proveedores desde el banco) y NO tocan el cuadre del turno.
-  const salidasT = (gastos || [])
-    .filter((g) => !g.anulada && g.fecha >= desde && gastoTocaTurno(g))
-    .sort((a, b) => b.fecha - a.fecha)
-  // Los gastos pagados DE CAJA descuadran el efectivo; los de transferencia/banco (Nequi)
-  // bajan el saldo digital. Un pago mixto (ej. comisión) reparte su parte a cada lado.
-  const gastosT = salidasT.reduce((s, g) => s + gastoMontoCaja(g), 0)
-  const gastosTransferT = salidasT.reduce((s, g) => s + gastoMontoTransfer(g), 0)
-  // Solo el efectivo entra a la caja física (transferencias van al banco)
-  const esperado = (abierto?.base || 0) + efectivo + abonosT - gastosT
-  // Transferencia/banco (Nequi): base + ventas por transferencia + abonos que el
-  // cliente pagó por transferencia − pagos hechos por transferencia.
+  // Resumen en vivo del turno abierto: MISMA función que el cuadre de un
+  // cierre, para que no puedan separarse nunca (antes eran dos copias).
+  const cuadre = cuadreTurno({ turno: abierto, ventas: ventas || [], abonos: abonos || [], gastos: gastos || [] })
+  const efectivoV = (ventas || []).filter((v) => !v.anulada && v.fecha >= (abierto?.abiertoEn || 0) && montoEfectivo(v) > 0)
+  const efectivo = cuadre.contado
+  const transferencias = cuadre.transferencias
+  const credito = cuadre.credito
+  const abonosT = cuadre.abonos
+  const abonosTransferT = cuadre.abonosTransfer
+  const salidasT = cuadre.salidasLista
+  const gastosT = cuadre.gastos
+  const gastosTransferT = cuadre.gastosTransfer
+  const esperado = cuadre.esperado
   const baseTransferAbierto = abierto?.baseTransferencia || 0
-  const totalTransfer = baseTransferAbierto + transferencias + abonosTransferT - gastosTransferT
+  const totalTransfer = cuadre.totalTransfer
+  const vTurno = { length: cuadre.ventasCount }
 
   // --- Abrir turno ---
   const [abrirOpen, setAbrirOpen] = useState(false)
@@ -224,34 +204,7 @@ export default function Turno() {
   // conteo físico manual, se conserva del cierre. La diferencia se recalcula con
   // el esperado nuevo. (Solo cambia lo que se muestra; no se reescribe el turno.)
   function cuadreCerrado(t) {
-    const d0 = t.abiertoEn || 0
-    const d1 = t.cerradoEn || Infinity
-    const enRango = (ts) => ts >= d0 && ts <= d1
-    const vs = (ventas || []).filter((v) => !v.anulada && enRango(v.fecha))
-    const efectivo = vs.reduce((s, v) => s + montoEfectivo(v), 0)
-    const transferencias = vs.reduce((s, v) => s + montoTransferencia(v), 0)
-    const credito = vs.filter((v) => v.metodoPago === 'credito').reduce((s, v) => s + v.total, 0)
-    const abonosRango = (abonos || []).filter((a) => enRango(a.fecha) && !a.anulada)
-    const abonosR = abonosRango.reduce((s, a) => s + gastoMontoCaja(a), 0)          // los que entraron en efectivo
-    const abonosTransferR = abonosRango.reduce((s, a) => s + gastoMontoTransfer(a), 0) // los que entraron por transferencia
-    const salidas = (gastos || []).filter((g) => !g.anulada && enRango(g.fecha) && gastoTocaTurno(g))
-    const gastosR = salidas.reduce((s, g) => s + gastoMontoCaja(g), 0)
-    const gastosTransferR = salidas.reduce((s, g) => s + gastoMontoTransfer(g), 0)
-    const esperado = (t.base || 0) + efectivo + abonosR - gastosR
-    const totalTransfer = (t.baseTransferencia || 0) + transferencias + abonosTransferR - gastosTransferR
-    const contadoReal = t.resumen?.contadoReal || 0
-    // La transferencia contada solo existe en cierres nuevos (o corregidos):
-    // en los viejos queda null y no se muestra su cuadre (no inventar faltantes).
-    const contadoTransfer = t.resumen?.contadoTransfer ?? null
-    return {
-      contado: efectivo, transferencias, credito, abonos: abonosR, abonosTransfer: abonosTransferR, gastos: gastosR,
-      gastosTransfer: gastosTransferR, totalTransfer, esperado, contadoReal,
-      diferencia: contadoReal - esperado, ventasCount: vs.length,
-      contadoTransfer, diferenciaTransfer: contadoTransfer == null ? null : contadoTransfer - totalTransfer,
-      // Listas para ver de QUÉ se compone cada total (auditar un descuadre).
-      salidasLista: salidas.slice().sort((a, b) => b.fecha - a.fecha),
-      abonosLista: abonosRango.slice().sort((a, b) => b.fecha - a.fecha),
-    }
+    return cuadreTurno({ turno: t, ventas: ventas || [], abonos: abonos || [], gastos: gastos || [] })
   }
 
   return (
