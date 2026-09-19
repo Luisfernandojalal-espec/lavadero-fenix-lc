@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, borrarTodo, TIPOS_VEHICULO, precioServicio, precioMinServicio, esServicioBase, ROLES, labelRol, medioPagoGasto } from '../db'
+import { db, uid, stamp, borrarTodo, TIPOS_VEHICULO, precioServicio, precioMinServicio, esServicioBase, ROLES, labelRol, medioPagoGasto, decidirTocaTurno } from '../db'
 import { supabase } from '../supabase'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
@@ -53,6 +53,9 @@ export default function Servicios() {
   const [montoPago, setMontoPago] = useState(0)
   const [pagoMedio, setPagoMedio] = useState('efectivo') // efectivo | transferencia | mixto
   const [pagoEfMixto, setPagoEfMixto] = useState(0)       // parte en efectivo cuando es mixto
+  // Si el dueño le paga la comisión con plata suya aparte, el pago se registra
+  // igual (baja el pendiente del lavador) pero NO descuadra la caja del turno.
+  const [pagoFuera, setPagoFuera] = useState(false)
   const [detalleT, setDetalleT] = useState(null) // planilla de lavadas de un lavador
 
   // Planilla: cada lavada del lavador desde su último pago (si no hay pagos, todas)
@@ -85,7 +88,7 @@ export default function Servicios() {
   function abrirPago(t) {
     setPagoA(t)
     setMontoPago(Math.max(0, resumenDe(t.id).pendiente))
-    setPagoMedio('efectivo'); setPagoEfMixto(0)
+    setPagoMedio('efectivo'); setPagoEfMixto(0); setPagoFuera(false)
   }
 
   const pagandoRef = useRef(false) // candado anti-doble-toque (doble pago de comisión)
@@ -107,7 +110,11 @@ export default function Servicios() {
       // neto de servicios) — por eso la categoría 'comisiones' se excluye allá.
       await db.gastos.add(stamp({
         id: uid(), concepto: `Pago de comisión a ${pagoA.nombre}`, categoria: 'comisiones', pagoId,
-        monto: montoPago, tipo: 'variable', ...medio, salidaTurno: 1, fecha: now, mes: monthKey(now),
+        monto: montoPago, tipo: 'variable', ...medio,
+        salidaTurno: pagoFuera ? 0 : 1,
+        fueraDeTurno: pagoFuera ? 1 : 0,
+        tocaTurno: decidirTocaTurno({ medioPago: medio.medioPago, fueraDeTurno: pagoFuera, salidaTurno: !pagoFuera }),
+        fecha: now, mes: monthKey(now),
       }))
       setPagoA(null); setMontoPago(0)
       show('Pago de comisiones registrado')
@@ -471,7 +478,16 @@ export default function Servicios() {
                 <div className="helper">Va por transferencia: <b>{money(Math.max(0, montoPago - Math.min(pagoEfMixto, montoPago)))}</b></div>
               </>
             )}
-            <div className="helper" style={{ marginTop: 6 }}>Sale del producido del día: el efectivo baja la caja del turno y la transferencia baja el saldo en banco. Se descuenta del pendiente.</div>
+            <label>¿De dónde sale esa plata?</label>
+            <div className="pill-row">
+              <button className={`pill ${!pagoFuera ? 'active' : ''}`} onClick={() => setPagoFuera(false)}>Del turno</button>
+              <button className={`pill ${pagoFuera ? 'active' : ''}`} onClick={() => setPagoFuera(true)}>De otra plata</button>
+            </div>
+            <div className="helper" style={{ marginTop: 6 }}>
+              {pagoFuera
+                ? 'No descuadra el turno: le pagaste con plata tuya aparte. El pago igual queda registrado y le baja el pendiente al lavador.'
+                : 'Sale del producido del día: el efectivo baja la caja del turno y la transferencia baja el saldo en banco. Se descuenta del pendiente.'}
+            </div>
             <div style={{ height: 14 }} />
             <button className="btn" onClick={pagarComision}>Registrar pago de {money(montoPago)}</button>
           </>

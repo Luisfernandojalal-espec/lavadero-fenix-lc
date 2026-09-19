@@ -100,6 +100,35 @@ describe('gasto pagado MIXTO (parte efectivo, parte transferencia)', () => {
   })
 })
 
+describe('pago de comisión al lavador', () => {
+  // 19/09: si el dueño le paga la comisión a un lavador con plata de su
+  // bolsillo, no tiene por qué descuadrarle la caja del turno.
+  it('pagada del turno, descuenta del bolsillo que corresponda', () => {
+    const efectivo = gasto({ categoria: 'comisiones', monto: 30_000, tipo: 'variable', medioPago: 'caja' })
+    efectivo.tocaTurno = decidirTocaTurno({ medioPago: 'caja', fueraDeTurno: false, salidaTurno: true })
+    const transfer = gasto({ categoria: 'comisiones', monto: 30_000, tipo: 'variable', medioPago: 'transferencia' })
+    transfer.tocaTurno = decidirTocaTurno({ medioPago: 'transferencia', fueraDeTurno: false, salidaTurno: true })
+
+    const rEf = cuadreTurno({ turno: { ...turno, base: 100_000 }, gastos: [efectivo] })
+    expect(rEf.gastos).toBe(30_000)
+    const rTr = cuadreTurno({ turno: { ...turno, baseTransferencia: 100_000 }, gastos: [transfer] })
+    expect(rTr.gastosTransfer).toBe(30_000)
+  })
+
+  it('pagada de otra plata, NO toca el turno', () => {
+    const toca = decidirTocaTurno({ medioPago: 'caja', fueraDeTurno: true, salidaTurno: false })
+    expect(toca).toBe(0)
+    const g = gasto({ categoria: 'comisiones', monto: 30_000, tipo: 'variable', medioPago: 'caja', fueraDeTurno: 1, tocaTurno: toca })
+    const r = cuadreTurno({ turno: { ...turno, base: 100_000 }, gastos: [g] })
+    expect(r.gastos).toBe(0)
+    expect(r.esperado).toBe(100_000)
+  })
+
+  it('en cualquier caso la comisión NO es gasto del negocio: ya está en el neto de servicios', () => {
+    expect(esGastoPnL(gasto({ categoria: 'comisiones' }))).toBe(false)
+  })
+})
+
 describe('la cuenta del turno cierra', () => {
   it('base + ventas + abonos − gastos = efectivo esperado', () => {
     const r = cuadreTurno({
