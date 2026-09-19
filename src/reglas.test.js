@@ -129,6 +129,37 @@ describe('pago de comisión al lavador', () => {
   })
 })
 
+describe('abono de un cliente (plata que ENTRA)', () => {
+  it('en efectivo sube el efectivo esperado; por transferencia sube el banco', () => {
+    const r = cuadreTurno({
+      turno: { ...turno, base: 100_000, baseTransferencia: 50_000 },
+      abonos: [
+        { monto: 20_000, medioPago: 'caja', fecha: dentro },
+        { monto: 30_000, medioPago: 'transferencia', fecha: dentro },
+      ],
+    })
+    expect(r.esperado).toBe(120_000)
+    expect(r.totalTransfer).toBe(80_000)
+  })
+
+  it('si esa plata no llegó al turno, no lo sube', () => {
+    const r = cuadreTurno({
+      turno: { ...turno, base: 100_000 },
+      abonos: [{ monto: 20_000, medioPago: 'caja', fecha: dentro, fueraDeTurno: 1 }],
+    })
+    expect(r.abonos).toBe(0)
+    expect(r.esperado).toBe(100_000)
+  })
+
+  it('los abonos viejos (sin la marca) siguen entrando al turno', () => {
+    const r = cuadreTurno({
+      turno: { ...turno, base: 100_000 },
+      abonos: [{ monto: 20_000, fecha: dentro }], // sin medioPago ni marca
+    })
+    expect(r.esperado).toBe(120_000)
+  })
+})
+
 describe('la cuenta del turno cierra', () => {
   it('base + ventas + abonos − gastos = efectivo esperado', () => {
     const r = cuadreTurno({

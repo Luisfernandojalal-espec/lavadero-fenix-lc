@@ -69,9 +69,13 @@ export default function Credito() {
   // Sin esto el turno daba por hecho que TODO abono entraba en efectivo.
   const [abonoMedio, setAbonoMedio] = useState('caja')
   const [abonoEf, setAbonoEf] = useState(0) // parte en efectivo cuando es mixto
+  // El abono normalmente ENTRA a la caja/banco del turno. Se marca cuando esa
+  // plata no llegó ahí (el cliente le transfirió a la cuenta personal del dueño
+  // o le pagó en la casa): el saldo del cliente baja igual, el turno no sube.
+  const [abonoFuera, setAbonoFuera] = useState(false)
   const det = lista.find((c) => c.id === detId)
 
-  function abrirDetalle(c) { setDetId(c.id); setAbono(0); setAbonoMedio('caja'); setAbonoEf(0) }
+  function abrirDetalle(c) { setDetId(c.id); setAbono(0); setAbonoMedio('caja'); setAbonoEf(0); setAbonoFuera(false) }
 
   // Etiqueta del medio de un abono (los viejos, sin medioPago, eran efectivo).
   const labelMedioAbono = (a) => a.medioPago === 'transferencia' ? 'Transferencia'
@@ -102,6 +106,7 @@ export default function Credito() {
       await db.abonos.add(stamp({
         id: uid(), clienteId: det.id, clienteNombre: det.nombre, monto: abono,
         ...medioPagoGasto(abonoMedio, abono, abonoEf), // medioPago (+ split si es mixto)
+        fueraDeTurno: abonoFuera ? 1 : 0,
         fecha: now, mes: monthKey(now),
       }))
       setAbono(0); setAbonoMedio('caja'); setAbonoEf(0)
@@ -114,14 +119,17 @@ export default function Credito() {
   const [abonoMonto, setAbonoMonto] = useState(0)
   const [abonoEditMedio, setAbonoEditMedio] = useState('caja')
   const [abonoEditEf, setAbonoEditEf] = useState(0)
+  const [abonoEditFuera, setAbonoEditFuera] = useState(false)
   function abrirAbono(a) {
     setAbonoEdit(a); setAbonoMonto(a.monto)
     setAbonoEditMedio(a.medioPago || 'caja'); setAbonoEditEf(a.pagoEfectivo || 0)
+    setAbonoEditFuera(a.fueraDeTurno === 1)
   }
   async function guardarAbono() {
     if (abonoMonto <= 0) return show('El abono debe ser mayor a 0')
     await db.abonos.update(abonoEdit.id, stamp({
       monto: abonoMonto, ...medioPagoGasto(abonoEditMedio, abonoMonto, abonoEditEf),
+      fueraDeTurno: abonoEditFuera ? 1 : 0,
     }))
     setAbonoEdit(null); show('Abono actualizado')
   }
@@ -343,6 +351,16 @@ export default function Credito() {
                 <div className="helper">Va por transferencia: <b>{money(Math.max(0, abono - Math.min(abonoEf, abono)))}</b></div>
               </>
             )}
+            <label>¿Esa plata entró al turno?</label>
+            <div className="pill-row">
+              <button className={`pill ${!abonoFuera ? 'active' : ''}`} onClick={() => setAbonoFuera(false)}>Sí, entró al turno</button>
+              <button className={`pill ${abonoFuera ? 'active' : ''}`} onClick={() => setAbonoFuera(true)}>No, entró a otra parte</button>
+            </div>
+            <div className="helper">
+              {abonoFuera
+                ? 'No sube el cuadre del turno (te la pagó aparte: a tu cuenta personal, en la casa…). La deuda del cliente baja igual.'
+                : 'Sube el turno: el efectivo entra a la caja y la transferencia al banco del día.'}
+            </div>
             <div style={{ height: 10 }} />
             <button className="btn" onClick={registrarAbono}>Abonar</button>
 
@@ -497,6 +515,11 @@ export default function Credito() {
                 <div className="helper">Va por transferencia: <b>{money(Math.max(0, abonoMonto - Math.min(abonoEditEf, abonoMonto)))}</b></div>
               </>
             )}
+            <label>¿Esa plata entró al turno?</label>
+            <div className="pill-row">
+              <button className={`pill ${!abonoEditFuera ? 'active' : ''}`} onClick={() => setAbonoEditFuera(false)}>Sí, entró al turno</button>
+              <button className={`pill ${abonoEditFuera ? 'active' : ''}`} onClick={() => setAbonoEditFuera(true)}>No, entró a otra parte</button>
+            </div>
             <div style={{ height: 14 }} />
             <button className="btn" onClick={guardarAbono}>Guardar</button>
             <div style={{ height: 10 }} />

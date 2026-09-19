@@ -86,6 +86,13 @@ export function decidirTocaTurno({ medioPago, fueraDeTurno, salidaTurno, origina
   return cambioOrigen ? elegido : (gastoTocaTurno(original) ? 1 : 0)
 }
 
+// Un abono ENTRA a la caja o al banco del turno. Se marca `fueraDeTurno` cuando
+// esa plata no llegó ahí (ej. el cliente le transfirió a la cuenta personal del
+// dueño, o le pagó en la casa). Ojo: NO se puede reutilizar `gastoTocaTurno`
+// aquí — esa función exige `salidaTurno` para lo que no es efectivo, y dejaría
+// de contar los abonos por transferencia, que sí entran.
+export const abonoEntraAlTurno = (a) => a.fueraDeTurno !== 1
+
 /* ─────────────── Cuadre del turno ─────────────── */
 
 // La aritmética del arqueo, una sola vez para el turno abierto y para uno ya
@@ -101,7 +108,7 @@ export function cuadreTurno({ turno, ventas = [], abonos = [], gastos = [] }) {
   const transferencias = vs.reduce((s, v) => s + montoTransferencia(v), 0)
   const credito = vs.filter((v) => v.metodoPago === 'credito').reduce((s, v) => s + v.total, 0)
 
-  const abonosRango = abonos.filter((a) => !a.anulada && enRango(a.fecha))
+  const abonosRango = abonos.filter((a) => !a.anulada && enRango(a.fecha) && abonoEntraAlTurno(a))
   const abonosCaja = abonosRango.reduce((s, a) => s + gastoMontoCaja(a), 0)
   const abonosTransfer = abonosRango.reduce((s, a) => s + gastoMontoTransfer(a), 0)
 
