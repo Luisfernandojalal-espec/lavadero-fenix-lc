@@ -71,6 +71,35 @@ describe('de dónde salió la plata', () => {
   })
 })
 
+describe('gasto pagado MIXTO (parte efectivo, parte transferencia)', () => {
+  // 19/09: el dueño pagó un gasto con un poco de efectivo y el resto por Nequi,
+  // y en Gastos solo podía elegir uno de los dos.
+  it('del turno: la parte en efectivo baja la caja y el resto baja el Nequi', () => {
+    const g = gasto({ monto: 50_000, tipo: 'variable', ...medioPagoGasto('mixto', 50_000, 20_000), salidaTurno: 1 })
+    g.tocaTurno = decidirTocaTurno({ medioPago: 'mixto', fueraDeTurno: false, salidaTurno: true })
+    const r = cuadreTurno({ turno: { ...turno, base: 100_000, baseTransferencia: 80_000 }, gastos: [g] })
+    expect(r.gastos).toBe(20_000)          // de la caja
+    expect(r.gastosTransfer).toBe(30_000)  // del Nequi
+    expect(r.esperado).toBe(80_000)
+    expect(r.totalTransfer).toBe(50_000)
+  })
+
+  it('de otra plata: no toca ninguno de los dos bolsillos', () => {
+    const toca = decidirTocaTurno({ medioPago: 'mixto', fueraDeTurno: false, salidaTurno: false })
+    expect(toca).toBe(0)
+    const g = gasto({ monto: 50_000, tipo: 'variable', ...medioPagoGasto('mixto', 50_000, 20_000), tocaTurno: toca })
+    const r = cuadreTurno({ turno: { ...turno, base: 100_000, baseTransferencia: 80_000 }, gastos: [g] })
+    expect(r.gastos).toBe(0)
+    expect(r.gastosTransfer).toBe(0)
+  })
+
+  it('si el efectivo declarado supera el total, no se inventa plata', () => {
+    const m = medioPagoGasto('mixto', 30_000, 99_999)
+    expect(m.pagoEfectivo).toBe(30_000)
+    expect(m.pagoTransferencia).toBe(0)
+  })
+})
+
 describe('la cuenta del turno cierra', () => {
   it('base + ventas + abonos − gastos = efectivo esperado', () => {
     const r = cuadreTurno({

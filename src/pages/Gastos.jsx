@@ -11,7 +11,7 @@ function labelGasto(id) {
   return c ? c.label : 'Otro'
 }
 
-const emptyForm = { concepto: '', categoria: 'arriendo', monto: 0, tipo: 'fijo', fijoId: null, medioPago: 'caja', salidaTurno: false, fueraDeTurno: false, responsable: '', comprobante: '' }
+const emptyForm = { concepto: '', categoria: 'arriendo', monto: 0, tipo: 'fijo', fijoId: null, medioPago: 'caja', pagoEfectivo: 0, salidaTurno: false, fueraDeTurno: false, responsable: '', comprobante: '' }
 const emptyFijo = { nombre: '', categoria: 'arriendo', montoEstimado: 0 }
 
 export default function Gastos() {
@@ -56,7 +56,8 @@ export default function Gastos() {
     setModoVariable(tipoGasto(g) === 'variable' && !g.fijoId)
     setForm({
       concepto: g.concepto, categoria: g.categoria, monto: g.monto, tipo: tipoGasto(g), fijoId: g.fijoId || null,
-      medioPago: g.medioPago || 'caja', salidaTurno: g.salidaTurno === 1, fueraDeTurno: g.fueraDeTurno === 1,
+      medioPago: g.medioPago || 'caja', pagoEfectivo: g.pagoEfectivo || 0,
+      salidaTurno: g.salidaTurno === 1, fueraDeTurno: g.fueraDeTurno === 1,
       responsable: g.responsable || '', comprobante: g.comprobante || '',
     })
     setSheetOpen(true)
@@ -80,11 +81,19 @@ export default function Gastos() {
     try {
     const cat = CATEGORIAS_GASTO.find((c) => c.id === form.categoria)
     const concepto = form.concepto.trim() || (cat ? cat.label : 'Gasto')
+    // Mixto: se guarda el reparto efectivo/transferencia como en las ventas.
+    // Ojo: `medioPagoGasto('banco')` devolvería 'caja', así que el medio se
+    // toma tal cual y solo se calcula el reparto. Si deja de ser mixto hay que
+    // LIMPIAR el reparto viejo: db.update fusiona y quedarían cifras fantasma.
+    const efMixto = Math.max(0, Math.min(form.pagoEfectivo || 0, form.monto))
     const extra = {
       medioPago: form.medioPago || 'caja',
+      ...(form.medioPago === 'mixto'
+        ? { pagoEfectivo: efMixto, pagoTransferencia: form.monto - efMixto }
+        : { pagoEfectivo: null, pagoTransferencia: null }),
       // Un gasto por transferencia/banco solo descuadra el turno si el operador
       // dice que salió de la plata DEL turno (Nequi del día).
-      salidaTurno: form.tipo === 'variable' && form.salidaTurno ? 1 : 0,
+      salidaTurno: form.tipo === 'variable' && form.salidaTurno ? 1 : 0, // aplica a transferencia y a mixto
       // El efectivo cuenta SIEMPRE, salvo que digan que salió de otra plata (no
       // del cajón). Aplica a fijos y variables: un fijo pagado del cajón también
       // descuadra la caja si el operador dice que salió de ahí.
@@ -281,6 +290,15 @@ export default function Gastos() {
             salido del cajón -> faltante inexplicable al cerrar. Ahora el
             selector aparece siempre que el medio sea caja; para los fijos viene
             en "De otra plata" (la regla de siempre) pero se puede corregir. */}
+        {form.medioPago === 'mixto' && (
+          <>
+            <label>¿Cuánto se pagó en efectivo?</label>
+            <MoneyInput value={form.pagoEfectivo} onChange={(v) => setForm({ ...form, pagoEfectivo: v })} />
+            <div className="helper">
+              Va por transferencia: <b>{money(Math.max(0, form.monto - Math.min(form.pagoEfectivo || 0, form.monto)))}</b>
+            </div>
+          </>
+        )}
         {form.medioPago === 'caja' && (
           <>
             <label>¿De cuál efectivo salió?</label>
@@ -298,15 +316,17 @@ export default function Gastos() {
         )}
         {form.medioPago !== 'caja' && form.tipo === 'variable' && (
           <>
-            <label>¿Salió del Nequi / transferencia del turno?</label>
+            <label>{form.medioPago === 'mixto' ? '¿Salió del turno?' : '¿Salió del Nequi / transferencia del turno?'}</label>
             <div className="pill-row">
               <button className={`pill ${form.salidaTurno ? 'active' : ''}`} onClick={() => setForm({ ...form, salidaTurno: true })}>Sí, del turno (descuenta ya)</button>
               <button className={`pill ${!form.salidaTurno ? 'active' : ''}`} onClick={() => setForm({ ...form, salidaTurno: false })}>No, de otra cuenta</button>
             </div>
             <div className="helper">
               {form.salidaTurno
-                ? 'Baja de una vez el "Debe quedar en transferencia" del turno abierto.'
-                : 'No afecta el cuadre del turno (pago del banco del dueño; solo cuenta en el mes).'}
+                ? (form.medioPago === 'mixto'
+                  ? 'La parte en efectivo baja la caja del turno y el resto baja el "Debe quedar en transferencia".'
+                  : 'Baja de una vez el "Debe quedar en transferencia" del turno abierto.')
+                : 'No afecta el cuadre del turno (se pagó de otra plata; solo cuenta en el mes).'}
             </div>
           </>
         )}

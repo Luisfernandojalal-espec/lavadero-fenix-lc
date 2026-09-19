@@ -251,6 +251,7 @@ export const CATEGORIAS_GASTO = [
 export const MEDIOS_PAGO_GASTO = [
   { id: 'caja', label: 'Caja (efectivo)' },
   { id: 'transferencia', label: 'Transferencia' },
+  { id: 'mixto', label: 'Mixto (efectivo + transferencia)' },
   { id: 'banco', label: 'Cuenta bancaria' },
 ]
 export const labelMedioGasto = (id) => {
