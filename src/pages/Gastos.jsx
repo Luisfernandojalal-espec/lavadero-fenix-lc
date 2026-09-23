@@ -98,7 +98,10 @@ export default function Gastos() {
         : { pagoEfectivo: null, pagoTransferencia: null }),
       // Un gasto por transferencia/banco solo descuadra el turno si el operador
       // dice que salió de la plata DEL turno (Nequi del día).
-      salidaTurno: form.tipo === 'variable' && form.salidaTurno ? 1 : 0, // aplica a transferencia y a mixto
+      // Aplica a transferencia y a mixto, en fijos Y variables: antes solo los
+      // variables podían decir "salió del turno" y un fijo pagado con el Nequi
+      // del turno no tenía cómo descontarse -> faltante al cerrar.
+      salidaTurno: form.medioPago !== 'caja' && form.salidaTurno ? 1 : 0,
       // El efectivo cuenta SIEMPRE, salvo que digan que salió de otra plata (no
       // del cajón). Aplica a fijos y variables: un fijo pagado del cajón también
       // descuadra la caja si el operador dice que salió de ahí.
@@ -336,7 +339,7 @@ export default function Gastos() {
             </div>
           </>
         )}
-        {form.medioPago !== 'caja' && form.tipo === 'variable' && (
+        {form.medioPago !== 'caja' && (
           <>
             <label>{form.medioPago === 'mixto' ? '¿Salió del turno?' : '¿Salió del Nequi / transferencia del turno?'}</label>
             <div className="pill-row">
@@ -349,11 +352,9 @@ export default function Gastos() {
                   ? 'La parte en efectivo baja la caja del turno y el resto baja el "Debe quedar en transferencia".'
                   : 'Baja de una vez el "Debe quedar en transferencia" del turno abierto.')
                 : 'No afecta el cuadre del turno (se pagó de otra plata; solo cuenta en el mes).'}
+              {form.tipo === 'fijo' ? ' Los gastos fijos normalmente se pagan de otra cuenta; marca "Sí, del turno" solo si de verdad salió de la plata del turno.' : ''}
             </div>
           </>
-        )}
-        {form.medioPago !== 'caja' && form.tipo !== 'variable' && (
-          <div className="helper">No sale del efectivo de la caja (no afecta el cuadre del turno).</div>
         )}
 
         <label>Responsable (opcional)</label>

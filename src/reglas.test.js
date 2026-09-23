@@ -56,6 +56,16 @@ describe('de dónde salió la plata', () => {
     expect(decidirTocaTurno({ medioPago: 'transferencia', fueraDeTurno: false, salidaTurno: true })).toBe(1)
   })
 
+  it('un FIJO pagado con la transferencia del turno baja el banco del turno, no el efectivo', () => {
+    // 23/09: factura de Tigo (fijo) pagada con el Nequi del turno; la pantalla
+    // solo dejaba decir "salió del turno" en gastos variables.
+    const tocaTurno = decidirTocaTurno({ medioPago: 'transferencia', fueraDeTurno: false, salidaTurno: true })
+    const tigo = gasto({ monto: 120_000, tipo: 'fijo', medioPago: 'transferencia', salidaTurno: 1, tocaTurno })
+    const r = cuadreTurno({ turno, ventas: [], abonos: [], gastos: [tigo] })
+    expect(r.totalTransfer).toBe(100_000 - 120_000)
+    expect(r.esperado).toBe(727_300)
+  })
+
   it('una compra por transferencia pega al banco, NO al efectivo', () => {
     // 17/09: registró una compra en transferencia y le descontó de la caja.
     const g = gasto({ monto: 90_058, ...medioPagoGasto('transferencia', 90_058), salidaTurno: 1 })
