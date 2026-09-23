@@ -2,21 +2,9 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useNavigate } from 'react-router-dom'
 import { db, tipoGasto, esGastoPnL } from '../db'
-import { money, currentMonthKey, monthLabel, dayKey, fechaLarga } from '../format'
+import { money, currentMonthKey, monthLabel, dayKey, fechaLarga, ultimosMeses } from '../format'
 import { Header } from '../components/ui'
 import { descargarReportePDF } from '../pdf'
-
-// Devuelve las últimas N claves de mes ("2026-06", "2026-05", ...)
-function ultimosMeses(n) {
-  const out = []
-  const d = new Date()
-  d.setDate(1)
-  for (let i = 0; i < n; i++) {
-    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-    d.setMonth(d.getMonth() - 1)
-  }
-  return out
-}
 
 // Formato compacto para etiquetas de barras: 57600 → "58k".
 const kMoney = (n) => (n >= 1000 ? Math.round(n / 1000) + 'k' : String(Math.round(n)))

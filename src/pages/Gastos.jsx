@@ -2,7 +2,7 @@ import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, CATEGORIAS_GASTO, MEDIOS_PAGO_GASTO, labelMedioGasto, tipoGasto, tipoPorCategoria, esGastoPnL, gastoTocaTurno } from '../db'
-import { money, monthKey, currentMonthKey, monthLabel, shortDate } from '../format'
+import { money, monthKey, currentMonthKey, monthLabel, shortDate, ultimosMeses } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 import { useAuth } from '../auth'
 
@@ -18,7 +18,12 @@ export default function Gastos() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const { show, node } = useToast()
-  const mesActual = currentMonthKey()
+  const mesHoy = currentMonthKey()
+  // Mes que se está mirando. Antes la pantalla estaba amarrada al mes en curso
+  // y no había forma de ver los gastos de meses anteriores.
+  const [mesActual, setMesActual] = useState(mesHoy)
+  const esMesPasado = mesActual !== mesHoy
+  const meses = ultimosMeses(12)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [editId, setEditId] = useState(null)
   const [editOrig, setEditOrig] = useState(null) // gasto tal como estaba antes de editarlo
@@ -185,6 +190,21 @@ export default function Gastos() {
       <Header title="Gastos" sub={monthLabel(mesActual)} onBack={() => navigate('/')} />
 
       <div className="content">
+        {/* Mismo selector de meses que Balance (ya lo conocen). */}
+        <div className="meses-row">
+          {meses.map((m) => (
+            <button key={m} className={`pill ${mesActual === m ? 'active' : ''}`} onClick={() => setMesActual(m)}>
+              {monthLabel(m).split(' ')[0]}{m.slice(0, 4) !== mesHoy.slice(0, 4) ? ` ${m.slice(0, 4)}` : ''}
+            </button>
+          ))}
+        </div>
+        {/* Un gasto nuevo siempre queda con la fecha de HOY: registrarlo
+            mirando otro mes lo haría "desaparecer" de la lista que está viendo. */}
+        {esMesPasado && (
+          <div className="helper" style={{ margin: '4px 0 8px', color: 'var(--amber)' }}>
+            Estás viendo {monthLabel(mesActual)}. Puedes revisar y corregir estos gastos; para registrar uno nuevo vuelve a {monthLabel(mesHoy).split(' ')[0]}.
+          </div>
+        )}
         <div className="dato-fuerte">
           Total del mes: <b style={{ color: 'var(--red)' }}>{money(total)}</b>
           <span className="muted-cell" style={{ fontSize: 13 }}> · fijos {money(totalFijo)} · variables {money(totalVariable)}</span>
@@ -192,7 +212,7 @@ export default function Gastos() {
 
         {/* Gastos variables del día a día (arriba porque se registran a diario) */}
         <div className="section-title" style={{ marginTop: 4 }}>Gastos variables (día a día)</div>
-        <button className="btn" onClick={abrirVariable}>Agregar gasto variable</button>
+        {!esMesPasado && <button className="btn" onClick={abrirVariable}>Agregar gasto variable</button>}
         <div className="helper" style={{ margin: '6px 0 4px' }}>Insumos y gastos del día. Se descuentan de la utilidad de hoy y del mes.</div>
         <div className="helper" style={{ margin: '0 0 4px', color: 'var(--amber)' }}>
           OJO: las compras de productos para vender (cerveza, gaseosa, mecatos…) NO van aquí — regístralas en Inventario → Factura de entrada, que descuenta la plata y suma el stock sin contar doble.
@@ -234,6 +254,8 @@ export default function Gastos() {
                     <div style={{ fontWeight: 700 }}>{money(reg.monto)}</div>
                     <span className="badge green">Registrado · editar</span>
                   </div>
+                ) : esMesPasado ? (
+                  <span className="badge amber">No registrado</span>
                 ) : (
                   <button className="chip-lavador" onClick={() => abrirDesdeFijo(f)}>Registrar</button>
                 )}
@@ -251,7 +273,7 @@ export default function Gastos() {
             <div className="right" style={{ fontWeight: 700, color: 'var(--red)' }}>−{money(g.monto)}</div>
           </div>
         ))}
-        <button className="btn ghost" style={{ marginBottom: 4 }} onClick={nuevoFijo}>Agregar gasto fijo</button>
+        {!esMesPasado && <button className="btn ghost" style={{ marginBottom: 4 }} onClick={nuevoFijo}>Agregar gasto fijo</button>}
       </div>
 
       {/* Registrar / editar gasto */}

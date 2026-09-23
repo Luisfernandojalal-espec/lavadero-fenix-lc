@@ -24,6 +24,18 @@ export function currentMonthKey() {
   return monthKey(Date.now())
 }
 
+// Devuelve las últimas N claves de mes ("2026-06", "2026-05", ...)
+export function ultimosMeses(n) {
+  const out = []
+  const d = new Date()
+  d.setDate(1)
+  for (let i = 0; i < n; i++) {
+    out.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
+    d.setMonth(d.getMonth() - 1)
+  }
+  return out
+}
+
 const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
 
