@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useLiveQuery } from 'dexie-react-hooks'
-import { db, uid, stamp, CATEGORIAS_GASTO, MEDIOS_PAGO_GASTO, labelMedioGasto, tipoGasto, tipoPorCategoria, esGastoPnL, gastoTocaTurno } from '../db'
+import { db, uid, stamp, CATEGORIAS_GASTO, MEDIOS_PAGO_GASTO, labelMedioGasto, tipoGasto, tipoPorCategoria, esGastoPnL, decidirTocaTurno } from '../db'
+import { origenGasto } from '../reglas'
 import { money, monthKey, currentMonthKey, monthLabel, shortDate, ultimosMeses } from '../format'
 import { Header, Sheet, useToast, MoneyInput, SearchSelect } from '../components/ui'
 import { useAuth } from '../auth'
@@ -96,16 +97,9 @@ export default function Gastos() {
       ...(form.medioPago === 'mixto'
         ? { pagoEfectivo: efMixto, pagoTransferencia: form.monto - efMixto }
         : { pagoEfectivo: null, pagoTransferencia: null }),
-      // Un gasto por transferencia/banco solo descuadra el turno si el operador
-      // dice que salió de la plata DEL turno (Nequi del día).
-      // Aplica a transferencia y a mixto, en fijos Y variables: antes solo los
-      // variables podían decir "salió del turno" y un fijo pagado con el Nequi
-      // del turno no tenía cómo descontarse -> faltante al cerrar.
-      salidaTurno: form.medioPago !== 'caja' && form.salidaTurno ? 1 : 0,
-      // El efectivo cuenta SIEMPRE, salvo que digan que salió de otra plata (no
-      // del cajón). Aplica a fijos y variables: un fijo pagado del cajón también
-      // descuadra la caja si el operador dice que salió de ahí.
-      fueraDeTurno: form.medioPago === 'caja' && form.fueraDeTurno ? 1 : 0,
+      // De dónde salió la plata: lo decide reglas.js (con pruebas). NO depende
+      // de fijo/variable: reclasificar no puede cambiar el origen.
+      ...origenGasto({ medioPago: form.medioPago || 'caja', salidaTurno: form.salidaTurno, fueraDeTurno: form.fueraDeTurno }),
       responsable: form.responsable.trim(),
       comprobante: form.comprobante.trim(),
     }
@@ -118,20 +112,13 @@ export default function Gastos() {
     // Lo que dice el operador con los selectores de origen: si salió del cajón
     // (caja y no "de otra plata") toca el turno; si fue por transferencia, solo
     // si marcó que salió del Nequi del turno.
-    const elegido = extra.fueraDeTurno === 1 ? 0
-      : (form.medioPago === 'caja' ? 1 : (extra.salidaTurno === 1 ? 1 : 0))
-    if (!editId) {
-      extra.tocaTurno = elegido
-    } else {
-      // Al EDITAR se CONGELA lo que el gasto ya hacía, para que reclasificar
-      // fijo/variable no mueva un cierre pasado... salvo que el operador cambie
-      // a propósito de dónde salió la plata (medio de pago o los selectores de
-      // origen). En ese caso manda lo que acaba de elegir.
-      const cambioOrigen = (editOrig?.medioPago || 'caja') !== extra.medioPago
-        || (editOrig?.fueraDeTurno === 1) !== (extra.fueraDeTurno === 1)
-        || (editOrig?.salidaTurno === 1) !== (extra.salidaTurno === 1)
-      extra.tocaTurno = cambioOrigen ? elegido : (gastoTocaTurno(editOrig) ? 1 : 0)
-    }
+    // Nuevo: lo que eligió el operador. Al editar se CONGELA lo que el gasto ya
+    // hacía, salvo que cambie a propósito el medio de pago o los selectores de
+    // origen (ver decidirTocaTurno en reglas.js).
+    extra.tocaTurno = decidirTocaTurno({
+      medioPago: extra.medioPago, fueraDeTurno: extra.fueraDeTurno === 1, salidaTurno: extra.salidaTurno === 1,
+      original: editId ? editOrig : null,
+    })
     if (editId) {
       await db.gastos.update(editId, stamp({ concepto, categoria: form.categoria, monto: form.monto, tipo: form.tipo, ...extra }))
       show('Gasto actualizado')

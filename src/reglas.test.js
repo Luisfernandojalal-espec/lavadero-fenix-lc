@@ -3,7 +3,7 @@ import {
   cuadreTurno, decidirTocaTurno, gastoTocaTurno,
   gastoMontoCaja, gastoMontoTransfer, medioPagoGasto,
   montoEfectivo, montoTransferencia, esGastoPnL, tipoGasto,
-  cierreGuardado, editadosDespues, resumenActualizado,
+  cierreGuardado, editadosDespues, resumenActualizado, origenGasto,
 } from './reglas'
 
 // Cada prueba nace de un error REAL que le costó plata o confianza al dueño.
@@ -30,6 +30,19 @@ describe('reclasificar fijo/variable NO mueve un cierre ya hecho', () => {
     expect(r.gastos).toBe(520_000)
     expect(r.esperado).toBe(207_300)
     expect(r.diferencia).toBe(0)   // cuadrada, no "faltó 520.000"
+  })
+
+  it('pasar a fijo un gasto pagado con el Nequi del turno NO lo saca del turno', () => {
+    // 22/09: "INSUMOS 19 DE SEPTIEMBRE" $100.000 por Nequi pasó a fijo y el
+    // cierre del sábado quedó en "Nequi: faltó $100.000".
+    const original = gasto({ monto: 100_000, tipo: 'variable', medioPago: 'transferencia', salidaTurno: 1, tocaTurno: 1 })
+    // Lo que manda la pantalla al guardarlo como fijo sin tocar nada más:
+    const origen = origenGasto({ medioPago: 'transferencia', salidaTurno: true, fueraDeTurno: false })
+    expect(origen.salidaTurno).toBe(1)
+    const toca = decidirTocaTurno({ medioPago: 'transferencia', fueraDeTurno: origen.fueraDeTurno === 1, salidaTurno: origen.salidaTurno === 1, original })
+    expect(toca).toBe(1)
+    const r = cuadreTurno({ turno, gastos: [{ ...original, tipo: 'fijo', ...origen, tocaTurno: toca }] })
+    expect(r.gastosTransfer).toBe(100_000)
   })
 
   it('pero si el operador dice a propósito que salió de otra plata, sí sale del turno', () => {

@@ -71,6 +71,19 @@ export function gastoTocaTurno(g) {
   return tipoGasto(g) === 'variable' && (gastoDeCaja(g) || g.salidaTurno === 1)
 }
 
+// Qué marcas de origen se guardan según lo que eligió el operador en Gastos.
+// NO depende de fijo/variable. Antes, guardar un gasto como fijo forzaba
+// `salidaTurno: 0`; como el original decía 1, se leía como un cambio de origen
+// a propósito y el gasto SALÍA del turno. Así, el 22/09 pasar a fijo un gasto
+// de $100.000 pagado con el Nequi del turno dejó el cierre del sábado 19 en
+// "Nequi: faltó $100.000".
+export function origenGasto({ medioPago, salidaTurno, fueraDeTurno }) {
+  return {
+    salidaTurno: medioPago !== 'caja' && salidaTurno ? 1 : 0,   // transferencia y mixto
+    fueraDeTurno: medioPago === 'caja' && fueraDeTurno ? 1 : 0, // efectivo "de otra plata"
+  }
+}
+
 // Qué marca `tocaTurno` guardar al crear o editar un gasto.
 // `original` = el gasto tal como estaba antes de editarlo (null si es nuevo).
 // Regla: al editar se CONGELA lo que ya hacía, salvo que el operador cambie a
