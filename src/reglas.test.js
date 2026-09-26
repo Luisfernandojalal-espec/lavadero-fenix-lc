@@ -3,6 +3,7 @@ import {
   cuadreTurno, decidirTocaTurno, gastoTocaTurno,
   gastoMontoCaja, gastoMontoTransfer, medioPagoGasto,
   montoEfectivo, montoTransferencia, esGastoPnL, tipoGasto,
+  cierreGuardado, editadosDespues, resumenActualizado,
 } from './reglas'
 
 // Cada prueba nace de un error REAL que le costó plata o confianza al dueño.
@@ -252,5 +253,60 @@ describe('ventas por medio de pago', () => {
   it('una venta vieja sin medio de pago cuenta como efectivo', () => {
     const v = { total: 12_000, fecha: dentro }
     expect(montoEfectivo(v)).toBe(12_000)
+  })
+})
+
+describe('un cierre muestra lo que dio ESA noche', () => {
+  // 25/09: el dueño anotaba "cuadrada" al cerrar y días después la lista decía
+  // "Nequi: faltó $100.000" porque se editó un movimiento de ese turno.
+  const cerrado = {
+    ...turno, estado: 'cerrado', updatedAt: T1,
+    resumen: { esperado: 727_300, contadoReal: 727_300, totalTransfer: 100_000, contadoTransfer: 100_000 },
+  }
+  const editado = gasto({ monto: 100_000, tipo: 'fijo', medioPago: 'transferencia', salidaTurno: 1, tocaTurno: 1, updatedAt: T1 + 86_400_000 })
+
+  it('editar un movimiento después NO cambia el resultado del cierre', () => {
+    const hoy = cuadreTurno({ turno: cerrado, ventas: [], abonos: [], gastos: [editado] })
+    const r = cierreGuardado(cerrado, hoy)
+    expect(r.diferencia).toBe(0)
+    expect(r.diferenciaTransfer).toBe(0)
+    expect(hoy.diferenciaTransfer).toBe(100_000)  // la cuenta de hoy sí cambió…
+    expect(r.cambio).toBe(true)                    // …y se avisa
+    expect(r.cambioTransfer).toBe(-100_000)
+  })
+
+  it('y señala cuál movimiento se editó después del cierre', () => {
+    const antes = gasto({ monto: 5_000, updatedAt: dentro })
+    const fuera = gasto({ monto: 9_000, fecha: T1 + 10, updatedAt: T1 + 86_400_000 })
+    const lista = editadosDespues(cerrado, { gastos: [editado, antes, fuera] })
+    expect(lista.map((m) => m.x)).toEqual([editado])
+  })
+
+  it('si nada cambió, no hay aviso', () => {
+    const hoy = cuadreTurno({ turno: cerrado, ventas: [], abonos: [], gastos: [] })
+    expect(cierreGuardado(cerrado, hoy).cambio).toBe(false)
+  })
+
+  it('corregir el conteo recalcula la diferencia contra lo de esa noche', () => {
+    const corregido = { ...cerrado, resumen: { ...cerrado.resumen, contadoReal: 700_000 } }
+    const hoy = cuadreTurno({ turno: corregido, ventas: [], abonos: [], gastos: [editado] })
+    expect(cierreGuardado(corregido, hoy).diferencia).toBe(700_000 - 727_300)
+  })
+
+  it('aceptar el cambio actualiza la foto y conserva lo contado', () => {
+    const hoy = cuadreTurno({ turno: cerrado, ventas: [], abonos: [], gastos: [editado] })
+    const nuevo = { ...cerrado, resumen: resumenActualizado(cerrado, hoy) }
+    const r = cierreGuardado(nuevo, cuadreTurno({ turno: nuevo, ventas: [], abonos: [], gastos: [editado] }))
+    expect(r.cambio).toBe(false)
+    expect(r.contadoTransfer).toBe(100_000)
+    expect(r.diferenciaTransfer).toBe(100_000)
+  })
+
+  it('un cierre viejo sin foto completa sigue mostrando la cuenta de hoy', () => {
+    const viejo = { ...turno, resumen: { contadoReal: 727_300 } }
+    const hoy = cuadreTurno({ turno: viejo, ventas: [], abonos: [], gastos: [] })
+    const r = cierreGuardado(viejo, hoy)
+    expect(r.diferencia).toBe(0)
+    expect(r.cambio).toBe(false)
   })
 })

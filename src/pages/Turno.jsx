@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, uid, stamp, gastoMontoCaja, gastoMontoTransfer, labelMedioGasto, medioPagoGasto, cuadreTurno } from '../db'
+import { cierreGuardado, editadosDespues, resumenActualizado } from '../reglas'
 import { money, monthKey, shortDate } from '../format'
 import { Header, Sheet, useToast, MoneyInput } from '../components/ui'
 import { descargarCierrePDF } from '../pdf'
@@ -197,15 +198,26 @@ export default function Turno() {
 
   const difColor = (d) => (d === 0 ? 'var(--green)' : d > 0 ? 'var(--amber)' : 'var(--red)')
 
-  // Recalcula el cuadre de un turno YA cerrado con los DATOS ACTUALES (mismas
-  // fórmulas del cierre en vivo), acotado a su rango [abiertoEn, cerradoEn].
-  // Así, si después se corrige un abono / gasto / venta, el comprobante de esa
-  // noche se ajusta. El "efectivo contado" (contadoReal) NO se recalcula: fue un
-  // conteo físico manual, se conserva del cierre. La diferencia se recalcula con
-  // el esperado nuevo. (Solo cambia lo que se muestra; no se reescribe el turno.)
+  // Un cierre muestra lo que dio ESA noche (la foto guardada al cerrar). Antes
+  // se rehacía la cuenta con los datos de hoy y, si días después se editaba un
+  // gasto o una venta de ese turno, el cierre cambiaba solo y sin avisar (el
+  // dueño anotaba "cuadrada" y luego salía "Nequi: faltó $100.000"). Ahora la
+  // cuenta de hoy solo se usa para AVISAR del cambio (`r.cambio`, `r.hoy`).
   function cuadreCerrado(t) {
-    return cuadreTurno({ turno: t, ventas: ventas || [], abonos: abonos || [], gastos: gastos || [] })
+    const hoy = cuadreTurno({ turno: t, ventas: ventas || [], abonos: abonos || [], gastos: gastos || [] })
+    return cierreGuardado(t, hoy)
   }
+  // El cambio fue una corrección legítima: la foto pasa a ser la cuenta de hoy
+  // (conservando lo que se contó). Solo el dueño, y a propósito.
+  async function actualizarCierre() {
+    if (!det) return
+    const hoy = cuadreTurno({ turno: det, ventas: ventas || [], abonos: abonos || [], gastos: gastos || [] })
+    const nuevoResumen = resumenActualizado(det, hoy)
+    await db.turnos.update(det.id, stamp({ resumen: nuevoResumen }))
+    setDet({ ...det, resumen: nuevoResumen })
+    show('Cierre actualizado con los cambios')
+  }
+  const difTexto = (d, cuadrada = 'cuadrada') => (d === 0 ? cuadrada : d > 0 ? `sobró ${money(d)}` : `faltó ${money(-d)}`)
 
   return (
     <>
@@ -345,6 +357,7 @@ export default function Turno() {
                         {r.diferenciaTransfer > 0 ? `Nequi: sobró ${money(r.diferenciaTransfer)}` : `Nequi: faltó ${money(-r.diferenciaTransfer)}`}
                       </div>
                     )}
+                    {r.cambio && <span className="badge amber" style={{ marginTop: 4 }}>Cambió después</span>}
                   </div>
                 </div>
               )
@@ -489,6 +502,46 @@ export default function Turno() {
                 <div><span>Cierre</span><b>{shortDate(det.cerradoEn)}</b><em>{det.cerradoPor}</em></div>
               </div>
 
+              {/* Lo de abajo es lo que dio el cierre ESA noche. Si después se
+                  editó algo de este turno, se avisa aquí con la cuenta de hoy y
+                  los movimientos tocados; el cierre no cambia solo. */}
+              {r.cambio && (() => {
+                const tocados = editadosDespues(det, { ventas: ventas || [], gastos: gastos || [], abonos: abonos || [] })
+                return (
+                  <div className="cambio-cierre">
+                    <b>Esto cambió después del cierre</b>
+                    <p>Las cifras de abajo son las que dio el cierre esa noche. Después se editaron movimientos de este turno y, con los datos de hoy, daría:</p>
+                    <ul>
+                      {r.cambioEfectivo !== 0 && <li>Efectivo: <b>{difTexto(r.hoy.diferencia)}</b> (esperado {money(r.hoy.esperado)} en vez de {money(r.esperado)})</li>}
+                      {r.cambioTransfer !== 0 && <li>Nequi: <b>{r.hoy.diferenciaTransfer == null ? 'no se contó' : difTexto(r.hoy.diferenciaTransfer)}</b> (debía quedar {money(r.hoy.totalTransfer)} en vez de {money(r.totalTransfer)})</li>}
+                    </ul>
+                    {tocados.length > 0 ? (
+                      <>
+                        <p>Movimientos editados después del cierre:</p>
+                        <ul>
+                          {tocados.map(({ clase, x }) => (
+                            <li key={x.id}>
+                              {clase === 'venta' ? `Venta${x.factura ? ' #' + x.factura : ''}` : clase === 'abono' ? `Abono${x.clienteNombre ? ' de ' + x.clienteNombre : ''}` : (x.concepto || 'Gasto')}
+                              {' · '}{money(clase === 'venta' ? x.total : x.monto)}
+                              {x.anulada ? ' · anulado' : ''}
+                              <small> — editado el {shortDate(x.updatedAt)}</small>
+                            </li>
+                          ))}
+                        </ul>
+                      </>
+                    ) : (
+                      <p>No se encontró qué movimiento se editó (puede ser un cierre de antes de un ajuste de la app).</p>
+                    )}
+                    {esDueno && (
+                      <>
+                        <p>Si ese cambio fue una corrección, actualiza el cierre. Si no, revisa el movimiento: nadie debía tocarlo.</p>
+                        <button className="btn secondary" onClick={actualizarCierre}>Actualizar el cierre con estos cambios</button>
+                      </>
+                    )}
+                  </div>
+                )
+              })()}
+
               <div className="arqueo">
                 <section className="bolsillo">
                   <div className="bolsillo-head"><span className="bolsillo-tag">Efectivo · caja</span></div>
@@ -573,7 +626,7 @@ export default function Turno() {
                       })}
                     </tbody>
                   </table>
-                  <div className="helper">Suma en efectivo {money(r.gastos)} · en transferencia {money(r.gastosTransfer)}.</div>
+                  <div className="helper">Suma en efectivo {money(r.hoy.gastos)} · en transferencia {money(r.hoy.gastosTransfer)}.</div>
                 </>
               )}
 
@@ -593,7 +646,7 @@ export default function Turno() {
                       ))}
                     </tbody>
                   </table>
-                  <div className="helper">Suma en efectivo {money(r.abonos)} · en transferencia {money(r.abonosTransfer)}.</div>
+                  <div className="helper">Suma en efectivo {money(r.hoy.abonos)} · en transferencia {money(r.hoy.abonosTransfer)}.</div>
                 </>
               )}
 

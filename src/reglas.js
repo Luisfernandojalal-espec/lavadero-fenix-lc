@@ -139,3 +139,72 @@ export function cuadreTurno({ turno, ventas = [], abonos = [], gastos = [] }) {
     abonosLista: abonosRango.slice().sort((a, b) => b.fecha - a.fecha),
   }
 }
+
+/* ─────────────── Cierres: lo que dio ESA noche vs lo que daría hoy ─────────────── */
+
+// Un cierre muestra lo que dio al cerrar (la foto guardada en `resumen`), NO la
+// cuenta rehecha con los datos de hoy. Antes se rehacía en vivo: si días
+// después alguien editaba un gasto o una venta de ese turno (pasarlo a fijo,
+// cambiarle el medio de pago…), el cierre viejo cambiaba SOLO y sin avisar —
+// el dueño anotaba "cuadrada" esa noche y luego la app decía "faltó $100.000".
+//
+// `hoy` = cuadreTurno(...) con los datos actuales. Si difiere de la foto, se
+// marca `cambio` para mostrar el aviso; el dueño decide si acepta el cambio.
+// Los conteos físicos (contadoReal / contadoTransfer) siempre salen de la foto:
+// "Corregir conteo" los reescribe ahí mismo.
+export function cierreGuardado(turno, hoy) {
+  const r0 = turno?.resumen
+  // Cierres muy viejos sin foto completa: no hay contra qué comparar.
+  if (!r0 || r0.esperado == null) {
+    return { ...hoy, cambio: false, cambioEfectivo: 0, cambioTransfer: 0, hoy }
+  }
+  const foto = (k) => (r0[k] != null ? r0[k] : hoy[k])
+  const esperado = r0.esperado
+  const contadoReal = r0.contadoReal || 0
+  const conTransfer = r0.totalTransfer != null
+  const totalTransfer = conTransfer ? r0.totalTransfer : hoy.totalTransfer
+  const contadoTransfer = r0.contadoTransfer != null ? r0.contadoTransfer : null
+  const cambioEfectivo = hoy.esperado - esperado
+  const cambioTransfer = conTransfer ? hoy.totalTransfer - totalTransfer : 0
+  return {
+    ...hoy, // las listas (salidas, abonos) son las de hoy
+    contado: foto('contado'), transferencias: foto('transferencias'), credito: foto('credito'),
+    abonos: foto('abonos'), abonosTransfer: foto('abonosTransfer'),
+    gastos: foto('gastos'), gastosTransfer: foto('gastosTransfer'), ventasCount: foto('ventasCount'),
+    esperado, totalTransfer, contadoReal, contadoTransfer,
+    diferencia: contadoReal - esperado,
+    diferenciaTransfer: contadoTransfer == null ? null : contadoTransfer - totalTransfer,
+    cambio: cambioEfectivo !== 0 || cambioTransfer !== 0,
+    cambioEfectivo, cambioTransfer, hoy,
+  }
+}
+
+// Movimientos de un turno cerrado que se editaron DESPUÉS del cierre (con un
+// minuto de gracia por relojes). Son los sospechosos cuando un cierre cambió.
+export function editadosDespues(turno, { ventas = [], gastos = [], abonos = [] }) {
+  if (!turno?.cerradoEn) return []
+  const enRango = (x) => x.fecha >= turno.abiertoEn && x.fecha <= turno.cerradoEn
+  const tarde = (x) => (x.updatedAt || 0) > turno.cerradoEn + 60_000
+  return [
+    ...ventas.filter((x) => enRango(x) && tarde(x)).map((x) => ({ clase: 'venta', x })),
+    ...gastos.filter((x) => enRango(x) && tarde(x)).map((x) => ({ clase: 'gasto', x })),
+    ...abonos.filter((x) => enRango(x) && tarde(x)).map((x) => ({ clase: 'abono', x })),
+  ].sort((a, b) => b.x.updatedAt - a.x.updatedAt)
+}
+
+// Foto nueva del cierre con la cuenta de hoy, conservando lo que se CONTÓ. Es
+// lo que guarda "Actualizar el cierre" cuando el cambio fue una corrección.
+export function resumenActualizado(turno, hoy) {
+  const r0 = turno?.resumen || {}
+  return {
+    ...r0,
+    contado: hoy.contado, transferencias: hoy.transferencias, credito: hoy.credito,
+    abonos: hoy.abonos, abonosTransfer: hoy.abonosTransfer, gastos: hoy.gastos,
+    gastosTransfer: hoy.gastosTransfer, totalTransfer: hoy.totalTransfer, esperado: hoy.esperado,
+    ventasCount: hoy.ventasCount,
+    contadoReal: r0.contadoReal || 0,
+    contadoTransfer: r0.contadoTransfer != null ? r0.contadoTransfer : null,
+    diferencia: (r0.contadoReal || 0) - hoy.esperado,
+    diferenciaTransfer: r0.contadoTransfer != null ? r0.contadoTransfer - hoy.totalTransfer : null,
+  }
+}
